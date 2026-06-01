@@ -1538,8 +1538,8 @@ export default function Results() {
                   </Grid>
                 </Grid>
 
-                {/* Quality Assessment Section */}
-                <Box sx={{ mb: 4 }}>
+              {/* Quality Assessment Section */}
+              <Box sx={{ mb: 4 }}>
                   <Typography variant="h5" sx={{
                     color: THEME.textPrimary,
                     fontWeight: 600,
