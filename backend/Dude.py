@@ -218,16 +218,28 @@ class UnifiedMediaAnalyzer:
                         m = re.search(r"(\d+)", star_aria["aria-label"])
                         if m: metadata["star_rating"] = float(m.group(1))
 
-            # 3. Regex search for "X stars" or "Rating: X"
+            # 3. Regex search for "X stars" or "Rating: X" (restricted to same-line matching)
             if "star_rating" not in metadata:
-                rating_match = re.search(r"(?:Rating|Stars)[\s:]*([0-5](?:\.\d)?)\s*(?:\/\s*5)?", page_text, re.I)
+                rating_match = re.search(r"(?:Rating|Stars)[ \t:]*([0-5](?:\.\d)?)\s*(?:\/\s*5)?", page_text, re.I)
                 if rating_match:
                     metadata["star_rating"] = float(rating_match.group(1))
 
-            # 4. Extract customer comments/feedback
-            feedback_match = re.search(r"(?:Comment|Feedback|Message)[\s:]*(.*)", page_text, re.I)
+            # 4. Extract customer comments/feedback (restricted to same-line matching)
+            feedback_match = re.search(r"(?:Comment|Feedback|Message)[ \t:]*(.*)", page_text, re.I)
             if feedback_match:
-                metadata["customer_feedback"] = feedback_match.group(1).strip()
+                feedback_text = feedback_match.group(1).strip()
+                # Exclude common placeholder/help texts from forms
+                fb_lower = feedback_text.lower()
+                placeholders = [
+                    "if you would like to send us a message",
+                    "would you like a callback",
+                    "fill out this form",
+                    "get back to you"
+                ]
+                if not any(p in fb_lower for p in placeholders) and len(feedback_text) > 0:
+                    metadata["customer_feedback"] = feedback_text
+                else:
+                    metadata["customer_feedback"] = None
 
             # Fallback: regex search in full plain text
             if not metadata["service_advisor"]:
