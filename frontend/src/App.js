@@ -51,6 +51,9 @@ export default function App() {
               <Route path="/dealer/results" element={<Layout><Results /></Layout>} />
               <Route path="/dealer/users" element={<Layout><DealerUsers /></Layout>} />
               <Route path="/support" element={<Layout><SupportPage /></Layout>} />
+            </Route>
+
+            <Route element={<ProtectedRoute roles={["super_admin", "dealer_admin", "dealer_user", "branch_admin"]} />}>
               <Route path="/account/profile" element={<Layout><AccountProfile /></Layout>} />
               <Route path="/account/password" element={<Layout><ChangePassword /></Layout>} />
             </Route>

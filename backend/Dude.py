@@ -1262,8 +1262,11 @@ class UnifiedMediaAnalyzer:
             
             try:
                 from faster_whisper import WhisperModel
-                print("🎙️ Loading faster-whisper model...")
-                self.faster_whisper_model = WhisperModel("large-v3", device="cpu", compute_type="int8") 
+                whisper_device = "cuda" if torch.cuda.is_available() else "cpu"
+                whisper_compute = "float16" if whisper_device == "cuda" else "int8"
+                whisper_model_name = os.getenv("WHISPER_MODEL", "base")
+                print(f"🎙️ Loading faster-whisper {whisper_model_name} on {whisper_device} ({whisper_compute})...")
+                self.faster_whisper_model = WhisperModel(whisper_model_name, device=whisper_device, compute_type=whisper_compute) 
                 print("✅ Whisper model loaded")
             except Exception as e:
                 print(f"⚠️ Could not pre-load whisper model: {e}")
@@ -1282,8 +1285,11 @@ class UnifiedMediaAnalyzer:
             print(f"🌐 Language: {transcription_language or 'auto-detection'}")
 
             if self.faster_whisper_model is None:
-                print("🎙️ Loading faster-whisper large-v3...")
-                self.faster_whisper_model = WhisperModel("large-v3", device="cpu", compute_type="int8")
+                whisper_device = "cuda" if torch.cuda.is_available() else "cpu"
+                whisper_compute = "float16" if whisper_device == "cuda" else "int8"
+                whisper_model_name = os.getenv("WHISPER_MODEL", "base")
+                print(f"🎙️ Loading faster-whisper {whisper_model_name} on {whisper_device} ({whisper_compute})...")
+                self.faster_whisper_model = WhisperModel(whisper_model_name, device=whisper_device, compute_type=whisper_compute)
             
             whisper_lang_param = transcription_language if transcription_language != "auto" else None
 
