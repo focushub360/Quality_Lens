@@ -31,3 +31,8 @@ SUPER_ADMIN_EMAIL = os.getenv("SUPER_ADMIN_EMAIL", "admin@example.com")
 
 # --- File Storage Configuration ---
 BULK_RESULTS_BASE_DIR = os.getenv("BULK_RESULTS_BASE_DIR", "bulk_analysis_reports")
+
+# --- AWS S3 Storage Configuration ---
+USE_S3_STORAGE = os.getenv("USE_S3_STORAGE", "false").lower() == "true"
+AWS_STORAGE_BUCKET_NAME = os.getenv("AWS_STORAGE_BUCKET_NAME", "")
+AWS_S3_REGION_NAME = os.getenv("AWS_S3_REGION_NAME", "us-east-1")

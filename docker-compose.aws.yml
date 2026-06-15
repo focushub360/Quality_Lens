@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.aws
+    image: citnow-backend:latest
+    container_name: citnow_backend
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+      - LOG_LEVEL=INFO
+      # Database connection (MongoDB Atlas URI)
+      - MONGODB_URI=mongodb+srv://appu:Prasanna460@scanner.8qogm7e.mongodb.net/citnow_analyzer?retryWrites=true&w=majority
+      - MONGODB_DB_NAME=citnow_analyzer
+      # AWS S3 Configuration
+      - USE_S3_STORAGE=true
+      - AWS_STORAGE_BUCKET_NAME=your-citnow-reports-bucket
+      - AWS_S3_REGION_NAME=us-east-1
+      # JWT and security config
+      - JWT_SECRET_KEY=69379b844f20d396b23565cbf7d3c002cfe593dec5642d3b9808dcd36830222b
+      - JWT_ALGORITHM=HS256
+      - JWT_ACCESS_TOKEN_EXPIRE_MINUTES=1440
+      # Super Admin Configuration
+      - SUPER_ADMIN_USERNAME=admin
+      - SUPER_ADMIN_PASSWORD=admin123
+      - SUPER_ADMIN_EMAIL=admin@gmail.com
+      - FRONTEND_URLS=http://localhost:3000,https://videoproject-frontend.pages.dev,http://3.110.138.205:8000
+      # ML settings
+      - WHISPER_MODEL=base
+      # CPU Resource Optimization (T3a.large: 2 vCPU, 8GB RAM)
+      - MAX_WORKERS=2
+      - CONCURRENCY_LIMIT=1
+      - PROCESS_TIMEOUT_SECONDS=900
+    restart: always

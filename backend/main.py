@@ -25,8 +25,10 @@ from dotenv import load_dotenv
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, BackgroundTasks, Request, Form, Depends, status, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import ORJSONResponse, JSONResponse, FileResponse, Response
+from fastapi.responses import ORJSONResponse, JSONResponse, FileResponse, Response, RedirectResponse
 from pydantic import BaseModel, Field # Added Field for MongoDB _id alias
+from s3_storage import s3_storage
+
 
 # --- RBAC Specific Imports ---
 from passlib.context import CryptContext
@@ -2041,6 +2043,20 @@ async def download_structured_results(batch_id: str, response: Response, current
     if current_user.role == "dealer_admin" and current_user.dealer_id != batch_doc.get("dealer_id"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to download results for this batch.")
 
+    zip_filename = f"batch_{batch_id}_structured_reports.zip"
+    s3_key = f"reports/{zip_filename}"
+
+    # Try to serve directly from S3 if enabled and exists
+    if s3_storage.enabled:
+        try:
+            if s3_storage.object_exists(s3_key):
+                presigned_url = s3_storage.generate_presigned_url(s3_key)
+                if presigned_url:
+                    logger.info(f"Serving reports for batch {batch_id} directly from cached S3 zip.")
+                    return RedirectResponse(url=presigned_url, status_code=303)
+        except Exception as e:
+            logger.error(f"Failed to check or generate S3 presigned URL for batch {batch_id}: {e}. Generating locally.")
+
     temp_dir = tempfile.mkdtemp()
     batch_output_root = os.path.join(temp_dir, batch_id)
     os.makedirs(batch_output_root, exist_ok=True)
@@ -2084,7 +2100,6 @@ async def download_structured_results(batch_id: str, response: Response, current
         shutil.rmtree(temp_dir)
         raise HTTPException(status_code=404, detail="No analysis results found for this batch.")
 
-    zip_filename = f"batch_{batch_id}_structured_reports.zip"
     zip_filepath = os.path.join(temp_dir, zip_filename)
     
     with zipfile.ZipFile(zip_filepath, 'w', zipfile.ZIP_DEFLATED) as zipf:
@@ -2092,6 +2107,19 @@ async def download_structured_results(batch_id: str, response: Response, current
             for file in files:
                 file_path = os.path.join(root, file)
                 zipf.write(file_path, os.path.relpath(file_path, temp_dir))
+
+    # Upload to S3 if enabled
+    if s3_storage.enabled:
+        try:
+            upload_success = s3_storage.upload_file(zip_filepath, s3_key)
+            if upload_success:
+                presigned_url = s3_storage.generate_presigned_url(s3_key)
+                shutil.rmtree(temp_dir)
+                if presigned_url:
+                    logger.info(f"Uploaded batch {batch_id} ZIP to S3 and redirecting.")
+                    return RedirectResponse(url=presigned_url, status_code=303)
+        except Exception as e:
+            logger.error(f"Failed to upload batch {batch_id} ZIP to S3: {e}. Falling back to streaming.")
 
     response.headers["Content-Disposition"] = f"attachment; filename=\"{zip_filename}\""
 
