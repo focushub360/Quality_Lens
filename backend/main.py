@@ -75,7 +75,7 @@ logger.info(f"Bulk analysis reports will be stored in: {BULK_RESULTS_BASE_DIR}")
 # CORS Origins
 _frontend_urls_env = os.getenv(
     "FRONTEND_URLS",
-    "https://focusadmin.focusengineeringapp.com,https://focus-user.focusengineeringapp.com,https://videoapi.focusengineeringapp.com"
+    "https://focusadmin.focusengineeringapp.com,https://focus-user.focusengineeringapp.com,https://videoapi.focusengineeringapp.com,https://main.d26c7jks4sa4os.amplifyapp.com"
 )
 CORS_ORIGINS = [url.strip() for url in _frontend_urls_env.split(',')]
 

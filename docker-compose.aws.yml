@@ -27,7 +27,7 @@ services:
       - SUPER_ADMIN_USERNAME=admin
       - SUPER_ADMIN_PASSWORD=admin123
       - SUPER_ADMIN_EMAIL=admin@gmail.com
-      - FRONTEND_URLS=http://localhost:3000,https://videoproject-frontend.pages.dev,http://3.110.138.205:8000,http://3.110.138.205,http://qualitylensfocustech.duckdns.org:8000,http://qualitylensfocustech.duckdns.org
+      - FRONTEND_URLS=http://localhost:3000,https://videoproject-frontend.pages.dev,http://3.110.138.205:8000,http://3.110.138.205,http://qualitylensfocustech.duckdns.org:8000,http://qualitylensfocustech.duckdns.org,https://main.d26c7jks4sa4os.amplifyapp.com
       # ML settings
       - WHISPER_MODEL=base
       # CPU Resource Optimization (T3a.large: 2 vCPU, 8GB RAM)
