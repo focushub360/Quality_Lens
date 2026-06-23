@@ -1,0 +1,3 @@
+qualitylensfocustech.duckdns.org {
+    reverse_proxy backend:8000
+}

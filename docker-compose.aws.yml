@@ -8,7 +8,8 @@ services:
     image: citnow-backend:latest
     container_name: citnow_backend
     ports:
-      - "8000:8000"
+      # Removed public exposure on port 8000 to keep the backend secure behind Caddy proxy
+      - "127.0.0.1:8000:8000"
     environment:
       - PORT=8000
       - LOG_LEVEL=INFO
@@ -35,3 +36,22 @@ services:
       - CONCURRENCY_LIMIT=1
       - PROCESS_TIMEOUT_SECONDS=900
     restart: always
+
+  caddy:
+    image: caddy:latest
+    container_name: caddy_proxy
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - backend
+
+volumes:
+  caddy_data:
+  caddy_config:
+
