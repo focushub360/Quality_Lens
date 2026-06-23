@@ -2,17 +2,31 @@ qualitylensfocustech.duckdns.org {
     # Serve static frontend files
     root * /srv/build
 
-    route {
-        # 1. Reverse proxy backend API endpoints to backend container
-        @api_paths {
-            path /token /users** /analyze** /my-analysis-tasks /bulk-analyze /bulk-status** /bulk-cancel** /bulk-job** /bulk-download** /bulk-excel-data** /results** /dashboard** /health /docs** /openapi.json
-        }
-        reverse_proxy @api_paths backend:8000
+    # API endpoints (must be proxied to backend:8000)
+    @api {
+        path /token /token/
+        path /openapi.json
+        path /health
+        path /my-analysis-tasks
+        path /bulk-analyze
+        path /users*
+        path /analyze*
+        path /bulk-status*
+        path /bulk-cancel*
+        path /bulk-job*
+        path /bulk-download*
+        path /bulk-excel-data*
+        path /results*
+        path /dashboard*
+        path /docs*
+    }
 
-        # 2. Serve static files if they exist
-        file_server
+    handle @api {
+        reverse_proxy backend:8000
+    }
 
-        # 3. Fallback to index.html for React router single-page routing
+    # Fallback to frontend SPA
+    handle {
         try_files {path} /index.html
         file_server
     }
