@@ -1348,7 +1348,7 @@ async def _run_analysis_pipeline(
     target_language: str,
     submitted_by_user_id: str,
     dealer_id: Optional[str] # Now a simple string
-) -> dict:
+) -> tuple[dict, Optional[str]]:
     """
     Internal helper to execute the UnifiedMediaAnalyzer pipeline and format results.
     """
@@ -1406,7 +1406,7 @@ async def _run_analysis_pipeline(
         "error_message": results.get("error_message"),
     }
 
-    return clean_results(processed_results)
+    return clean_results(processed_results), None
 
 async def _process_single_video_in_thread(video_input: str, transcription_language: str, target_language: str) -> tuple[Optional[dict], Optional[str]]:
     """Executes the CPU-bound video analysis in a separate thread."""
