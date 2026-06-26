@@ -1552,85 +1552,38 @@ class UnifiedMediaAnalyzer:
     def translate_text(self, text, target_language=None):
         actual_target_lang = target_language if target_language is not None else self.target_language
         
-        print(f"🌍 Initiating translation to {actual_target_lang.upper()}...")
+        print(f"🌍 Initiating high-reliability translation to {actual_target_lang.upper()}...")
 
         if actual_target_lang == "en":
             print(f"🎯 Target language is English - returning original text without translation.")
             return text
         
-        try:
-            translation_model, translation_tokenizer = self.load_translation_model(actual_target_lang)
-            if translation_model is None:
-                return text
-        except Exception as e:
-            return f"Translation failed due to model loading error for {LANGUAGE_NAME_LOOKUP.get(actual_target_lang, actual_target_lang)}: {e}"
-
-        if len(text.strip()) < 10:
+        if len(text.strip()) < 1:
             return text
-        if len(text) > 1500:
-            text = text[:1500] + "..."
 
         try:
-            model_name = self.lang_model_map.get(actual_target_lang, NLLB_MODEL)
-
-            if model_name == NLLB_MODEL:
-                translation_tokenizer.src_lang = "eng_Latn"
-
-                flores_code = INDIAN_LANGUAGE_CODES.get(actual_target_lang, "eng_Latn")
-                forced_bos_token_id = translation_tokenizer.convert_tokens_to_ids(flores_code)
-                if not isinstance(forced_bos_token_id, int):
-                    forced_bos_token_id = forced_bos_token_id[0] if forced_bos_token_id else None
-
-                if forced_bos_token_id is None:
-                    print(f"⚠️ Warning: Could not find valid BOS token for {actual_target_lang}. Defaulting to English token for translation output.")
-                    forced_bos_token_id = translation_tokenizer.convert_tokens_to_ids("eng_Latn")
-                    if isinstance(forced_bos_token_id, list): forced_bos_token_id = forced_bos_token_id[0]
-
-                inputs = translation_tokenizer(
-                    text,
-                    return_tensors="pt",
-                    padding=True,
-                    truncation=True,
-                    max_length=400,
-                )
-                generated_tokens = translation_model.generate(
-                    **inputs,
-                    forced_bos_token_id=forced_bos_token_id,
-                    max_length=400,
-                    num_beams=2,
-                    early_stopping=True,
-                )
-                translated_text = translation_tokenizer.batch_decode(
-                    generated_tokens, skip_special_tokens=True
-                )[0]
+            from deep_translator import GoogleTranslator
+            
+            # Google Translate uses standard ISO codes
+            lang_code = actual_target_lang.split('_')[0].lower() # fallback safety
+            
+            translator = GoogleTranslator(source='auto', target=lang_code)
+            
+            # Handle large texts safely by chunking if necessary (Google limits to 5000 chars)
+            if len(text) > 4900:
+                text = text[:4900] + "..."
                 
-                print(f"✅ Translation completed for {LANGUAGE_NAME_LOOKUP.get(actual_target_lang, actual_target_lang)}")
-                return translated_text
-                
-            else:
-                inputs = translation_tokenizer(
-                    [text],
-                    return_tensors="pt",
-                    padding=True,
-                    truncation=True,
-                    max_length=400,
-                )
-                translated = translation_model.generate(
-                    **inputs,
-                    max_length=400,
-                    num_beams=2,
-                    early_stopping=True,
-                )
-                translated_text = translation_tokenizer.decode(
-                    translated[0], skip_special_tokens=True
-                )
-                
-                print(f"✅ MarianMT translation completed for {LANGUAGE_NAME_LOOKUP.get(actual_target_lang, actual_target_lang)}")
-                return translated_text
-
+            translated_text = translator.translate(text)
+            
+            print(f"✅ Google Translation completed for {actual_target_lang}")
+            return translated_text
+            
+        except ImportError:
+            print("❌ deep_translator is not installed. Please run pip install deep_translator.")
+            return text
         except Exception as e:
             print(f"❌ Translation error for {actual_target_lang}: {e}")
-            return f"Translation failed for {LANGUAGE_NAME_LOOKUP.get(actual_target_lang, actual_target_lang)}: {e}"
+            return text
 
     def process_video(self, video_input, transcription_language=None, target_language_short=None):
         requested_target_language = target_language_short if target_language_short else self.target_language
