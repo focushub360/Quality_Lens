@@ -88,35 +88,48 @@ export default function BulkUpload() {
     if (secs <= 0) return '0s';
     const h = Math.floor(secs / 3600);
     const m = Math.floor((secs % 3600) / 60);
-    const s = secs % 60;
-    
+    const s = Math.floor(secs % 60);
     if (h > 0) return `${h}h ${m}m ${s}s`;
     if (m > 0) return `${m}m ${s}s`;
     return `${s}s`;
   };
 
-  const getExpectedTimeRemaining = () => {
-    if (!status || status.status !== 'processing') return '';
-    
+  // Live clock — ticks every second so the countdown is real
+  const [nowTs, setNowTs] = useState(Date.now());
+  useEffect(() => {
+    if (!status || status.status !== 'processing') return;
+    const tick = setInterval(() => setNowTs(Date.now()), 1000);
+    return () => clearInterval(tick);
+  }, [status?.status]);
+
+  const getTimeInfo = () => {
+    if (!status || status.status !== 'processing') return { remaining: '', elapsed: '' };
+
     const startTime = status.started_at ? new Date(status.started_at).getTime() : null;
-    const now = Date.now();
-    
-    if (!startTime) {
-      const remaining = status.total_urls - status.processed_urls;
-      return formatDuration(remaining * 30);
+    const now = nowTs; // live-ticking value
+
+    // Elapsed seconds since batch started
+    const elapsedSec = startTime ? Math.floor((now - startTime) / 1000) : 0;
+    const elapsedStr = elapsedSec > 0 ? formatDuration(elapsedSec) : '—';
+
+    // Use attempted (success + failed) to estimate rate, never stuck at 0
+    const attempted = (status.processed_urls || 0) + (status.failed_urls || 0);
+    const remaining = status.total_urls - attempted;
+
+    if (!startTime || attempted === 0) {
+      // No data yet — rough estimate: assume 30s per video
+      return { remaining: formatDuration(remaining * 30), elapsed: elapsedStr };
     }
-    
-    const elapsedMs = now - startTime;
-    if (status.processed_urls > 0) {
-      const msPerUrl = elapsedMs / status.processed_urls;
-      const remainingUrls = status.total_urls - status.processed_urls;
-      const remainingMs = msPerUrl * remainingUrls;
-      return formatDuration(Math.ceil(remainingMs / 1000));
-    } else {
-      const remaining = status.total_urls;
-      return formatDuration(remaining * 30);
-    }
+
+    const secPerUrl = elapsedSec / attempted;           // real measured rate
+    const remainingSec = Math.ceil(secPerUrl * remaining);
+    return {
+      remaining: remainingSec > 0 ? formatDuration(remainingSec) : 'almost done',
+      elapsed: elapsedStr,
+      secPerUrl: secPerUrl.toFixed(1),
+    };
   };
+
 
   // liveProgress ref to ensure we never display a backward jump
   const liveProgressRef = useRef(0);
@@ -1344,15 +1357,20 @@ export default function BulkUpload() {
                     {status.status === 'completed' ? '✅ BATCH COMPLETE' : `⚡ ${status.status?.toUpperCase()}`}
                   </Typography>
 
-                  {status.status === 'processing' && (
-                    <Typography variant="caption" sx={{
-                      color: 'rgba(255,255,255,0.55)',
-                      fontWeight: 500,
-                      fontSize: '0.7rem',
-                    }}>
-                      ⏱ Est. Time Remaining: {getExpectedTimeRemaining()}
-                    </Typography>
-                  )}
+                  {status.status === 'processing' && (() => {
+                    const { remaining, elapsed, secPerUrl } = getTimeInfo();
+                    return (
+                      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.3, mt: 0.5 }}>
+                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.85)', fontWeight: 600, fontSize: '0.72rem' }}>
+                          ⏱ {remaining} remaining
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 400, fontSize: '0.65rem' }}>
+                          {elapsed} elapsed{secPerUrl ? ` · ~${secPerUrl}s/url` : ''}
+                        </Typography>
+                      </Box>
+                    );
+                  })()}
+
                 </Box>
                 {/* ── END NEON DISPLAY ────────────────────────────── */}
 
