@@ -2011,11 +2011,21 @@ async def create_bulk_analysis(
 
         # Try preferred detection by header keywords
         url_column: Optional[str] = None
+        
+        # First priority: columns explicitly containing 'url' or 'link'
         for col in df.columns:
             col_lower = str(col).lower()
-            if any(keyword in col_lower for keyword in ['video', 'url', 'link']):
+            if 'url' in col_lower or 'link' in col_lower:
                 url_column = col
                 break
+                
+        # Second priority: fallback to 'video' but explicitly ignore 'id', 'taker', 'duration', etc.
+        if not url_column:
+            for col in df.columns:
+                col_lower = str(col).lower()
+                if 'video' in col_lower and 'id' not in col_lower and 'duration' not in col_lower and 'taker' not in col_lower:
+                    url_column = col
+                    break
 
         urls: list[str] = []
         non_empty_urls = []
@@ -2034,9 +2044,13 @@ async def create_bulk_analysis(
                 else:
                     if val_str.endswith(".0"):
                         val_str = val_str[:-2]
-                    reconstructed = f"https://southasia.citnow.com/vid/{val_str}"
-                    urls.append(reconstructed)
-                    non_empty_urls.append(reconstructed)
+                    # Only reconstruct if it looks like a video ID (alphanumeric, short)
+                    if val_str.isalnum() and len(val_str) < 20:
+                        reconstructed = f"https://southasia.citnow.com/vid/{val_str}"
+                        urls.append(reconstructed)
+                        non_empty_urls.append(reconstructed)
+                    else:
+                        urls.append("")
 
         # Fallback: pick the column with the most http-links if nothing found or if no valid items matched
         if not url_column or not non_empty_urls:
@@ -2069,9 +2083,12 @@ async def create_bulk_analysis(
                     else:
                         if val_str.endswith(".0"):
                             val_str = val_str[:-2]
-                        reconstructed = f"https://southasia.citnow.com/vid/{val_str}"
-                        urls.append(reconstructed)
-                        non_empty_urls.append(reconstructed)
+                        if val_str.isalnum() and len(val_str) < 20:
+                            reconstructed = f"https://southasia.citnow.com/vid/{val_str}"
+                            urls.append(reconstructed)
+                            non_empty_urls.append(reconstructed)
+                        else:
+                            urls.append("")
 
         if not non_empty_urls:
             raise HTTPException(status_code=400, detail="No valid URLs or Video IDs found in the Excel file.")
