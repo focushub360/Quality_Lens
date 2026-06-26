@@ -6,7 +6,7 @@ import {
 } from '@mui/material';
 import {
   PlayArrow, Check, Error, Schedule, Refresh,
-  Language, Translate, Link, Add, VideoCameraBack
+  Language, Translate, Link, Add, VideoCameraBack, HelpOutline
 } from '@mui/icons-material';
 import api from '../../services/api';
 
@@ -504,25 +504,106 @@ export default function NewAnalysis() {
                   {/* Score Cards */}
                   <Grid container spacing={2} sx={{ mb: 3 }}>
                     {[
-                      { label: 'Video Quality', value: resultData.video_analysis?.quality_score ?? resultData.video_quality_score ?? 0, color: THEME.primary },
-                      { label: 'Audio Quality', value: resultData.audio_analysis?.score ?? resultData.audio_quality_score ?? 0, color: THEME.accent },
-                      { label: 'Overall Score', value: resultData.overall_quality?.overall_score ?? resultData.overall_quality_score ?? 0, color: THEME.success },
-                    ].map(({ label, value, color }) => (
-                      <Grid item xs={4} key={label}>
-                        <Paper elevation={0} sx={{
-                          p: 2, borderRadius: 2, textAlign: 'center',
-                          border: `1px solid ${THEME.border}`,
-                          background: THEME.surface
-                        }}>
-                          <Typography variant="h4" fontWeight="700" sx={{ color }}>
-                            {Number(value).toFixed(1)}
+                      {
+                        label: 'Video Quality',
+                        value: resultData.video_analysis?.quality_score ?? resultData.video_quality_score ?? 0,
+                        color: THEME.primary,
+                        issues: resultData.video_analysis?.issues || [],
+                        tips: [
+                          ...(resultData.video_analysis?.issues || []).map(i => `Fix: ${i}`),
+                          'Ensure good, bright lighting',
+                          'Use a stable tripod or gimbal',
+                          'Shoot in HD (1080p or higher)',
+                          'Keep the camera lens clean and focused',
+                        ]
+                      },
+                      {
+                        label: 'Audio Quality',
+                        value: resultData.audio_analysis?.score ?? resultData.audio_quality_score ?? 0,
+                        color: THEME.accent,
+                        issues: resultData.audio_analysis?.issues || [],
+                        tips: [
+                          ...(resultData.audio_analysis?.issues || []).map(i => `Fix: ${i}`),
+                          'Use an external microphone',
+                          'Record in a quiet environment',
+                          'Speak clearly and at a consistent volume',
+                          'Reduce wind and background noise',
+                        ]
+                      },
+                      {
+                        label: 'Overall Score',
+                        value: resultData.overall_quality?.overall_score ?? resultData.overall_quality_score ?? 0,
+                        color: THEME.success,
+                        issues: [
+                          ...(resultData.video_analysis?.issues || []),
+                          ...(resultData.audio_analysis?.issues || [])
+                        ],
+                        tips: [
+                          'Improve both video and audio quality',
+                          'Ensure complete transcription with clear speech',
+                          'Minimize all detected issues listed above',
+                          'Maintain professional camera framing throughout',
+                        ]
+                      },
+                    ].map(({ label, value, color, issues, tips }) => {
+                      const tooltipContent = (
+                        <Box sx={{ p: 0.5, maxWidth: 280 }}>
+                          {issues.length > 0 && (
+                            <>
+                              <Typography variant="caption" fontWeight="700" sx={{ color: '#FFB400', display: 'block', mb: 0.5 }}>
+                                ⚠️ Why this score:
+                              </Typography>
+                              {issues.slice(0, 3).map((issue, i) => (
+                                <Typography key={i} variant="caption" sx={{ display: 'block', mb: 0.3, color: '#ffd580' }}>
+                                  • {issue}
+                                </Typography>
+                              ))}
+                              <Box sx={{ borderTop: '1px solid rgba(255,255,255,0.15)', my: 1 }} />
+                            </>
+                          )}
+                          <Typography variant="caption" fontWeight="700" sx={{ color: '#90EE90', display: 'block', mb: 0.5 }}>
+                            🚀 To reach 10/10:
                           </Typography>
-                          <Typography variant="caption" sx={{ color: THEME.textSecondary, fontWeight: 600 }}>
-                            {label}
-                          </Typography>
-                        </Paper>
-                      </Grid>
-                    ))}
+                          {tips.slice(0, 4).map((tip, i) => (
+                            <Typography key={i} variant="caption" sx={{ display: 'block', mb: 0.3, color: '#d4edda' }}>
+                              ✓ {tip}
+                            </Typography>
+                          ))}
+                        </Box>
+                      );
+                      return (
+                        <Grid item xs={4} key={label}>
+                          <Paper elevation={0} sx={{
+                            p: 2, borderRadius: 2, textAlign: 'center',
+                            border: `1px solid ${THEME.border}`,
+                            background: THEME.surface,
+                            position: 'relative'
+                          }}>
+                            <Tooltip
+                              title={tooltipContent}
+                              placement="top"
+                              arrow
+                              componentsProps={{ tooltip: { sx: { bgcolor: '#1a2a3a', maxWidth: 300, p: 1.5, borderRadius: 2, boxShadow: '0 8px 32px rgba(0,0,0,0.4)', border: '1px solid rgba(255,255,255,0.1)' } }, arrow: { sx: { color: '#1a2a3a' } } }}
+                            >
+                              <HelpOutline
+                                sx={{
+                                  position: 'absolute', top: 6, right: 6,
+                                  fontSize: 15, color: THEME.textSecondary,
+                                  cursor: 'help',
+                                  '&:hover': { color: THEME.primary }
+                                }}
+                              />
+                            </Tooltip>
+                            <Typography variant="h4" fontWeight="700" sx={{ color }}>
+                              {Number(value).toFixed(1)}
+                            </Typography>
+                            <Typography variant="caption" sx={{ color: THEME.textSecondary, fontWeight: 600 }}>
+                              {label}
+                            </Typography>
+                          </Paper>
+                        </Grid>
+                      );
+                    })}
                   </Grid>
 
                   {/* Vehicle & Case Details */}

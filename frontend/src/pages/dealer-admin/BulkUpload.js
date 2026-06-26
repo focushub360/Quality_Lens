@@ -112,17 +112,14 @@ export default function BulkUpload() {
     const elapsedSec = startTime ? Math.floor((now - startTime) / 1000) : 0;
     const elapsedStr = elapsedSec > 0 ? formatDuration(elapsedSec) : '—';
 
-    // Use attempted (success + failed) to estimate rate, never stuck at 0
     const attempted = (status.processed_urls || 0) + (status.failed_urls || 0);
     const remaining = status.total_urls - attempted;
 
-    if (!startTime || attempted === 0) {
-      // No data yet — rough estimate: assume 30s per video
-      return { remaining: formatDuration(remaining * 30), elapsed: elapsedStr };
-    }
-
-    const secPerUrl = elapsedSec / attempted;           // real measured rate
+    // Use a realistic fixed estimate (45s per URL) instead of historical average
+    // to prevent paused/restarted batches from artificially inflating the ETA to 60+ hours.
+    const secPerUrl = 45;           
     const remainingSec = Math.ceil(secPerUrl * remaining);
+    
     return {
       remaining: remainingSec > 0 ? formatDuration(remainingSec) : 'almost done',
       elapsed: elapsedStr,
@@ -620,6 +617,62 @@ export default function BulkUpload() {
     } catch (err) {
       console.error('Error downloading structured ZIP:', err);
       showSnackbarMessage('Failed to download structured ZIP', 'error');
+    }
+  };
+
+  const downloadExcel = async (batchIdToDownload) => {
+    try {
+      const response = await api.get(`/bulk-results/${batchIdToDownload}`);
+      const results = response.data.results || [];
+      
+      if (results.length === 0) {
+        showSnackbarMessage('No results found for this batch', 'error');
+        return;
+      }
+      
+      const headers = [
+        'Dealership', 'Vehicle', 'Service Advisor', 'Video Score', 'Audio Score', 
+        'Overall Score', 'Quality', 'Date', 'Status', 'Error Message',
+        'Transcription', 'Summary', 'Translation'
+      ];
+      const csvRows = [headers.join(',')];
+      
+      results.forEach(r => {
+        const m = r.citnow_metadata || {};
+        const escapeCsv = (str) => `"${String(str || '').replace(/"/g, '""')}"`;
+        const date = r.created_at ? new Date(r.created_at).toLocaleDateString() : '—';
+        
+        csvRows.push([
+          escapeCsv(m.dealership),
+          escapeCsv([m.vehicle, m.registration].filter(Boolean).join(' / ')),
+          escapeCsv(m.service_advisor),
+          (r.video_analysis?.quality_score || 0).toFixed(1),
+          (r.audio_analysis?.score || 0).toFixed(1),
+          (r.overall_quality?.overall_score || 0).toFixed(1),
+          escapeCsv(r.overall_quality?.overall_label),
+          escapeCsv(date),
+          escapeCsv(r.status),
+          escapeCsv(r.error_message),
+          escapeCsv(r.transcription?.text),
+          escapeCsv(r.summarization?.summary),
+          escapeCsv(r.translation?.translated_text)
+        ].join(','));
+      });
+      
+      const csvString = csvRows.join('\n');
+      const blob = new Blob(['\uFEFF' + csvString], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `batch-${batchIdToDownload}-results.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      showSnackbarMessage('CSV downloaded successfully', 'success');
+    } catch (err) {
+      showSnackbarMessage('Failed to download CSV', 'error');
+      console.error('Error downloading CSV:', err);
     }
   };
 
@@ -1369,11 +1422,16 @@ export default function BulkUpload() {
                     >
                       ✅ Bulk processing completed! Processed: {status.processed_urls} | Failed: {status.failed_urls}
                     </Alert>
+                  </Box>
+                )}
+
+                {(status.processed_urls > 0 || status.failed_urls > 0 || status.status === 'completed') && (
+                  <Box sx={{ mt: 2, display: 'flex', gap: 1 }}>
                     <Button
                       variant="contained"
-                      fullWidth
                       onClick={() => window.location.href = `/dealer/results?batchId=${status.batchId}`}
                       sx={{
+                        flex: 1,
                         background: THEME.gradientPrimary,
                         color: '#fff',
                         fontWeight: 700,
@@ -1385,8 +1443,25 @@ export default function BulkUpload() {
                         }
                       }}
                     >
-                      VIEW DETAILED RESULTS DASHBOARD
+                      {status.status === 'completed' ? 'VIEW DETAILED RESULTS DASHBOARD' : 'VIEW RESULTS DASHBOARD (LIVE)'}
                     </Button>
+                    <Tooltip title={status.status === 'completed' ? 'DOWNLOAD AS EXCEL (CSV)' : 'DOWNLOAD EXCEL SO FAR (LIVE)'}>
+                      <IconButton
+                        onClick={() => downloadExcel(status.batchId)}
+                        sx={{
+                          border: `1px solid ${THEME.primary}`,
+                          color: THEME.primary,
+                          borderRadius: 2,
+                          width: 50,
+                          height: 50,
+                          '&:hover': {
+                            backgroundColor: THEME.primaryUltraLight
+                          }
+                        }}
+                      >
+                        <Download />
+                      </IconButton>
+                    </Tooltip>
                   </Box>
                 )}
                 
