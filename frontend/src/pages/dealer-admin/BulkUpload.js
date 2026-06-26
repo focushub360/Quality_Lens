@@ -44,8 +44,9 @@ const THEME = {
   shadowLg: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
 };
 
-// Persistent storage key
+// Persistent storage keys
 const STORAGE_KEY = 'bulkProcessingBatches';
+const STATUS_SNAPSHOT_KEY = 'bulkActiveStatusSnapshot';
 
 // Language options
 const LANGS = [
@@ -165,6 +166,28 @@ export default function BulkUpload() {
   useEffect(() => {
     isMounted.current = true;
 
+    // ── INSTANT RESTORE ──────────────────────────────────────────
+    // Before the async server fetch even starts, restore the last
+    // known status from localStorage so the processing card shows
+    // up immediately when the user navigates back to this page.
+    try {
+      const snapshot = localStorage.getItem(STATUS_SNAPSHOT_KEY);
+      if (snapshot) {
+        const saved = JSON.parse(snapshot);
+        if (saved && saved.batchId) {
+          setBatchId(saved.batchId);
+          setStatus(saved);
+          // Restart polling immediately if the batch was still running
+          if (['processing', 'pending', 'stopping'].includes(saved.status)) {
+            startPolling(saved.batchId);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Could not restore status snapshot', e);
+    }
+    // ─────────────────────────────────────────────────────────────
+
     const init = async () => {
       try {
         // 1) Get current user (includes dealer_id and role)
@@ -201,6 +224,18 @@ export default function BulkUpload() {
       console.error('Error persisting batches to localStorage:', err);
     }
   }, [activeBatches]);
+
+  // Persist full status object to localStorage whenever it changes
+  // so we can restore the processing card instantly on page re-visit
+  useEffect(() => {
+    if (status) {
+      try {
+        localStorage.setItem(STATUS_SNAPSHOT_KEY, JSON.stringify(status));
+      } catch (err) {
+        console.error('Error persisting status snapshot:', err);
+      }
+    }
+  }, [status]);
 
   const showSnackbarMessage = (message, severity = 'success') => {
     setSnackbar({ open: true, message, severity });
@@ -611,6 +646,7 @@ export default function BulkUpload() {
     setExcelPreview(null);
     setList([]);
     localStorage.removeItem('trackedBulkBatchId');
+    localStorage.removeItem(STATUS_SNAPSHOT_KEY);
     if (pollingIntervalRef.current) {
       clearInterval(pollingIntervalRef.current);
       pollingIntervalRef.current = null;
