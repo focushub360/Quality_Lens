@@ -1284,6 +1284,9 @@ async def process_single_analysis_task(
         
         if not processed_results:
             raise Exception("Analysis returned empty results without an error message.")
+            
+        if processed_results.get("status") == BatchStatus.FAILED or processed_results.get("error_message"):
+            raise Exception(processed_results.get("error_message", "Analysis pipeline encountered an internal error."))
         
         # Store results
         # Restore created_at as datetime object for MongoDB Date storage compatibility
@@ -1373,7 +1376,7 @@ async def _run_analysis_pipeline(
         "transcription_language": transcription_language,
         "target_language_used": target_language,
         "created_at": dt.utcnow(),
-        "status": BatchStatus.COMPLETED,
+        "status": BatchStatus.FAILED if results.get("error_message") else BatchStatus.COMPLETED,
         
         # Extracted key metrics for dashboard queries
         "overall_quality_score": results.get("overall_quality", {}).get("overall_score"),
