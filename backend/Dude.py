@@ -815,6 +815,80 @@ class UnifiedMediaAnalyzer:
             return 0
 
     def analyze_video_quality(self, video_path):
+        import os
+        gemini_key = os.getenv("GEMINI_API_KEY")
+        if gemini_key:
+            return self._analyze_video_with_gemini(video_path, gemini_key)
+        else:
+            print("⚠️ GEMINI_API_KEY not found in environment. Falling back to OpenCV heuristics for video analysis.")
+            return self._analyze_video_with_opencv(video_path)
+
+    def _analyze_video_with_gemini(self, video_path, api_key):
+        import google.generativeai as genai
+        import json
+        import time
+        import traceback
+        
+        try:
+            genai.configure(api_key=api_key)
+            print(f"🎬 Uploading {video_path} to Gemini for true Vision AI analysis...")
+            video_file = genai.upload_file(path=video_path)
+            
+            # Wait for processing
+            while video_file.state.name == "PROCESSING":
+                print("⏳ Waiting for Gemini to process the video...")
+                time.sleep(3)
+                video_file = genai.get_file(video_file.name)
+                
+            if video_file.state.name == "FAILED":
+                raise Exception("Gemini failed to process the video file.")
+                
+            print("✅ Video processed by Gemini. Asking for quality assessment...")
+            
+            model = genai.GenerativeModel(model_name="gemini-1.5-flash")
+            
+            prompt = """
+            You are a professional video quality analyst. Watch this video and grade its technical visual quality.
+            DO NOT judge the content or the subject matter. ONLY judge the camera work, lighting, focus, stability, and visual clarity.
+            
+            Return a JSON object with EXACTLY these keys:
+            {
+              "quality_score": <float between 1.0 and 10.0, where 10 is cinematic perfect quality>,
+              "quality_label": <string, one of: "Excellent", "Very Good", "Good", "Fair", "Poor", "Very Poor">,
+              "issues": [<array of strings describing visual issues like "blurry", "too dark", "shaky", "poor compression">],
+              "shake_level": <string, e.g., "None", "Minimal", "Noticeable", "Severe">,
+              "resolution_quality": <string, e.g., "High Definition", "Standard Definition", "Low Quality">,
+              "detailed_analysis": {
+                 "lighting": <description of lighting>,
+                 "focus": <description of sharpness/focus>,
+                 "stability": <description of camera shake>
+              },
+              "component_scores": {
+                 "sharpness": <0-100>,
+                 "brightness": <0-100>,
+                 "stability": <0-100>,
+                 "color": <0-100>
+              }
+            }
+            Respond with ONLY valid JSON.
+            """
+            
+            response = model.generate_content([video_file, prompt], generation_config={"response_mime_type": "application/json"})
+            
+            # Clean up the file from Gemini servers
+            genai.delete_file(video_file.name)
+            
+            result = json.loads(response.text)
+            print(f"✅ Gemini Analysis Complete! Score: {result.get('quality_score')}/10")
+            return result
+            
+        except Exception as e:
+            print(f"❌ Gemini Vision API Failed: {e}")
+            traceback.print_exc()
+            print("⚠️ Falling back to OpenCV heuristics...")
+            return self._analyze_video_with_opencv(video_path)
+
+    def _analyze_video_with_opencv(self, video_path):
         """Comprehensive video quality analysis with stability, noise, and detail assessment - SCORES OUT OF 10"""
         try:
             cap = cv2.VideoCapture(video_path)
