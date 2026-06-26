@@ -246,12 +246,22 @@ export default function Results() {
 
       // Compute stats from FILTERED results only
       if (Array.isArray(results) && results.length > 0) {
-        const avgVideo = results.reduce((sum, r) => sum + (r.video_analysis?.quality_score || r.video_quality_score || 0), 0) / results.length;
-        const avgAudio = results.reduce((sum, r) => sum + (r.audio_analysis?.score || r.audio_quality_score || 0), 0) / results.length;
-        const avgOverall = results.reduce((sum, r) => sum + (r.overall_quality?.overall_score || r.overall_quality_score || 0), 0) / results.length;
+        const validResults = results.filter(r => r.status !== 'failed' && !r.error_message);
+        
+        const avgVideo = validResults.length > 0 
+          ? validResults.reduce((sum, r) => sum + (r.video_analysis?.quality_score || r.video_quality_score || 0), 0) / validResults.length 
+          : 0;
+          
+        const avgAudio = validResults.length > 0 
+          ? validResults.reduce((sum, r) => sum + (r.audio_analysis?.score || r.audio_quality_score || 0), 0) / validResults.length 
+          : 0;
+          
+        const avgOverall = validResults.length > 0 
+          ? validResults.reduce((sum, r) => sum + (r.overall_quality?.overall_score || r.overall_quality_score || 0), 0) / validResults.length 
+          : 0;
 
         const distribution = { excellent: 0, good: 0, fair: 0, poor: 0 };
-        results.forEach(r => {
+        validResults.forEach(r => {
           const score = r.overall_quality?.overall_score || r.overall_quality_score || 0;
           if (score >= 8) distribution.excellent++;
           else if (score >= 6) distribution.good++;
@@ -260,7 +270,7 @@ export default function Results() {
         });
 
         setStats({
-          totalResults: results.length,   // use FILTERED count, not backend total
+          totalResults: results.length,   // keep total count of analyses submitted
           averageVideoScore: avgVideo,
           averageAudioScore: avgAudio,
           averageOverallScore: avgOverall,
