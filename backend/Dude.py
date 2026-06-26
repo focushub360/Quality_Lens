@@ -417,14 +417,8 @@ class UnifiedMediaAnalyzer:
         video_url = metadata.get('video_url')
 
         if not video_url:
-            print("❌ No video URL found in metadata, falling back to direct pattern...")
-            # Fallback: extract video ID from URL
-            if '/vid/' in url:
-                video_id = url.split('/vid/')[-1].split('?')[0]
-            else:
-                video_id = url.split('/')[-1].split('?')[0]
-            
-            video_url = f"https://lts.in.prod.citnow.com/cin-southasia-sanghi-classic-service/{video_id}/output-1200k.mp4"
+            print("❌ No video URL found in metadata. The link may have expired or is invalid.")
+            raise Exception("Video not found on the page. The link may have expired, returned 404, or is invalid.")
 
         print(f"🎯 Using video URL: {video_url}")
 
