@@ -118,19 +118,31 @@ export default function BulkUpload() {
     }
   };
 
-  // Interpolation logic to count decimals continuously (e.g. 12.90% live)
+  // liveProgress ref to ensure we never display a backward jump
+  const liveProgressRef = useRef(0);
+
+  // Interpolation logic: uses ATTEMPTED (processed + failed) as base so
+  // progress always moves forward even when all videos are failing.
   useEffect(() => {
     if (!status) {
       setLiveProgress(0);
+      liveProgressRef.current = 0;
       return;
     }
 
     if (status.status !== 'processing') {
-      setLiveProgress(status.progress_percentage || 0);
+      const finalPct = status.progress_percentage || 0;
+      setLiveProgress(finalPct);
+      liveProgressRef.current = finalPct;
       return;
     }
 
-    setLiveProgress(status.progress_percentage);
+    // Use the server value as floor (never go below it)
+    const serverPct = status.progress_percentage || 0;
+    if (serverPct > liveProgressRef.current) {
+      liveProgressRef.current = serverPct;
+      setLiveProgress(serverPct);
+    }
 
     let activeUrl = status.current_url;
     let itemStartTime = Date.now();
@@ -145,15 +157,23 @@ export default function BulkUpload() {
       const estimatedDuration = 25000; // 25s per video
       const itemProgressRatio = Math.min(elapsed / estimatedDuration, 0.95);
 
-      const baseProgress = (status.processed_urls / status.total_urls) * 100;
+      // Count both successful AND failed as attempted
+      const attempted = (status.processed_urls || 0) + (status.failed_urls || 0);
+      const baseProgress = (attempted / status.total_urls) * 100;
       const nextItemWeight = (1 / status.total_urls) * 100;
       const estimatedLive = baseProgress + (nextItemWeight * itemProgressRatio);
+      const capped = Math.min(estimatedLive, 99.99);
 
-      setLiveProgress(Math.min(estimatedLive, 99.99));
+      // Only move forward — never decrease
+      if (capped > liveProgressRef.current) {
+        liveProgressRef.current = capped;
+        setLiveProgress(capped);
+      }
     }, 100);
 
     return () => clearInterval(interval);
   }, [status]);
+
 
   const [targetLanguage, setTargetLanguage] = useState('en');
   const [list, setList] = useState([]);

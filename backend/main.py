@@ -2280,8 +2280,11 @@ async def get_bulk_status(batch_id: str, current_user: UserInDB = Depends(get_cu
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to view this batch's status.")
 
     processed = batch.get("processed_urls", 0)
+    failed = batch.get("failed_urls", 0)
     total = batch.get("total_urls", 0)
-    progress = (processed / total * 100) if total > 0 else 0
+    # Count both successful AND failed as "attempted" so progress never goes backward
+    attempted = processed + failed
+    progress = (attempted / total * 100) if total > 0 else 0
     current_status = batch.get("status", "unknown")
     
     can_cancel = current_status in [BatchStatus.PENDING, BatchStatus.PROCESSING]
