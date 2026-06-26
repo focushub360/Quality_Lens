@@ -2,15 +2,14 @@ import React, { useEffect, useState } from 'react';
 import {
   Card, CardContent, Typography, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
   Button, Box, Chip, Tooltip, IconButton, Dialog, DialogTitle, DialogContent, DialogActions,
-  TablePagination, Grid, LinearProgress, Avatar, Fade, Container, TextField, Stack,
-  InputAdornment, Divider, Badge, MenuItem, Menu
+  TablePagination, Grid, Avatar, Fade, Container, TextField, Stack,
+  InputAdornment, Divider, MenuItem, Menu
 } from '@mui/material';
 import {
   Business, DirectionsCar, Person, Description, Email, Phone, Videocam, Mic,
-  Vibration, VolumeUp, VolumeOff, Warning, CheckCircle, Score, Visibility, ArrowBack,
+  CheckCircle, Score, Visibility, ArrowBack,
   Delete as DeleteIcon, FileDownload as FileDownloadIcon, Search as SearchIcon,
-  FilterList, Refresh, Analytics, TrendingUp, Star, Assessment, Dashboard as DashboardIcon,
-  PieChart, Timeline, Speed, Group, VideoLibrary, EmojiEvents, PictureAsPdf, TableChart
+  Refresh, Assessment, Group, VideoLibrary, PictureAsPdf, TableChart
 } from '@mui/icons-material';
 import api from '../../services/api';
 import { getDealerUserStats } from '../../services/dealer_user';

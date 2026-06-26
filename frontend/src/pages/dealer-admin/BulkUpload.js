@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  Box, Paper, Typography, Button, LinearProgress, CircularProgress,
+  Box, Paper, Typography, Button, CircularProgress,
   Card, CardContent, Alert, Chip, Grid, Table,
   TableBody, TableCell, TableContainer, TableHead, TableRow,
   Dialog, DialogTitle, DialogContent, DialogActions,
@@ -9,7 +9,7 @@ import {
 import {
   Upload, PlayArrow, CheckCircle, Error, TableChart,
   Close, History, Refresh, Stop, Delete, Download, Translate,
-  CloudUpload, Dashboard, Archive, Description
+  CloudUpload, Archive, Description
 } from '@mui/icons-material';
 import api from '../../services/api';
 

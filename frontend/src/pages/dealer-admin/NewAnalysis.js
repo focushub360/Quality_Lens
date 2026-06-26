@@ -2,11 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { useTasks } from '../../contexts/TaskContext';
 import {
   Card, CardContent, Grid, TextField, MenuItem, Button, Typography, Alert,
-  Box, LinearProgress, Chip, Paper, IconButton, Tooltip, Container, CircularProgress
+  Box, Chip, Paper, Tooltip, Container, CircularProgress
 } from '@mui/material';
 import {
   PlayArrow, Check, Error, Schedule, Refresh,
-  Language, Translate, Link, Add, VideoCameraBack, HelpOutline
+  Language, Translate, Add, VideoCameraBack, HelpOutline
 } from '@mui/icons-material';
 import api from '../../services/api';
 
