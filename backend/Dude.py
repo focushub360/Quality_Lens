@@ -828,58 +828,87 @@ class UnifiedMediaAnalyzer:
         import json
         import time
         import traceback
+        import tempfile
+        import base64
         
         try:
             genai.configure(api_key=api_key)
-            print(f"🎬 Uploading {video_path} to Gemini for true Vision AI analysis...")
-            video_file = genai.upload_file(path=video_path)
+            print(f"🎬 Extracting keyframes from {video_path} for fast Gemini Vision analysis...")
             
-            # Wait for processing
-            while video_file.state.name == "PROCESSING":
-                print("⏳ Waiting for Gemini to process the video...")
-                time.sleep(3)
-                video_file = genai.get_file(video_file.name)
-                
-            if video_file.state.name == "FAILED":
-                raise Exception("Gemini failed to process the video file.")
-                
-            print("✅ Video processed by Gemini. Asking for quality assessment...")
+            # --- FAST APPROACH: Extract keyframes as images instead of uploading full video ---
+            # This is 5-10x faster than uploading the whole video file
+            cap = cv2.VideoCapture(video_path)
+            if not cap.isOpened():
+                raise Exception("Could not open video file for keyframe extraction")
+            
+            frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            fps = cap.get(cv2.CAP_PROP_FPS)
+            duration = frame_count / max(fps, 1)
+            
+            # Sample 8 evenly-spaced keyframes across the video
+            num_keyframes = min(8, max(3, int(duration / 5)))
+            frame_indices = [int(i * frame_count / num_keyframes) for i in range(num_keyframes)]
+            
+            keyframes_b64 = []
+            for idx in frame_indices:
+                cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
+                ret, frame = cap.read()
+                if not ret:
+                    continue
+                # Resize to reduce payload size (max 720p)
+                h, w = frame.shape[:2]
+                if w > 1280:
+                    scale = 1280 / w
+                    frame = cv2.resize(frame, (int(w * scale), int(h * scale)))
+                _, buf = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+                keyframes_b64.append(base64.b64encode(buf.tobytes()).decode('utf-8'))
+            cap.release()
+            
+            if not keyframes_b64:
+                raise Exception("Could not extract any keyframes from video")
+            
+            print(f"✅ Extracted {len(keyframes_b64)} keyframes. Sending to Gemini...")
             
             model = genai.GenerativeModel(model_name="gemini-1.5-flash")
             
-            prompt = """
-            You are a professional video quality analyst. Watch this video and grade its technical visual quality.
-            DO NOT judge the content or the subject matter. ONLY judge the camera work, lighting, focus, stability, and visual clarity.
+            # Build the request: text prompt + all keyframe images inline
+            parts = []
+            for i, b64 in enumerate(keyframes_b64):
+                parts.append({"inline_data": {"mime_type": "image/jpeg", "data": b64}})
             
-            Return a JSON object with EXACTLY these keys:
-            {
-              "quality_score": <float between 1.0 and 10.0, where 10 is cinematic perfect quality>,
-              "quality_label": <string, one of: "Excellent", "Very Good", "Good", "Fair", "Poor", "Very Poor">,
-              "issues": [<array of strings describing visual issues like "blurry", "too dark", "shaky", "poor compression">],
-              "shake_level": <string, e.g., "None", "Minimal", "Noticeable", "Severe">,
-              "resolution_quality": <string, e.g., "High Definition", "Standard Definition", "Low Quality">,
-              "detailed_analysis": {
-                 "lighting": <description of lighting>,
-                 "focus": <description of sharpness/focus>,
-                 "stability": <description of camera shake>
-              },
-              "component_scores": {
-                 "sharpness": <0-100>,
-                 "brightness": <0-100>,
-                 "stability": <0-100>,
-                 "color": <0-100>
-              }
-            }
-            Respond with ONLY valid JSON.
-            """
+            prompt = f"""You are a professional video quality analyst. I am showing you {len(keyframes_b64)} keyframes sampled evenly from a video.
+            Analyze the TECHNICAL VISUAL QUALITY only. Do NOT judge content or subject matter.
+            Grade: camera stability, lighting, focus/sharpness, framing, and overall visual clarity.
             
-            response = model.generate_content([video_file, prompt], generation_config={"response_mime_type": "application/json"})
+            Return ONLY valid JSON with EXACTLY these keys:
+            {{
+              "quality_score": <float 1.0-10.0, where 10 is perfect cinematic quality>,
+              "quality_label": <one of: "Excellent", "Very Good", "Good", "Fair", "Poor", "Very Poor">,
+              "issues": [<list of specific visual problems found, e.g. "blurry", "too dark", "shaky", "overexposed">],
+              "shake_level": <"None", "Minimal", "Noticeable", or "Severe">,
+              "resolution_quality": <"High Definition", "Standard Definition", or "Low Quality">,
+              "detailed_analysis": {{
+                "lighting": "<one sentence about lighting quality>",
+                "focus": "<one sentence about sharpness and focus>",
+                "stability": "<one sentence about camera movement>"
+              }},
+              "component_scores": {{
+                "sharpness": <integer 0-100>,
+                "brightness": <integer 0-100>,
+                "stability": <integer 0-100>,
+                "color": <integer 0-100>
+              }}
+            }}"""
             
-            # Clean up the file from Gemini servers
-            genai.delete_file(video_file.name)
+            parts.append({"text": prompt})
+            
+            response = model.generate_content(
+                parts,
+                generation_config={"response_mime_type": "application/json"}
+            )
             
             result = json.loads(response.text)
-            print(f"✅ Gemini Analysis Complete! Score: {result.get('quality_score')}/10")
+            print(f"✅ Gemini Keyframe Analysis Complete! Score: {result.get('quality_score')}/10 ({len(keyframes_b64)} frames analyzed)")
             return result
             
         except Exception as e:
@@ -887,6 +916,7 @@ class UnifiedMediaAnalyzer:
             traceback.print_exc()
             print("⚠️ Falling back to OpenCV heuristics...")
             return self._analyze_video_with_opencv(video_path)
+
 
     def _analyze_video_with_opencv(self, video_path):
         """Comprehensive video quality analysis with stability, noise, and detail assessment - SCORES OUT OF 10"""
