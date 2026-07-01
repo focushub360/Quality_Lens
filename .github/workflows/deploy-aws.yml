@@ -48,7 +48,7 @@ jobs:
             docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
 
           # Pull the new image and restart
-          cd /home/${{ secrets.EC2_USER }}/videoproject_frontend
+          cd /home/${{ secrets.EC2_USER }}/Quality_Lens || cd /home/${{ secrets.EC2_USER }}/videoproject_frontend
           docker compose -f docker-compose.aws.yml pull backend
           docker compose -f docker-compose.aws.yml up -d --no-deps backend
           echo "✅ Backend restarted with new image"
