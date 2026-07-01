@@ -1941,6 +1941,7 @@ def load_excel_file_robustly(contents: bytes, filename: str) -> pd.DataFrame:
     """
     Robustly loads Excel files (.xls, .xlsx) into a pandas DataFrame.
     Handles xlrd's "Workbook corruption: seen[2] == 4" error by using engine_kwargs.
+    Also handles files that are actually CSVs or HTML tables with an Excel extension.
     """
     filename_lower = filename.lower() if filename else ""
     
@@ -1951,9 +1952,9 @@ def load_excel_file_robustly(contents: bytes, filename: str) -> pd.DataFrame:
         err_msg = str(e)
         logger.warning(f"Default pandas read failed for {filename}: {err_msg}. Retrying with specific settings...")
         
-        # Check if the error is due to workbook corruption (xlrd)
-        if "Workbook corruption" in err_msg or "seen[2] ==" in err_msg:
-            # 2. Try specifically with engine='xlrd' and ignore_workbook_corruption=True
+        # 2. Try specifically with engine='xlrd' and ignore_workbook_corruption=True
+        # We try this if the error message mentions workbook corruption OR if the file has a .xls extension
+        if "Workbook corruption" in err_msg or "seen[2] ==" in err_msg or filename_lower.endswith('.xls'):
             try:
                 logger.info(f"Retrying {filename} with engine='xlrd' and ignore_workbook_corruption=True")
                 return pd.read_excel(
@@ -1983,6 +1984,34 @@ def load_excel_file_robustly(contents: bytes, filename: str) -> pd.DataFrame:
                 )
             except Exception:
                 pass
+        
+        # 4. Fallback for files that are actually CSVs/TSVs but have an Excel extension
+        try:
+            logger.info(f"Retrying {filename} as CSV")
+            return pd.read_csv(_io.BytesIO(contents))
+        except Exception:
+            pass
+
+        try:
+            logger.info(f"Retrying {filename} as Tab-Separated CSV (Unicode)")
+            return pd.read_csv(_io.BytesIO(contents), sep='\t', encoding='utf-16')
+        except Exception:
+            pass
+
+        try:
+            logger.info(f"Retrying {filename} as CSV (ISO-8859-1)")
+            return pd.read_csv(_io.BytesIO(contents), encoding='iso-8859-1')
+        except Exception:
+            pass
+
+        # 5. Fallback for files that are actually HTML tables but have an Excel extension
+        try:
+            logger.info(f"Retrying {filename} as HTML table")
+            dfs = pd.read_html(_io.BytesIO(contents))
+            if dfs:
+                return dfs[0]
+        except Exception:
+            pass
         
         # Reraise the original error if we couldn't parse it with any fallback
         raise e
