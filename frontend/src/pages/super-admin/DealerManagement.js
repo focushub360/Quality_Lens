@@ -623,6 +623,38 @@ export default function DealerManagement() {
   const [userPage, setUserPage] = useState(0);
   const [userRowsPerPage, setUserRowsPerPage] = useState(10);
 
+  // Create Dealer Form
+  const [createDealerOpen, setCreateDealerOpen] = useState(false);
+  const [createDealerError, setCreateDealerError] = useState('');
+  const [createDealerForm, setCreateDealerForm] = useState({
+    dealer_id: '', showroom_name: '', username: '', email: '', password: ''
+  });
+
+  const handleCreateDealerSubmit = async () => {
+    setCreateDealerError('');
+    if (!createDealerForm.dealer_id || !createDealerForm.showroom_name || !createDealerForm.username || !createDealerForm.email || !createDealerForm.password) {
+      setCreateDealerError('All fields are required');
+      return;
+    }
+    
+    try {
+      await createUser({
+        username: createDealerForm.username,
+        email: createDealerForm.email,
+        password: createDealerForm.password,
+        role: 'dealer_admin',
+        dealer_id: createDealerForm.dealer_id,
+        showroom_name: createDealerForm.showroom_name
+      });
+      setCreateDealerOpen(false);
+      setCreateDealerForm({ dealer_id: '', showroom_name: '', username: '', email: '', password: '' });
+      setRefreshCounter(prev => prev + 1);
+    } catch (error) {
+      console.error('Error creating dealer:', error);
+      setCreateDealerError(error.response?.data?.error || 'Failed to create dealer');
+    }
+  };
+
   // User form
   const [userFormOpen, setUserFormOpen] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
@@ -1282,29 +1314,53 @@ export default function DealerManagement() {
           }}>
             Dealership Network
           </Typography>
-          <Button
-            variant="contained"
-            startIcon={<Refresh />}
-            onClick={() => setRefreshCounter(prev => prev + 1)}
-            disabled={loading}
-            sx={{
-              background: THEME.gradientPrimary,
-              borderRadius: 3,
-              px: 4,
-              py: 1.5,
-              fontWeight: 600,
-              textTransform: 'none',
-              fontSize: '16px',
-              boxShadow: THEME.shadowMd,
-              '&:hover': {
-                boxShadow: THEME.shadowLg,
-                transform: 'translateY(-1px)'
-              },
-              transition: 'all 0.2s ease-in-out'
-            }}
-          >
-            Refresh Data
-          </Button>
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            <Button
+              variant="contained"
+              startIcon={<Add />}
+              onClick={() => setCreateDealerOpen(true)}
+              sx={{
+                background: THEME.gradientPrimary,
+                borderRadius: 3,
+                px: 4,
+                py: 1.5,
+                fontWeight: 600,
+                textTransform: 'none',
+                fontSize: '16px',
+                boxShadow: THEME.shadowMd,
+                '&:hover': {
+                  boxShadow: THEME.shadowLg,
+                  transform: 'translateY(-1px)'
+                },
+                transition: 'all 0.2s ease-in-out'
+              }}
+            >
+              Create Dealer
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={<Refresh />}
+              onClick={() => setRefreshCounter(prev => prev + 1)}
+              disabled={loading}
+              sx={{
+                borderRadius: 3,
+                px: 3,
+                py: 1.5,
+                fontWeight: 600,
+                textTransform: 'none',
+                fontSize: '16px',
+                borderColor: THEME.primary,
+                color: THEME.primary,
+                '&:hover': {
+                  background: THEME.primaryUltraLight,
+                  borderColor: THEME.primaryDark,
+                },
+                transition: 'all 0.2s ease-in-out'
+              }}
+            >
+              Refresh Data
+            </Button>
+          </Box>
         </Box>
 
         {/* Centered Dealers Grid */}
@@ -3738,7 +3794,134 @@ export default function DealerManagement() {
           </DialogActions>
         </Dialog>
 
+        {/* Create Dealer Dialog */}
+        <Dialog
+          open={createDealerOpen}
+          onClose={() => setCreateDealerOpen(false)}
+          fullWidth
+          maxWidth="sm"
+          PaperProps={{
+            sx: { borderRadius: 3, boxShadow: THEME.shadowMd }
+          }}
+        >
+          <DialogTitle sx={{
+            bgcolor: THEME.surface,
+            borderBottom: `1px solid ${THEME.border}`,
+            fontWeight: 600,
+            color: THEME.textPrimary
+          }}>
+            Create New Dealership
+          </DialogTitle>
 
+          <DialogContent sx={{ pt: 3 }}>
+            {createDealerError && (
+              <Alert severity="error" sx={{ mb: 2 }} onClose={() => setCreateDealerError('')}>
+                {createDealerError}
+              </Alert>
+            )}
+
+            <Stack spacing={2.5} sx={{ mt: 1 }}>
+              <TextField
+                fullWidth
+                label="Dealer ID"
+                value={createDealerForm.dealer_id}
+                onChange={(e) => setCreateDealerForm({ ...createDealerForm, dealer_id: e.target.value })}
+                required
+                helperText="Unique identifier for this dealership (e.g., 'bmw-kun')"
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <Business sx={{ color: THEME.textSecondary }} />
+                    </InputAdornment>
+                  )
+                }}
+              />
+              <TextField
+                fullWidth
+                label="Showroom Name"
+                value={createDealerForm.showroom_name}
+                onChange={(e) => setCreateDealerForm({ ...createDealerForm, showroom_name: e.target.value })}
+                required
+                helperText="Full name of the dealership"
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <Business sx={{ color: THEME.textSecondary }} />
+                    </InputAdornment>
+                  )
+                }}
+              />
+              
+              <Divider sx={{ my: 1 }}><Chip label="Initial Administrator" size="small" /></Divider>
+
+              <TextField
+                fullWidth
+                label="Admin Username"
+                value={createDealerForm.username}
+                onChange={(e) => setCreateDealerForm({ ...createDealerForm, username: e.target.value })}
+                required
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <Person sx={{ color: THEME.textSecondary }} />
+                    </InputAdornment>
+                  )
+                }}
+              />
+              <TextField
+                fullWidth
+                label="Admin Email"
+                type="email"
+                value={createDealerForm.email}
+                onChange={(e) => setCreateDealerForm({ ...createDealerForm, email: e.target.value })}
+                required
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <Email sx={{ color: THEME.textSecondary }} />
+                    </InputAdornment>
+                  )
+                }}
+              />
+              <TextField
+                fullWidth
+                label="Admin Password"
+                type="password"
+                value={createDealerForm.password}
+                onChange={(e) => setCreateDealerForm({ ...createDealerForm, password: e.target.value })}
+                required
+              />
+            </Stack>
+          </DialogContent>
+
+          <DialogActions sx={{ p: 2.5, bgcolor: THEME.surface, borderTop: `1px solid ${THEME.border}` }}>
+            <Button 
+              onClick={() => setCreateDealerOpen(false)}
+              sx={{ color: THEME.textSecondary, fontWeight: 600 }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleCreateDealerSubmit}
+              variant="contained"
+              disabled={!createDealerForm.dealer_id || !createDealerForm.showroom_name || !createDealerForm.username || !createDealerForm.email || !createDealerForm.password}
+              sx={{
+                background: THEME.gradientPrimary,
+                borderRadius: 2,
+                px: 3,
+                fontWeight: 600,
+                boxShadow: THEME.shadowSm,
+                '&:hover': {
+                  boxShadow: THEME.shadowMd,
+                  transform: 'translateY(-1px)'
+                },
+                transition: 'all 0.2s ease-in-out'
+              }}
+            >
+              Create Dealer
+            </Button>
+          </DialogActions>
+        </Dialog>
         <style jsx>{`
           @keyframes spin {
             0% { transform: rotate(0deg); }
