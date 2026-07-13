@@ -396,66 +396,155 @@ const DealerPerformanceChart = ({ data }) => {
 
 
 
-const DealerPerformanceHeatmap = ({ data, selectedFilterDealer, allResults, users }) => {
-  const getCellColor = (val) => {
-    if (val >= 8.5) return { bg: '#E8F5E9', text: '#2E7D32' };
-    if (val >= 7.0) return { bg: '#E3F2FD', text: '#1565C0' };
-    if (val >= 5.5) return { bg: '#FFF3E0', text: '#EF6C00' };
-    return { bg: '#FFEBEE', text: '#C62828' };
+const CustomTreemapContent = (props) => {
+  const { x, y, width, height, name, overall, size } = props;
+
+  const getScoreColor = (score) => {
+    if (score >= 8.5) return '#2E7D32';
+    if (score >= 7.0) return '#1565C0';
+    if (score >= 5.5) return '#EF6C00';
+    return '#C62828';
   };
 
+  const getScoreBg = (score) => {
+    if (score >= 8.5) return '#E8F5E9';
+    if (score >= 7.0) return '#E3F2FD';
+    if (score >= 5.5) return '#FFF3E0';
+    return '#FFEBEE';
+  };
+
+  const bgColor = getScoreBg(overall || 0);
+  const textColor = getScoreColor(overall || 0);
+
+  const showText = width > 50 && height > 35;
+  const showSubText = width > 80 && height > 55;
+
+  return (
+    <g>
+      <rect
+        x={x}
+        y={y}
+        width={width}
+        height={height}
+        style={{
+          fill: bgColor,
+          stroke: '#fff',
+          strokeWidth: 2,
+          strokeOpacity: 1,
+        }}
+      />
+      {showText && (
+        <text
+          x={x + width / 2}
+          y={y + height / 2 - (showSubText ? 6 : 0)}
+          textAnchor="middle"
+          dominantBaseline="middle"
+          style={{
+            fill: textColor,
+            fontSize: showSubText ? '13px' : '11px',
+            fontWeight: 700,
+            fontFamily: 'Outfit, sans-serif'
+          }}
+        >
+          {name}
+        </text>
+      )}
+      {showSubText && (
+        <text
+          x={x + width / 2}
+          y={y + height / 2 + 12}
+          textAnchor="middle"
+          dominantBaseline="middle"
+          style={{
+            fill: textColor,
+            fontSize: '11px',
+            fontWeight: 500,
+            opacity: 0.85,
+            fontFamily: 'Outfit, sans-serif'
+          }}
+        >
+          {(overall || 0).toFixed(1)} ({size} videos)
+        </text>
+      )}
+    </g>
+  );
+};
+
+const DealerPerformanceHeatmap = ({ data, selectedFilterDealer, allResults, users }) => {
   let rows = [];
-  let title = "Dealership Performance Heatmap";
+  let title = "Dealership Performance Heatmap (Treemap)";
+
+  const computeMetrics = (results) => {
+    const total = results.length;
+    if (total === 0) {
+      return {
+        overall: 0,
+        videos: 0
+      };
+    }
+
+    const scores = results.filter(r => r.overall_quality_score != null).map(r => r.overall_quality_score);
+    const avgOverall = scores.length > 0 ? (scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
+
+    return {
+      overall: avgOverall,
+      videos: total
+    };
+  };
 
   if (selectedFilterDealer === 'all') {
-    rows = data.map(d => ({
-      id: d.id,
-      name: d.name,
-      overall: d.overall,
-      video: d.video,
-      audio: d.audio,
-      videos: d.videos
-    }));
+    const dealerMap = {};
+    allResults.forEach(r => {
+      const did = r.dealer_id;
+      if (!did) return;
+      if (!dealerMap[did]) dealerMap[did] = [];
+      dealerMap[did].push(r);
+    });
+
+    data.forEach(d => {
+      if (!dealerMap[d.id]) {
+        dealerMap[d.id] = [];
+      }
+    });
+
+    rows = Object.entries(dealerMap).map(([did, results]) => {
+      const dealerObj = data.find(d => d.id === did);
+      const name = dealerObj ? dealerObj.name : did;
+      const metrics = computeMetrics(results);
+      return {
+        id: did,
+        name: name,
+        size: metrics.videos || 1,
+        overall: metrics.overall,
+        videos: metrics.videos
+      };
+    }).filter(d => d.videos > 0).sort((a, b) => b.overall - a.overall);
   } else {
     const selectedDealerObj = data.find(d => d.id === selectedFilterDealer);
     const dealerName = selectedDealerObj ? selectedDealerObj.name : 'Selected Dealership';
-    title = `${dealerName} — User Performance Heatmap`;
+    title = `${dealerName} — User Performance Heatmap (Treemap)`;
 
     const dealerResults = allResults.filter(r => r.dealer_id === selectedFilterDealer);
-    
     const userMap = {};
     dealerResults.forEach(r => {
       const userId = r.submitted_by_user_id;
       if (!userId) return;
-      if (!userMap[userId]) {
-        userMap[userId] = {
-          id: userId,
-          overall: [], video: [], audio: [], count: 0
-        };
-      }
-      userMap[userId].count++;
-      if (r.overall_quality_score != null) userMap[userId].overall.push(r.overall_quality_score);
-      if (r.video_quality_score != null) userMap[userId].video.push(r.video_quality_score);
-      if (r.audio_quality_score != null) userMap[userId].audio.push(r.audio_quality_score);
+      if (!userMap[userId]) userMap[userId] = [];
+      userMap[userId].push(r);
     });
 
-    rows = Object.entries(userMap).map(([userId, data]) => {
+    rows = Object.entries(userMap).map(([userId, results]) => {
       const userObj = users.find(u => String(u._id || u.id) === userId);
       const name = userObj ? userObj.username : `User ${userId.substring(0, 5)}`;
-      
-      const avgOverall = data.overall.length > 0 ? (data.overall.reduce((a, b) => a + b, 0) / data.overall.length) : 0;
-      const avgVideo = data.video.length > 0 ? (data.video.reduce((a, b) => a + b, 0) / data.video.length) : 0;
-      const avgAudio = data.audio.length > 0 ? (data.audio.reduce((a, b) => a + b, 0) / data.audio.length) : 0;
-      
+      const metrics = computeMetrics(results);
       return {
         id: userId,
         name: name,
-        overall: avgOverall,
-        video: avgVideo,
-        audio: avgAudio,
-        videos: data.count
+        size: metrics.videos || 1,
+        overall: metrics.overall,
+        videos: metrics.videos
       };
-    }).sort((a, b) => b.overall - a.overall);
+    }).filter(u => u.videos > 0).sort((a, b) => b.overall - a.overall);
   }
 
   return (
@@ -474,86 +563,24 @@ const DealerPerformanceHeatmap = ({ data, selectedFilterDealer, allResults, user
             {title}
           </Typography>
         </Box>
-        <TableContainer sx={{ borderRadius: 2, border: `1px solid ${THEME.borderLight}`, overflow: 'hidden' }}>
-          <Table size="small">
-            <TableHead>
-              <TableRow sx={{ 
-                backgroundColor: THEME.surface,
-                '& th': {
-                  fontWeight: 600,
-                  color: THEME.textPrimary,
-                  fontSize: '0.875rem',
-                  py: 1.5
-                }
-              }}>
-                <TableCell>{selectedFilterDealer === 'all' ? 'Dealership' : 'User / Advisor'}</TableCell>
-                <TableCell align="center">Overall Score</TableCell>
-                <TableCell align="center">Video Quality</TableCell>
-                <TableCell align="center">Audio Quality</TableCell>
-                <TableCell align="center">Total Videos</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {rows.map((row) => {
-                const overallStyle = getCellColor(row.overall);
-                const videoStyle = getCellColor(row.video);
-                const audioStyle = getCellColor(row.audio);
-
-                return (
-                  <TableRow key={row.id} sx={{ '&:hover': { backgroundColor: THEME.surface } }}>
-                    <TableCell sx={{ fontWeight: 600, py: 1.5, color: THEME.textPrimary }}>{row.name}</TableCell>
-                    <TableCell 
-                      align="center" 
-                      sx={{ 
-                        backgroundColor: overallStyle.bg, 
-                        color: overallStyle.text, 
-                        fontWeight: 700,
-                        py: 1.5,
-                        transition: 'background-color 0.2s'
-                      }}
-                    >
-                      {row.overall.toFixed(1)}
-                    </TableCell>
-                    <TableCell 
-                      align="center" 
-                      sx={{ 
-                        backgroundColor: videoStyle.bg, 
-                        color: videoStyle.text, 
-                        fontWeight: 700,
-                        py: 1.5,
-                        transition: 'background-color 0.2s'
-                      }}
-                    >
-                      {row.video.toFixed(1)}
-                    </TableCell>
-                    <TableCell 
-                      align="center" 
-                      sx={{ 
-                        backgroundColor: audioStyle.bg, 
-                        color: audioStyle.text, 
-                        fontWeight: 700,
-                        py: 1.5,
-                        transition: 'background-color 0.2s'
-                      }}
-                    >
-                      {row.audio.toFixed(1)}
-                    </TableCell>
-                    <TableCell align="center" sx={{ fontWeight: 500, py: 1.5, color: THEME.textSecondary }}>{row.videos}</TableCell>
-                  </TableRow>
-                );
-              })}
-              {rows.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={5} align="center" sx={{ py: 4 }}>
-                    <Typography variant="body2" sx={{ color: THEME.textTertiary }}>
-                      No performance data available
-                    </Typography>
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
+        {rows.length > 0 ? (
+          <ResponsiveContainer width="100%" height={360}>
+            <Treemap
+              data={rows}
+              dataKey="size"
+              aspectRatio={4 / 3}
+              stroke="#fff"
+              fill="#8884d8"
+              content={<CustomTreemapContent />}
+            />
+          </ResponsiveContainer>
+        ) : (
+          <Box sx={{ py: 6, textAlign: 'center' }}>
+            <Typography variant="body2" sx={{ color: THEME.textTertiary }}>
+              No performance data available for Treemap
+            </Typography>
+          </Box>
+        )}
       </CardContent>
     </Card>
   );
