@@ -244,12 +244,12 @@ const DealerPerformanceChart = ({ data }) => {
     {
       metric: 'Video Quality',
       fullMark: 10,
-      ...Object.fromEntries(data.map(d => [d.name, d.video_quality || d.overall || 0]))
+      ...Object.fromEntries(data.map(d => [d.name, d.video ?? d.video_quality ?? d.overall ?? 0]))
     },
     {
       metric: 'Audio Quality',
       fullMark: 10,
-      ...Object.fromEntries(data.map(d => [d.name, d.audio_quality || d.overall || 0]))
+      ...Object.fromEntries(data.map(d => [d.name, d.audio ?? d.audio_quality ?? d.overall ?? 0]))
     }
   ];
 
@@ -1410,6 +1410,7 @@ export default function SuperAdminDashboard() {
   const [users, setUsers] = useState([]);
   const [selectedDealer, setSelectedDealer] = useState(null);
   const [dealerDetailOpen, setDealerDetailOpen] = useState(false);
+  const [selectedFilterDealer, setSelectedFilterDealer] = useState('all');
 
   /* 
    * Helper: Calculate Performance Trend
@@ -1492,8 +1493,8 @@ export default function SuperAdminDashboard() {
         name: dealerNames[d.dealer_id] || d.dealer_id || 'Unknown Dealer',
         videos: d.total_videos,
         overall: d.avg_overall_quality,
-        video: d.avg_overall_quality,
-        audio: d.avg_overall_quality,
+        video: d.avg_video_quality ?? d.avg_overall_quality,
+        audio: d.avg_audio_quality ?? d.avg_overall_quality,
         users: 0
       })).sort((a, b) => b.overall - a.overall);
 
@@ -1503,20 +1504,26 @@ export default function SuperAdminDashboard() {
         resultsArray.forEach(r => {
           const did = r.dealer_id;
           if (!did) return;
-          if (!dealerMap[did]) dealerMap[did] = { scores: [], count: 0 };
+          if (!dealerMap[did]) dealerMap[did] = { overall: [], video: [], audio: [], count: 0 };
           dealerMap[did].count++;
-          if (r.overall_quality_score != null) dealerMap[did].scores.push(r.overall_quality_score);
+          if (r.overall_quality_score != null) dealerMap[did].overall.push(r.overall_quality_score);
+          if (r.video_quality_score != null) dealerMap[did].video.push(r.video_quality_score);
+          if (r.audio_quality_score != null) dealerMap[did].audio.push(r.audio_quality_score);
         });
         Object.entries(dealerMap).forEach(([did, data]) => {
-          const avg = data.scores.length > 0
-            ? Math.round((data.scores.reduce((a, b) => a + b, 0) / data.scores.length) * 10) / 10 : 0;
+          const avgOverall = data.overall.length > 0
+            ? Math.round((data.overall.reduce((a, b) => a + b, 0) / data.overall.length) * 10) / 10 : 0;
+          const avgVideo = data.video.length > 0
+            ? Math.round((data.video.reduce((a, b) => a + b, 0) / data.video.length) * 10) / 10 : 0;
+          const avgAudio = data.audio.length > 0
+            ? Math.round((data.audio.reduce((a, b) => a + b, 0) / data.audio.length) * 10) / 10 : 0;
           dealerPerformance.push({
             id: did,
             name: dealerNames[did] || did,
             videos: data.count,
-            overall: avg,
-            video: avg,
-            audio: avg,
+            overall: avgOverall,
+            video: avgVideo,
+            audio: avgAudio,
             users: 0
           });
         });
@@ -2046,14 +2053,36 @@ export default function SuperAdminDashboard() {
             boxShadow: THEME.shadowSm
           }}>
             <CardContent sx={{ p: 3 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-                <Analytics sx={{ color: THEME.primary, mr: 2, fontSize: 24 }} />
-                <Typography variant="h6" sx={{
-                  color: THEME.textPrimary,
-                  fontWeight: 600
-                }}>
-                  Dealer Performance Overview
-                </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2, mb: 3 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  <Analytics sx={{ color: THEME.primary, mr: 2, fontSize: 24 }} />
+                  <Typography variant="h6" sx={{
+                    color: THEME.textPrimary,
+                    fontWeight: 600
+                  }}>
+                    Dealer Performance Overview
+                  </Typography>
+                </Box>
+                <TextField
+                  select
+                  size="small"
+                  label="Filter by Dealer"
+                  value={selectedFilterDealer}
+                  onChange={(e) => setSelectedFilterDealer(e.target.value)}
+                  sx={{
+                    minWidth: 200,
+                    '& .MuiOutlinedInput-root': {
+                      borderRadius: 2
+                    }
+                  }}
+                >
+                  <MenuItem value="all">All Dealers</MenuItem>
+                  {dashboardData.dealerRankings.map((dealer) => (
+                    <MenuItem key={dealer.id} value={dealer.id}>
+                      {dealer.name}
+                    </MenuItem>
+                  ))}
+                </TextField>
               </Box>
 
               <TableContainer>
@@ -2078,7 +2107,10 @@ export default function SuperAdminDashboard() {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {dashboardData.dealerRankings.map((dealer, index) => (
+                    {dashboardData.dealerRankings
+                      .map((dealer, originalIndex) => ({ ...dealer, originalRank: originalIndex + 1 }))
+                      .filter(dealer => selectedFilterDealer === 'all' || dealer.id === selectedFilterDealer)
+                      .map((dealer) => (
                       <TableRow
                         key={dealer.id}
                         sx={{
@@ -2103,7 +2135,7 @@ export default function SuperAdminDashboard() {
                                 mr: 2
                               }}
                             >
-                              {index + 1}
+                              {dealer.originalRank}
                             </Avatar>
                             <Typography variant="body2" sx={{
                               color: THEME.textPrimary,

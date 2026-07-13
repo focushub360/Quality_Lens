@@ -209,6 +209,8 @@ class DealerSummary(BaseModel):
     dealer_id: str
     total_videos: int
     avg_overall_quality: float
+    avg_video_quality: Optional[float] = 0.0
+    avg_audio_quality: Optional[float] = 0.0
 
 class SuperAdminDashboardOverview(BaseModel):
     total_videos_analyzed: int
@@ -2671,19 +2673,31 @@ async def get_super_admin_dashboard_overview(
 
     # Dealer-wise summary
     dealers_summary_raw = await results_collection.aggregate([
-        {"$match": {"dealer_id": {"$exists": True, "$ne": None}}},
+        {"$match": {**status_match, "dealer_id": {"$exists": True, "$ne": None}}},
         {"$group": {
             "_id": "$dealer_id",
             "total_videos": {"$sum": 1},
-            "avg_overall_quality": {"$avg": "$overall_quality_score"}
+            "avg_overall_quality": {"$avg": "$overall_quality_score"},
+            "avg_video_quality": {"$avg": "$video_quality_score"},
+            "avg_audio_quality": {"$avg": "$audio_quality_score"}
         }},
         {"$project": {
             "dealer_id": "$_id",
             "total_videos": 1,
-            "avg_overall_quality": {"$round": ["$avg_overall_quality", 1]}
+            "avg_overall_quality": {"$round": ["$avg_overall_quality", 1]},
+            "avg_video_quality": {"$round": ["$avg_video_quality", 1]},
+            "avg_audio_quality": {"$round": ["$avg_audio_quality", 1]}
         }}
     ]).to_list(None)
-    dealers_summary = [DealerSummary(**{**d, "avg_overall_quality": d.get("avg_overall_quality") or 0.0}) for d in dealers_summary_raw]
+    dealers_summary = [
+        DealerSummary(
+            dealer_id=d["dealer_id"],
+            total_videos=d["total_videos"],
+            avg_overall_quality=d.get("avg_overall_quality") or 0.0,
+            avg_video_quality=d.get("avg_video_quality") or 0.0,
+            avg_audio_quality=d.get("avg_audio_quality") or 0.0
+        ) for d in dealers_summary_raw
+    ]
 
     return SuperAdminDashboardOverview(
         total_videos_analyzed=total_videos,
