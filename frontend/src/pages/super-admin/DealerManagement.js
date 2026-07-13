@@ -627,27 +627,30 @@ export default function DealerManagement() {
   const [createDealerOpen, setCreateDealerOpen] = useState(false);
   const [createDealerError, setCreateDealerError] = useState('');
   const [createDealerForm, setCreateDealerForm] = useState({
-    dealer_id: '', showroom_name: '', username: '', email: '', password: ''
+    dealer_id: '', showroom_name: ''
   });
 
   const handleCreateDealerSubmit = async () => {
     setCreateDealerError('');
-    if (!createDealerForm.dealer_id || !createDealerForm.showroom_name || !createDealerForm.username || !createDealerForm.email || !createDealerForm.password) {
-      setCreateDealerError('All fields are required');
+    if (!createDealerForm.dealer_id || !createDealerForm.showroom_name) {
+      setCreateDealerError('Dealer ID and Showroom Name are required');
       return;
     }
     
     try {
+      const generatedUsername = `${createDealerForm.dealer_id.replace(/\s+/g, '_').toLowerCase()}_admin`;
+      const generatedEmail = `admin@${createDealerForm.dealer_id.replace(/\s+/g, '').toLowerCase()}.com`;
+      
       await createUser({
-        username: createDealerForm.username,
-        email: createDealerForm.email,
-        password: createDealerForm.password,
+        username: generatedUsername,
+        email: generatedEmail,
+        password: 'ChangeMe@123',
         role: 'dealer_admin',
         dealer_id: createDealerForm.dealer_id,
         showroom_name: createDealerForm.showroom_name
       });
       setCreateDealerOpen(false);
-      setCreateDealerForm({ dealer_id: '', showroom_name: '', username: '', email: '', password: '' });
+      setCreateDealerForm({ dealer_id: '', showroom_name: '' });
       setRefreshCounter(prev => prev + 1);
     } catch (error) {
       console.error('Error creating dealer:', error);
@@ -3851,46 +3854,6 @@ export default function DealerManagement() {
                   )
                 }}
               />
-              
-              <Divider sx={{ my: 1 }}><Chip label="Initial Administrator" size="small" /></Divider>
-
-              <TextField
-                fullWidth
-                label="Admin Username"
-                value={createDealerForm.username}
-                onChange={(e) => setCreateDealerForm({ ...createDealerForm, username: e.target.value })}
-                required
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <Person sx={{ color: THEME.textSecondary }} />
-                    </InputAdornment>
-                  )
-                }}
-              />
-              <TextField
-                fullWidth
-                label="Admin Email"
-                type="email"
-                value={createDealerForm.email}
-                onChange={(e) => setCreateDealerForm({ ...createDealerForm, email: e.target.value })}
-                required
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <Email sx={{ color: THEME.textSecondary }} />
-                    </InputAdornment>
-                  )
-                }}
-              />
-              <TextField
-                fullWidth
-                label="Admin Password"
-                type="password"
-                value={createDealerForm.password}
-                onChange={(e) => setCreateDealerForm({ ...createDealerForm, password: e.target.value })}
-                required
-              />
             </Stack>
           </DialogContent>
 
@@ -3904,7 +3867,7 @@ export default function DealerManagement() {
             <Button
               onClick={handleCreateDealerSubmit}
               variant="contained"
-              disabled={!createDealerForm.dealer_id || !createDealerForm.showroom_name || !createDealerForm.username || !createDealerForm.email || !createDealerForm.password}
+              disabled={!createDealerForm.dealer_id || !createDealerForm.showroom_name}
               sx={{
                 background: THEME.gradientPrimary,
                 borderRadius: 2,
