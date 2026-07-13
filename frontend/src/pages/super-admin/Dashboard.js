@@ -399,24 +399,17 @@ const DealerPerformanceChart = ({ data }) => {
 const CustomTreemapContent = (props) => {
   const { x, y, width, height, name, overall, size } = props;
 
-  // Logo-oriented teal/cyan palette — light backgrounds, dark text
+  // Logo teal/cyan palette — medium-saturated backgrounds, white text
   const getScoreBg = (score) => {
-    if (score >= 8.5) return '#B2DFDB';   // deep teal light
-    if (score >= 7.5) return '#B2EBF2';   // cyan light
-    if (score >= 7.0) return '#E0F7FA';   // very light cyan
-    if (score >= 6.5) return '#E0F2F1';   // very light teal
-    if (score >= 5.5) return '#FFF8E1';   // warm cream
-    return '#FFEBEE';                      // light red for poor
-  };
-
-  const getTextColor = (score) => {
-    if (score >= 7.0) return '#0C587D';   // brand dark teal
-    if (score >= 5.5) return '#E65100';   // deep orange
-    return '#C62828';                      // red for poor
+    if (score >= 8.5) return '#00897B';   // rich teal
+    if (score >= 7.5) return '#0097A7';   // deep cyan
+    if (score >= 7.0) return '#0DA1B8';   // brand primary
+    if (score >= 6.5) return '#4DB6AC';   // medium teal
+    if (score >= 5.5) return '#F4A261';   // warm amber
+    return '#E76F51';                      // coral red
   };
 
   const bgColor = getScoreBg(overall || 0);
-  const textColor = getTextColor(overall || 0);
 
   const showText = width > 50 && height > 35;
   const showSubText = width > 80 && height > 55;
@@ -431,21 +424,22 @@ const CustomTreemapContent = (props) => {
         style={{
           fill: bgColor,
           stroke: '#fff',
-          strokeWidth: 2,
+          strokeWidth: 3,
           strokeOpacity: 1,
         }}
       />
       {showText && (
         <text
           x={x + width / 2}
-          y={y + height / 2 - (showSubText ? 8 : 0)}
+          y={y + height / 2 - (showSubText ? 10 : 0)}
           textAnchor="middle"
           dominantBaseline="middle"
           style={{
-            fill: textColor,
-            fontSize: Math.min(16, Math.max(11, width / 8)) + 'px',
+            fill: '#FFFFFF',
+            fontSize: Math.min(18, Math.max(12, width / 7)) + 'px',
             fontWeight: 700,
-            fontFamily: 'Outfit, sans-serif'
+            fontFamily: 'Outfit, sans-serif',
+            textShadow: '0 1px 4px rgba(0,0,0,0.25)'
           }}
         >
           {name}
@@ -458,14 +452,14 @@ const CustomTreemapContent = (props) => {
           textAnchor="middle"
           dominantBaseline="middle"
           style={{
-            fill: textColor,
-            fontSize: '12px',
+            fill: 'rgba(255,255,255,0.92)',
+            fontSize: '13px',
             fontWeight: 600,
-            opacity: 0.8,
-            fontFamily: 'Outfit, sans-serif'
+            fontFamily: 'Outfit, sans-serif',
+            textShadow: '0 1px 3px rgba(0,0,0,0.2)'
           }}
         >
-          {(overall || 0).toFixed(1)} · {size} videos
+          ★ {(overall || 0).toFixed(1)} · {size} videos
         </text>
       )}
     </g>
