@@ -399,16 +399,24 @@ const DealerPerformanceChart = ({ data }) => {
 const CustomTreemapContent = (props) => {
   const { x, y, width, height, name, overall, size } = props;
 
+  // Logo-oriented teal/cyan palette — light backgrounds, dark text
   const getScoreBg = (score) => {
-    if (score >= 8.5) return '#2E7D32';
-    if (score >= 7.5) return '#388E3C';
-    if (score >= 7.0) return '#1976D2';
-    if (score >= 6.5) return '#F57C00';
-    if (score >= 5.5) return '#E65100';
-    return '#C62828';
+    if (score >= 8.5) return '#B2DFDB';   // deep teal light
+    if (score >= 7.5) return '#B2EBF2';   // cyan light
+    if (score >= 7.0) return '#E0F7FA';   // very light cyan
+    if (score >= 6.5) return '#E0F2F1';   // very light teal
+    if (score >= 5.5) return '#FFF8E1';   // warm cream
+    return '#FFEBEE';                      // light red for poor
+  };
+
+  const getTextColor = (score) => {
+    if (score >= 7.0) return '#0C587D';   // brand dark teal
+    if (score >= 5.5) return '#E65100';   // deep orange
+    return '#C62828';                      // red for poor
   };
 
   const bgColor = getScoreBg(overall || 0);
+  const textColor = getTextColor(overall || 0);
 
   const showText = width > 50 && height > 35;
   const showSubText = width > 80 && height > 55;
@@ -434,11 +442,10 @@ const CustomTreemapContent = (props) => {
           textAnchor="middle"
           dominantBaseline="middle"
           style={{
-            fill: '#fff',
+            fill: textColor,
             fontSize: Math.min(16, Math.max(11, width / 8)) + 'px',
             fontWeight: 700,
-            fontFamily: 'Outfit, sans-serif',
-            textShadow: '0 1px 3px rgba(0,0,0,0.3)'
+            fontFamily: 'Outfit, sans-serif'
           }}
         >
           {name}
@@ -451,11 +458,11 @@ const CustomTreemapContent = (props) => {
           textAnchor="middle"
           dominantBaseline="middle"
           style={{
-            fill: 'rgba(255,255,255,0.9)',
+            fill: textColor,
             fontSize: '12px',
             fontWeight: 600,
-            fontFamily: 'Outfit, sans-serif',
-            textShadow: '0 1px 2px rgba(0,0,0,0.2)'
+            opacity: 0.8,
+            fontFamily: 'Outfit, sans-serif'
           }}
         >
           {(overall || 0).toFixed(1)} · {size} videos
