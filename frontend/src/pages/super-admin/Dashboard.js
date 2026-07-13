@@ -1972,24 +1972,31 @@ export default function SuperAdminDashboard() {
         </Box>
 
         {/* Dealer Performance Section */}
-        <Box sx={{ mb: 6, textAlign: 'center' }}>
-          <Typography variant="h4" sx={{
-            color: THEME.textPrimary,
-            fontWeight: 600,
-            mb: 1
+        <Box sx={{ mb: 6 }}>
+          <Box sx={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'space-between', 
+            flexWrap: 'wrap', 
+            gap: 2, 
+            mb: 4, 
+            textAlign: 'left'
           }}>
-            Dealer Performance Rankings
-          </Typography>
-          <Typography variant="body1" sx={{
-            color: THEME.textSecondary,
-            mb: 3,
-            maxWidth: '600px',
-            mx: 'auto'
-          }}>
-            Comparative analysis and ranking of dealership performance
-          </Typography>
-
-          <Box sx={{ display: 'flex', justifyContent: 'center', mb: 4 }}>
+            <Box>
+              <Typography variant="h4" sx={{
+                color: THEME.textPrimary,
+                fontWeight: 600,
+                mb: 0.5
+              }}>
+                Dealer Performance Rankings
+              </Typography>
+              <Typography variant="body1" sx={{
+                color: THEME.textSecondary,
+                maxWidth: '600px'
+              }}>
+                Comparative analysis and ranking of dealership performance
+              </Typography>
+            </Box>
             <TextField
               select
               size="small"
