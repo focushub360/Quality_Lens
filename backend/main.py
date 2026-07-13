@@ -1177,6 +1177,18 @@ async def delete_user(user_id: str, current_user: UserInDB = Depends(get_current
     elif current_user.role != "super_admin":
         raise HTTPException(403, detail="Not authorized to delete users.")
 
+    # Cascade delete all analysis results, tasks, and batches for this user
+    await results_collection.delete_many({"submitted_by_user_id": user_id})
+    if analysis_tasks_collection is not None:
+        await analysis_tasks_collection.delete_many({"submitted_by_user_id": user_id})
+    
+    # Clean up batches and their associated excel chunks
+    user_batches = await batch_collection.find({"submitted_by_user_id": user_id}).to_list(None)
+    if user_batches:
+        batch_ids = [str(b["_id"]) for b in user_batches]
+        await excel_data_collection.delete_many({"batch_id": {"$in": batch_ids}})
+        await batch_collection.delete_many({"submitted_by_user_id": user_id})
+
     await users_collection.delete_one({"_id": ObjectId(user_id)})
     return Response(status_code=204)
 
@@ -2261,8 +2273,8 @@ async def list_all_batches(limit: int = 50, status_filter: Optional[str] = None,
         query["status"] = status_filter
     
     # Authorization: Filter batches by dealer_id for Dealer Admins & Users. Super Admins see all.
-    if current_user.role in ["dealer_admin", "dealer_user"] and current_user.dealer_id:
-        query["dealer_id"] = current_user.dealer_id # Simple string comparison
+    if current_user.role != "super_admin":
+        query["submitted_by_user_id"] = str(current_user.id)
     
     batches_cursor = batch_collection.find(query).sort("created_at", -1)
     batches = await batches_cursor.to_list(min(limit, 100))
@@ -2549,6 +2561,9 @@ async def get_all_results(
     if current_user.role == "super_admin":
         if dealer_id:
             query["dealer_id"] = dealer_id
+        else:
+            active_dealers = await users_collection.distinct("dealer_id")
+            query["dealer_id"] = {"$in": [d for d in active_dealers if d]}
     elif current_user.role in ("dealer_admin", "branch_admin", "dealer_user"):
         # All roles see ONLY their own results (hierarchy: each user owns their uploads)
         if not current_user.dealer_id:
@@ -2618,8 +2633,9 @@ async def get_super_admin_dashboard_overview(
     Retrieves aggregated data for the Super Admin dashboard.
     Includes ALL results (completed or without status field for backward compatibility).
     """
-    # Match all records in system
-    status_match = {}
+    # Match only records for active dealers
+    active_dealers = await users_collection.distinct("dealer_id")
+    status_match = {"dealer_id": {"$in": [d for d in active_dealers if d]}}
 
     if timeRange and timeRange.lower() != "all":
         now = dt.utcnow()
