@@ -1597,15 +1597,71 @@ export default function SuperAdminDashboard() {
   };
 
   const getTopPerformersByType = () => {
-    switch (activeTab) {
-      case 0:
-        return dashboardData.topPerformers.overall;
-      case 1:
-        return dashboardData.topPerformers.video;
-      case 2:
-        return dashboardData.topPerformers.audio;
-      default:
-        return dashboardData.topPerformers.overall;
+    if (selectedFilterDealer === 'all') {
+      switch (activeTab) {
+        case 0:
+          return dashboardData.topPerformers.overall;
+        case 1:
+          return dashboardData.topPerformers.video;
+        case 2:
+          return dashboardData.topPerformers.audio;
+        default:
+          return dashboardData.topPerformers.overall;
+      }
+    } else {
+      // Filter results for this dealer
+      const dealerResults = allResults.filter(r => r.dealer_id === selectedFilterDealer);
+      
+      const userMap = {};
+      dealerResults.forEach(r => {
+        const userId = r.submitted_by_user_id;
+        if (!userId) return;
+        if (!userMap[userId]) {
+          userMap[userId] = {
+            id: userId,
+            overall: [], video: [], audio: [], count: 0
+          };
+        }
+        userMap[userId].count++;
+        if (r.overall_quality_score != null) userMap[userId].overall.push(r.overall_quality_score);
+        if (r.video_quality_score != null) userMap[userId].video.push(r.video_quality_score);
+        if (r.audio_quality_score != null) userMap[userId].audio.push(r.audio_quality_score);
+      });
+
+      const userPerformers = Object.entries(userMap).map(([userId, data]) => {
+        const userObj = users.find(u => String(u._id || u.id) === userId);
+        const name = userObj ? userObj.username : `User ${userId.substring(0, 5)}`;
+        
+        const avgOverall = data.overall.length > 0 ? (data.overall.reduce((a, b) => a + b, 0) / data.overall.length) : 0;
+        const avgVideo = data.video.length > 0 ? (data.video.reduce((a, b) => a + b, 0) / data.video.length) : 0;
+        const avgAudio = data.audio.length > 0 ? (data.audio.reduce((a, b) => a + b, 0) / data.audio.length) : 0;
+        
+        return {
+          id: userId,
+          name: name,
+          videos: data.count,
+          overall: avgOverall,
+          video: avgVideo,
+          audio: avgAudio
+        };
+      });
+
+      let sortedPerformers = [];
+      switch (activeTab) {
+        case 0:
+          sortedPerformers = [...userPerformers].sort((a, b) => b.overall - a.overall);
+          break;
+        case 1:
+          sortedPerformers = [...userPerformers].sort((a, b) => b.video - a.video);
+          break;
+        case 2:
+          sortedPerformers = [...userPerformers].sort((a, b) => b.audio - a.audio);
+          break;
+        default:
+          sortedPerformers = [...userPerformers].sort((a, b) => b.overall - a.overall);
+      }
+
+      return sortedPerformers.map((u, index) => ({ ...u, rank: index + 1 }));
     }
   };
 
@@ -1926,12 +1982,35 @@ export default function SuperAdminDashboard() {
           </Typography>
           <Typography variant="body1" sx={{
             color: THEME.textSecondary,
-            mb: 4,
+            mb: 3,
             maxWidth: '600px',
             mx: 'auto'
           }}>
             Comparative analysis and ranking of dealership performance
           </Typography>
+
+          <Box sx={{ display: 'flex', justifyContent: 'center', mb: 4 }}>
+            <TextField
+              select
+              size="small"
+              label="Select Dealership"
+              value={selectedFilterDealer}
+              onChange={(e) => setSelectedFilterDealer(e.target.value)}
+              sx={{
+                minWidth: 240,
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: 2
+                }
+              }}
+            >
+              <MenuItem value="all">All Dealerships</MenuItem>
+              {dashboardData.dealerRankings.map((dealer) => (
+                <MenuItem key={dealer.id} value={dealer.id}>
+                  {dealer.name}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Box>
 
           <Grid container spacing={3} justifyContent="center" alignItems="stretch">
             {/* Dealer Performance Chart */}
@@ -1946,7 +2025,13 @@ export default function SuperAdminDashboard() {
                 cursor: 'pointer'
               }}>
                 <CardContent sx={{ p: 3 }}>
-                  <DealerPerformanceChart data={dashboardData.dealerRankings} />
+                  <DealerPerformanceChart 
+                    data={
+                      selectedFilterDealer === 'all'
+                        ? dashboardData.dealerRankings
+                        : dashboardData.dealerRankings.filter(d => d.id === selectedFilterDealer)
+                    } 
+                  />
                 </CardContent>
               </Card>
             </Grid>
@@ -1969,7 +2054,7 @@ export default function SuperAdminDashboard() {
                       color: THEME.textPrimary,
                       fontWeight: 600
                     }}>
-                      Top 5 Performers
+                      {selectedFilterDealer === 'all' ? 'Top 5 Performers' : 'Top 5 Users'}
                     </Typography>
                   </Box>
 
@@ -1995,7 +2080,12 @@ export default function SuperAdminDashboard() {
                     {getTopPerformersByType().slice(0, 5).map((dealer) => (
                       <CardActionArea
                         key={dealer.id}
-                        onClick={() => handleViewDealer(dealer)}
+                        onClick={() => {
+                          if (selectedFilterDealer === 'all') {
+                            handleViewDealer(dealer);
+                          }
+                        }}
+                        disabled={selectedFilterDealer !== 'all'}
                         sx={{
                           borderRadius: 0,
                           '&:hover': {
@@ -2053,36 +2143,14 @@ export default function SuperAdminDashboard() {
             boxShadow: THEME.shadowSm
           }}>
             <CardContent sx={{ p: 3 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2, mb: 3 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                  <Analytics sx={{ color: THEME.primary, mr: 2, fontSize: 24 }} />
-                  <Typography variant="h6" sx={{
-                    color: THEME.textPrimary,
-                    fontWeight: 600
-                  }}>
-                    Dealer Performance Overview
-                  </Typography>
-                </Box>
-                <TextField
-                  select
-                  size="small"
-                  label="Filter by Dealer"
-                  value={selectedFilterDealer}
-                  onChange={(e) => setSelectedFilterDealer(e.target.value)}
-                  sx={{
-                    minWidth: 200,
-                    '& .MuiOutlinedInput-root': {
-                      borderRadius: 2
-                    }
-                  }}
-                >
-                  <MenuItem value="all">All Dealers</MenuItem>
-                  {dashboardData.dealerRankings.map((dealer) => (
-                    <MenuItem key={dealer.id} value={dealer.id}>
-                      {dealer.name}
-                    </MenuItem>
-                  ))}
-                </TextField>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
+                <Analytics sx={{ color: THEME.primary, mr: 2, fontSize: 24 }} />
+                <Typography variant="h6" sx={{
+                  color: THEME.textPrimary,
+                  fontWeight: 600
+                }}>
+                  Dealer Performance Overview
+                </Typography>
               </Box>
 
               <TableContainer>
@@ -2107,10 +2175,7 @@ export default function SuperAdminDashboard() {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {dashboardData.dealerRankings
-                      .map((dealer, originalIndex) => ({ ...dealer, originalRank: originalIndex + 1 }))
-                      .filter(dealer => selectedFilterDealer === 'all' || dealer.id === selectedFilterDealer)
-                      .map((dealer) => (
+                    {dashboardData.dealerRankings.map((dealer, index) => (
                       <TableRow
                         key={dealer.id}
                         sx={{
@@ -2135,7 +2200,7 @@ export default function SuperAdminDashboard() {
                                 mr: 2
                               }}
                             >
-                              {dealer.originalRank}
+                              {index + 1}
                             </Avatar>
                             <Typography variant="body2" sx={{
                               color: THEME.textPrimary,
