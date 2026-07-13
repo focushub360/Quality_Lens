@@ -46,6 +46,7 @@ import {
   EmojiEvents,
   Analytics,
   Timeline,
+  TableChart,
   PieChart,
   BarChart,
   Refresh,
@@ -390,6 +391,171 @@ const DealerPerformanceChart = ({ data }) => {
         </RadarChart>
       </ResponsiveContainer>
     </Box>
+  );
+};
+
+
+
+const DealerPerformanceHeatmap = ({ data, selectedFilterDealer, allResults, users }) => {
+  const getCellColor = (val) => {
+    if (val >= 8.5) return { bg: '#E8F5E9', text: '#2E7D32' };
+    if (val >= 7.0) return { bg: '#E3F2FD', text: '#1565C0' };
+    if (val >= 5.5) return { bg: '#FFF3E0', text: '#EF6C00' };
+    return { bg: '#FFEBEE', text: '#C62828' };
+  };
+
+  let rows = [];
+  let title = "Dealership Performance Heatmap";
+
+  if (selectedFilterDealer === 'all') {
+    rows = data.map(d => ({
+      id: d.id,
+      name: d.name,
+      overall: d.overall,
+      video: d.video,
+      audio: d.audio,
+      videos: d.videos
+    }));
+  } else {
+    const selectedDealerObj = data.find(d => d.id === selectedFilterDealer);
+    const dealerName = selectedDealerObj ? selectedDealerObj.name : 'Selected Dealership';
+    title = `${dealerName} — User Performance Heatmap`;
+
+    const dealerResults = allResults.filter(r => r.dealer_id === selectedFilterDealer);
+    
+    const userMap = {};
+    dealerResults.forEach(r => {
+      const userId = r.submitted_by_user_id;
+      if (!userId) return;
+      if (!userMap[userId]) {
+        userMap[userId] = {
+          id: userId,
+          overall: [], video: [], audio: [], count: 0
+        };
+      }
+      userMap[userId].count++;
+      if (r.overall_quality_score != null) userMap[userId].overall.push(r.overall_quality_score);
+      if (r.video_quality_score != null) userMap[userId].video.push(r.video_quality_score);
+      if (r.audio_quality_score != null) userMap[userId].audio.push(r.audio_quality_score);
+    });
+
+    rows = Object.entries(userMap).map(([userId, data]) => {
+      const userObj = users.find(u => String(u._id || u.id) === userId);
+      const name = userObj ? userObj.username : `User ${userId.substring(0, 5)}`;
+      
+      const avgOverall = data.overall.length > 0 ? (data.overall.reduce((a, b) => a + b, 0) / data.overall.length) : 0;
+      const avgVideo = data.video.length > 0 ? (data.video.reduce((a, b) => a + b, 0) / data.video.length) : 0;
+      const avgAudio = data.audio.length > 0 ? (data.audio.reduce((a, b) => a + b, 0) / data.audio.length) : 0;
+      
+      return {
+        id: userId,
+        name: name,
+        overall: avgOverall,
+        video: avgVideo,
+        audio: avgAudio,
+        videos: data.count
+      };
+    }).sort((a, b) => b.overall - a.overall);
+  }
+
+  return (
+    <Card sx={{
+      background: THEME.surfaceElevated,
+      border: `1px solid ${THEME.border}`,
+      borderRadius: 3,
+      boxShadow: THEME.shadowSm,
+      mt: 3,
+      width: '100%'
+    }}>
+      <CardContent sx={{ p: 3 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
+          <TableChart sx={{ color: THEME.primary, mr: 2, fontSize: 24 }} />
+          <Typography variant="h6" sx={{ color: THEME.textPrimary, fontWeight: 600 }}>
+            {title}
+          </Typography>
+        </Box>
+        <TableContainer sx={{ borderRadius: 2, border: `1px solid ${THEME.borderLight}`, overflow: 'hidden' }}>
+          <Table size="small">
+            <TableHead>
+              <TableRow sx={{ 
+                backgroundColor: THEME.surface,
+                '& th': {
+                  fontWeight: 600,
+                  color: THEME.textPrimary,
+                  fontSize: '0.875rem',
+                  py: 1.5
+                }
+              }}>
+                <TableCell>{selectedFilterDealer === 'all' ? 'Dealership' : 'User / Advisor'}</TableCell>
+                <TableCell align="center">Overall Score</TableCell>
+                <TableCell align="center">Video Quality</TableCell>
+                <TableCell align="center">Audio Quality</TableCell>
+                <TableCell align="center">Total Videos</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {rows.map((row) => {
+                const overallStyle = getCellColor(row.overall);
+                const videoStyle = getCellColor(row.video);
+                const audioStyle = getCellColor(row.audio);
+
+                return (
+                  <TableRow key={row.id} sx={{ '&:hover': { backgroundColor: THEME.surface } }}>
+                    <TableCell sx={{ fontWeight: 600, py: 1.5, color: THEME.textPrimary }}>{row.name}</TableCell>
+                    <TableCell 
+                      align="center" 
+                      sx={{ 
+                        backgroundColor: overallStyle.bg, 
+                        color: overallStyle.text, 
+                        fontWeight: 700,
+                        py: 1.5,
+                        transition: 'background-color 0.2s'
+                      }}
+                    >
+                      {row.overall.toFixed(1)}
+                    </TableCell>
+                    <TableCell 
+                      align="center" 
+                      sx={{ 
+                        backgroundColor: videoStyle.bg, 
+                        color: videoStyle.text, 
+                        fontWeight: 700,
+                        py: 1.5,
+                        transition: 'background-color 0.2s'
+                      }}
+                    >
+                      {row.video.toFixed(1)}
+                    </TableCell>
+                    <TableCell 
+                      align="center" 
+                      sx={{ 
+                        backgroundColor: audioStyle.bg, 
+                        color: audioStyle.text, 
+                        fontWeight: 700,
+                        py: 1.5,
+                        transition: 'background-color 0.2s'
+                      }}
+                    >
+                      {row.audio.toFixed(1)}
+                    </TableCell>
+                    <TableCell align="center" sx={{ fontWeight: 500, py: 1.5, color: THEME.textSecondary }}>{row.videos}</TableCell>
+                  </TableRow>
+                );
+              })}
+              {rows.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={5} align="center" sx={{ py: 4 }}>
+                    <Typography variant="body2" sx={{ color: THEME.textTertiary }}>
+                      No performance data available
+                    </Typography>
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </CardContent>
+    </Card>
   );
 };
 
@@ -2122,6 +2288,14 @@ export default function SuperAdminDashboard() {
               </Card>
             </Grid>
           </Grid>
+
+          {/* Dealer / User Performance Heatmap */}
+          <DealerPerformanceHeatmap 
+            data={dashboardData.dealerRankings} 
+            selectedFilterDealer={selectedFilterDealer} 
+            allResults={allResults} 
+            users={users} 
+          />
         </Box>
 
         {/* Recent Activity Section */}
