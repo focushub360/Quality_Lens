@@ -26,7 +26,8 @@ import {
   CircularProgress,
   Tooltip,
   Stack,
-  Toolbar
+  Toolbar,
+  Autocomplete
 } from '@mui/material';
 import {
   Add,
@@ -99,12 +100,28 @@ export default function UserManagement() {
   const [order, setOrder] = useState('asc');
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
+  const [availableDealers, setAvailableDealers] = useState([]);
 
   const load = async () => {
     setLoading(true);
     try {
       const data = await listUsers();
       const userList = Array.isArray(data) ? data : [];
+      
+      const dealersMap = new Map();
+      userList.forEach(u => {
+        if (u.dealer_id) {
+          const did = u.dealer_id.toLowerCase().trim();
+          if (!dealersMap.has(did)) {
+            dealersMap.set(did, {
+              id: u.dealer_id,
+              name: u.showroom_name || u.dealer_id
+            });
+          }
+        }
+      });
+      setAvailableDealers(Array.from(dealersMap.values()));
+
       const dealerAdmins = userList.filter(user => user.role === 'dealer_admin');
       setUsers(dealerAdmins);
     } catch (error) {
@@ -713,21 +730,43 @@ export default function UserManagement() {
                 ))}
               </TextField>
 
-              <TextField
-                fullWidth
-                label="Dealer ID"
-                value={form.dealer_id}
-                onChange={(e) => setForm({ ...form, dealer_id: e.target.value })}
-                required={form.role === 'dealer_admin'}
-                helperText={form.role === 'dealer_admin' ? "Required: Unique ID for this dealership" : "Optional: Assign to specific dealership"}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <Business sx={{ color: THEME.textSecondary }} />
-                    </InputAdornment>
-                  )
+              <Autocomplete
+                freeSolo
+                options={availableDealers}
+                getOptionLabel={(option) => typeof option === 'string' ? option : `${option.name} (${option.id})`}
+                value={availableDealers.find(d => d.id === form.dealer_id) || form.dealer_id}
+                onChange={(event, newValue) => {
+                  if (typeof newValue === 'string') {
+                    setForm({ ...form, dealer_id: newValue });
+                  } else if (newValue && newValue.id) {
+                    setForm({ ...form, dealer_id: newValue.id, showroom_name: newValue.name || form.showroom_name });
+                  } else {
+                    setForm({ ...form, dealer_id: '' });
+                  }
                 }}
-                sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
+                onInputChange={(event, newInputValue) => {
+                  setForm({ ...form, dealer_id: newInputValue });
+                }}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Dealer ID"
+                    required={form.role === 'dealer_admin'}
+                    helperText={form.role === 'dealer_admin' ? "Select existing dealer or type a new ID to create one" : "Optional: Assign to specific dealership"}
+                    InputProps={{
+                      ...params.InputProps,
+                      startAdornment: (
+                        <>
+                          <InputAdornment position="start" sx={{ pl: 1 }}>
+                            <Business sx={{ color: THEME.textSecondary }} />
+                          </InputAdornment>
+                          {params.InputProps.startAdornment}
+                        </>
+                      )
+                    }}
+                    sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
+                  />
+                )}
               />
               <TextField
                 fullWidth
