@@ -470,6 +470,61 @@ const CustomTreemapContent = (props) => {
   );
 };
 
+const CustomTreemapTooltip = ({ active, payload }) => {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload;
+    return (
+      <Box sx={{
+        background: 'rgba(255, 255, 255, 0.98)',
+        borderRadius: 2,
+        p: 1.5,
+        boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
+        border: `1px solid ${THEME.border}`,
+        minWidth: 160
+      }}>
+        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: THEME.textPrimary, mb: 1, borderBottom: `1px solid ${THEME.borderLight}`, pb: 0.5 }}>
+          {data.name}
+        </Typography>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
+            <Typography variant="caption" sx={{ color: THEME.textSecondary, fontWeight: 500 }}>
+              Overall Score:
+            </Typography>
+            <Typography variant="caption" sx={{ fontWeight: 700, color: THEME.primary }}>
+              {(data.overall || 0).toFixed(1)}
+            </Typography>
+          </Box>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
+            <Typography variant="caption" sx={{ color: THEME.textSecondary, fontWeight: 500 }}>
+              Video Quality:
+            </Typography>
+            <Typography variant="caption" sx={{ fontWeight: 700, color: THEME.success }}>
+              {(data.video || 0).toFixed(1)}
+            </Typography>
+          </Box>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
+            <Typography variant="caption" sx={{ color: THEME.textSecondary, fontWeight: 500 }}>
+              Audio Quality:
+            </Typography>
+            <Typography variant="caption" sx={{ fontWeight: 700, color: THEME.warning }}>
+              {(data.audio || 0).toFixed(1)}
+            </Typography>
+          </Box>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, mt: 0.5, pt: 0.5, borderTop: `1px dashed ${THEME.borderLight}` }}>
+            <Typography variant="caption" sx={{ color: THEME.textSecondary, fontWeight: 500 }}>
+              Total Videos:
+            </Typography>
+            <Typography variant="caption" sx={{ fontWeight: 700, color: THEME.textPrimary }}>
+              {data.videos}
+            </Typography>
+          </Box>
+        </Box>
+      </Box>
+    );
+  }
+  return null;
+};
+
 const DealerPerformanceHeatmap = ({ data, selectedFilterDealer, allResults, users }) => {
   let rows = [];
   let title = "Dealership Performance Heatmap (Treemap)";
@@ -479,6 +534,8 @@ const DealerPerformanceHeatmap = ({ data, selectedFilterDealer, allResults, user
     if (total === 0) {
       return {
         overall: 0,
+        video: 0,
+        audio: 0,
         videos: 0
       };
     }
@@ -486,8 +543,16 @@ const DealerPerformanceHeatmap = ({ data, selectedFilterDealer, allResults, user
     const scores = results.filter(r => r.overall_quality_score != null).map(r => r.overall_quality_score);
     const avgOverall = scores.length > 0 ? (scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
 
+    const videoScores = results.filter(r => r.video_quality_score != null).map(r => r.video_quality_score);
+    const avgVideo = videoScores.length > 0 ? (videoScores.reduce((a, b) => a + b, 0) / videoScores.length) : avgOverall;
+
+    const audioScores = results.filter(r => r.audio_quality_score != null).map(r => r.audio_quality_score);
+    const avgAudio = audioScores.length > 0 ? (audioScores.reduce((a, b) => a + b, 0) / audioScores.length) : avgOverall;
+
     return {
       overall: avgOverall,
+      video: avgVideo,
+      audio: avgAudio,
       videos: total
     };
   };
@@ -516,6 +581,8 @@ const DealerPerformanceHeatmap = ({ data, selectedFilterDealer, allResults, user
         name: name,
         size: metrics.videos || 1,
         overall: metrics.overall,
+        video: metrics.video,
+        audio: metrics.audio,
         videos: metrics.videos
       };
     }).filter(d => d.videos > 0).sort((a, b) => b.overall - a.overall);
@@ -542,6 +609,8 @@ const DealerPerformanceHeatmap = ({ data, selectedFilterDealer, allResults, user
         name: name,
         size: metrics.videos || 1,
         overall: metrics.overall,
+        video: metrics.video,
+        audio: metrics.audio,
         videos: metrics.videos
       };
     }).filter(u => u.videos > 0).sort((a, b) => b.overall - a.overall);
@@ -572,7 +641,9 @@ const DealerPerformanceHeatmap = ({ data, selectedFilterDealer, allResults, user
               stroke="#fff"
               fill="#8884d8"
               content={<CustomTreemapContent />}
-            />
+            >
+              <RechartsTooltip content={<CustomTreemapTooltip />} />
+            </Treemap>
           </ResponsiveContainer>
         ) : (
           <Box sx={{ py: 6, textAlign: 'center' }}>
