@@ -1360,7 +1360,7 @@ export default function DealerManagement() {
             </Typography>
           </Card>
         ) : (
-          <Grid container spacing={3} justifyContent="center">
+          <Grid container spacing={3} justifyContent="flex-start">
             {dealers.map((dealer, index) => (
               <Grid item xs={12} sm={6} md={4} lg={3} key={dealer.dealer_id}>
                 <Fade in={true} timeout={600} style={{ transitionDelay: `${index * 100}ms` }}>
@@ -1422,7 +1422,7 @@ export default function DealerManagement() {
                         <Divider sx={{ borderColor: THEME.borderLight, mb: 3 }} />
 
                         {/* Stats */}
-                        <Box sx={{ mb: 3, flexGrow: 1 }}>
+                        <Box sx={{ mb: 3, flexGrow: 0 }}>
                           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2.5 }}>
                             <Box sx={{ display: 'flex', alignItems: 'center' }}>
                               <VideoLibrary sx={{ fontSize: 20, color: THEME.primary, mr: 2 }} />
@@ -1469,7 +1469,7 @@ export default function DealerManagement() {
                         <Divider sx={{ borderColor: THEME.borderLight, mb: 3 }} />
 
                         {/* Users */}
-                        <Box sx={{ mb: 3 }}>
+                        <Box sx={{ mb: 3, flexGrow: 0 }}>
                           <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
                             <Group sx={{ fontSize: 18, color: THEME.textSecondary, mr: 1.5 }} />
                             <Typography variant="subtitle2" sx={{
@@ -1522,7 +1522,7 @@ export default function DealerManagement() {
                         <Divider sx={{ borderColor: THEME.borderLight, mb: 3 }} />
 
                         {/* Branches */}
-                        <Box sx={{ mb: 3 }}>
+                        <Box sx={{ mb: 3, flexGrow: 1 }}>
                           <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
                             <AccountTree sx={{ fontSize: 18, color: THEME.textSecondary, mr: 1.5 }} />
                             <Typography variant="subtitle2" sx={{
@@ -1580,6 +1580,7 @@ export default function DealerManagement() {
                           fullWidth
                           startIcon={<Analytics />}
                           sx={{
+                            mt: 'auto',
                             background: THEME.gradientPrimary,
                             borderRadius: 3,
                             py: 1.5,
