@@ -1369,6 +1369,8 @@ export default function DealerManagement() {
                     border: `1px solid ${THEME.border}`,
                     borderRadius: 3,
                     height: '100%',
+                    display: 'flex',
+                    flexDirection: 'column',
                     transition: 'all 0.3s ease-in-out',
                     boxShadow: THEME.shadowSm,
                     '&:hover': {
@@ -1377,8 +1379,8 @@ export default function DealerManagement() {
                       transform: 'translateY(-4px)'
                     }
                   }}>
-                    <CardActionArea onClick={() => handleViewDealer(dealer.dealer_id)} sx={{ height: '100%' }}>
-                      <CardContent sx={{ p: 4, height: '100%', display: 'flex', flexDirection: 'column' }}>
+                    <CardActionArea onClick={() => handleViewDealer(dealer.dealer_id)} sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', alignItems: 'stretch' }}>
+                      <CardContent sx={{ p: 4, flexGrow: 1, display: 'flex', flexDirection: 'column', width: '100%' }}>
                         {/* Header */}
                         <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
                           <Avatar
