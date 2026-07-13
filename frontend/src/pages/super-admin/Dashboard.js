@@ -399,22 +399,16 @@ const DealerPerformanceChart = ({ data }) => {
 const CustomTreemapContent = (props) => {
   const { x, y, width, height, name, overall, size } = props;
 
-  const getScoreColor = (score) => {
+  const getScoreBg = (score) => {
     if (score >= 8.5) return '#2E7D32';
-    if (score >= 7.0) return '#1565C0';
-    if (score >= 5.5) return '#EF6C00';
+    if (score >= 7.5) return '#388E3C';
+    if (score >= 7.0) return '#1976D2';
+    if (score >= 6.5) return '#F57C00';
+    if (score >= 5.5) return '#E65100';
     return '#C62828';
   };
 
-  const getScoreBg = (score) => {
-    if (score >= 8.5) return '#E8F5E9';
-    if (score >= 7.0) return '#E3F2FD';
-    if (score >= 5.5) return '#FFF3E0';
-    return '#FFEBEE';
-  };
-
   const bgColor = getScoreBg(overall || 0);
-  const textColor = getScoreColor(overall || 0);
 
   const showText = width > 50 && height > 35;
   const showSubText = width > 80 && height > 55;
@@ -436,14 +430,15 @@ const CustomTreemapContent = (props) => {
       {showText && (
         <text
           x={x + width / 2}
-          y={y + height / 2 - (showSubText ? 6 : 0)}
+          y={y + height / 2 - (showSubText ? 8 : 0)}
           textAnchor="middle"
           dominantBaseline="middle"
           style={{
-            fill: textColor,
-            fontSize: showSubText ? '13px' : '11px',
+            fill: '#fff',
+            fontSize: Math.min(16, Math.max(11, width / 8)) + 'px',
             fontWeight: 700,
-            fontFamily: 'Outfit, sans-serif'
+            fontFamily: 'Outfit, sans-serif',
+            textShadow: '0 1px 3px rgba(0,0,0,0.3)'
           }}
         >
           {name}
@@ -452,18 +447,18 @@ const CustomTreemapContent = (props) => {
       {showSubText && (
         <text
           x={x + width / 2}
-          y={y + height / 2 + 12}
+          y={y + height / 2 + 14}
           textAnchor="middle"
           dominantBaseline="middle"
           style={{
-            fill: textColor,
-            fontSize: '11px',
-            fontWeight: 500,
-            opacity: 0.85,
-            fontFamily: 'Outfit, sans-serif'
+            fill: 'rgba(255,255,255,0.9)',
+            fontSize: '12px',
+            fontWeight: 600,
+            fontFamily: 'Outfit, sans-serif',
+            textShadow: '0 1px 2px rgba(0,0,0,0.2)'
           }}
         >
-          {(overall || 0).toFixed(1)} ({size} videos)
+          {(overall || 0).toFixed(1)} · {size} videos
         </text>
       )}
     </g>
