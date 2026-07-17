@@ -1023,7 +1023,8 @@ export default function Results() {
                           fontWeight: 600,
                           color: THEME.textPrimary,
                           fontSize: '0.875rem',
-                          py: 2
+                          py: 2,
+                          whiteSpace: 'nowrap'
                         }
                       }}>
                         <TableCell>Dealership</TableCell>
@@ -1047,7 +1048,8 @@ export default function Results() {
                               },
                               '& td': {
                                 borderBottom: `1px solid ${THEME.borderLight}`,
-                                py: 1.5
+                                py: 1.5,
+                                whiteSpace: 'nowrap'
                               }
                             }}
                           >

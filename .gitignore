@@ -61,3 +61,8 @@ backend/cache/
 
 # Reports
 backend/reports/
+
+# Sensitive keys and credentials
+aws-modern-key
+aws-modern-key.pub
+*.pem
