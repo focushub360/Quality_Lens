@@ -52,6 +52,12 @@ jobs:
           git fetch origin main
           git reset --hard origin/main
 
+          # Build the React production build on the host filesystem (in case host Caddy/Nginx is serving it)
+          cd frontend
+          npm install
+          npm run build
+          cd ..
+
           # Login to ECR from the EC2 instance
           aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | \
             docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
