@@ -4,8 +4,6 @@ on:
   push:
     branches:
       - main
-    paths:
-      - 'backend/**'
 
 jobs:
   deploy:
@@ -48,12 +46,20 @@ jobs:
         key: ${{ secrets.EC2_SSH_KEY }}
         envs: AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,AWS_DEFAULT_REGION
         script: |
+          cd /home/${{ secrets.EC2_USER }}/Quality_Lens || cd /home/${{ secrets.EC2_USER }}/videoproject_frontend
+          
+          # Pull latest code from GitHub
+          git fetch origin main
+          git reset --hard origin/main
+
           # Login to ECR from the EC2 instance
           aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | \
             docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
 
-          # Pull the new image and restart
-          cd /home/${{ secrets.EC2_USER }}/Quality_Lens || cd /home/${{ secrets.EC2_USER }}/videoproject_frontend
+          # Pull latest backend image
           docker compose -f docker-compose.aws.yml pull backend
-          docker compose -f docker-compose.aws.yml up -d --no-deps backend
-          echo "✅ Backend restarted with new image"
+          
+          # Rebuild caddy (which compiles React production build) and restart all containers
+          docker compose -f docker-compose.aws.yml up -d --build
+          
+          echo "✅ Backend and Frontend/Caddy successfully updated and restarted"
