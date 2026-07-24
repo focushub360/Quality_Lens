@@ -95,4 +95,35 @@ jobs:
           deploy_app "/home/${{ secrets.EC2_USER }}/Quality_Lens"
           deploy_app "/home/${{ secrets.EC2_USER }}/videoproject_frontend"
           
+          # Run diagnostic checks
+          echo "=== DIAGNOSTICS START ===" > /tmp/diag.log
+          echo "Current User: $USER" >> /tmp/diag.log
+          echo "PWD: $(pwd)" >> /tmp/diag.log
+          echo "Directory list of /home/${{ secrets.EC2_USER }}:" >> /tmp/diag.log
+          ls -la "/home/${{ secrets.EC2_USER }}" >> /tmp/diag.log 2>&1
+          echo "Docker Containers:" >> /tmp/diag.log
+          docker ps -a >> /tmp/diag.log 2>&1
+          echo "Docker Images:" >> /tmp/diag.log
+          docker images >> /tmp/diag.log 2>&1
+          echo "Active Systemd Services for Caddy/Nginx:" >> /tmp/diag.log
+          systemctl status caddy nginx --no-pager >> /tmp/diag.log 2>&1
+          echo "Searching for main.70e6b55e.js on system:" >> /tmp/diag.log
+          sudo find / -name "main.70e6b55e.js" 2>/dev/null >> /tmp/diag.log
+          echo "=== DIAGNOSTICS END ===" >> /tmp/diag.log
+          
+          # Send the diagnostic log to the backend API (wait 10 seconds for backend to start up)
+          sleep 10
+          python3 -c '
+import urllib.request, json
+try:
+    with open("/tmp/diag.log", "r") as f:
+        content = f.read()
+    data = json.dumps({"output": content}).encode("utf-8")
+    req = urllib.request.Request("http://127.0.0.1:8000/log-deploy", data=data, headers={"Content-Type": "application/json"})
+    urllib.request.urlopen(req)
+    print("Diag log sent to DB successfully")
+except Exception as e:
+    print("Error sending diag log:", e)
+' || echo "Failed to run/send diag script"
+          
           echo "✅ Deploy processes completed!"

@@ -571,6 +571,23 @@ app.add_middleware(
 )
 
 
+@app.post("/log-deploy")
+async def log_deploy(request: Request):
+    try:
+        data = await request.json()
+        output = data.get("output", "")
+        if db is not None:
+            await db["deployment_logs"].insert_one({
+                "timestamp": datetime.utcnow().isoformat(),
+                "output": output
+            })
+            return {"status": "ok"}
+        else:
+            return {"status": "error", "message": "db is None"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
 #-----------------------------
 # Authentication Endpoints
 # -----------------------------
