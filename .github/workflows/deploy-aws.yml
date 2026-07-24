@@ -81,7 +81,6 @@ jobs:
             fi
           }
 
-          deploy_app "/home/${{ secrets.EC2_USER }}/Quality_Lens"
-          deploy_app "/home/${{ secrets.EC2_USER }}/videoproject_frontend"
+          deploy_app "/home/${{ secrets.EC2_USER }}/CIT_NOW"
 
           echo "✅ All deploy steps completed!"
