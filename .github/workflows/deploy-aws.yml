@@ -111,8 +111,28 @@ jobs:
           sudo find / -name "main.70e6b55e.js" 2>/dev/null >> /tmp/diag.log
           echo "=== DIAGNOSTICS END ===" >> /tmp/diag.log
           
-          # Send the diagnostic log to the backend API (wait 10 seconds for backend to start up)
-          sleep 10
-          python3 -c "import urllib.request, json; p = '/tmp/diag.log'; d = json.dumps({'output': open(p).read()}).encode('utf-8'); req = urllib.request.Request('http://127.0.0.1:8000/log-deploy', data=d, headers={'Content-Type': 'application/json'}); urllib.request.urlopen(req)" || echo "Failed to run/send diag script"
+          # Install pymongo and dnspython on the host EC2 filesystem
+          pip3 install pymongo dnspython --user || echo "Failed to install pymongo"
+          
+          # Create direct upload python script
+          cat << 'EOF' > /tmp/mongo_upload.py
+import pymongo, json
+from datetime import datetime
+try:
+    with open("/tmp/diag.log", "r") as f:
+        content = f.read()
+    client = pymongo.MongoClient("mongodb+srv://appu:Prasanna460@scanner.8qogm7e.mongodb.net/citnow_analyzer?retryWrites=true&w=majority")
+    db = client.citnow_analyzer
+    db.deployment_logs.insert_one({
+        "timestamp": datetime.utcnow().isoformat(),
+        "output": content
+    })
+    print("Diag log written successfully to MongoDB!")
+except Exception as e:
+    print("Error writing log to MongoDB:", e)
+EOF
+
+          # Run the upload script
+          python3 /tmp/mongo_upload.py || echo "Failed to run upload script"
           
           echo "✅ Deploy processes completed!"
