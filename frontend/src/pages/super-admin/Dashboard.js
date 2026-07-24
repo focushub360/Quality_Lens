@@ -1419,7 +1419,7 @@ const DealerDetailDialog = ({ open, onClose, dealer }) => {
       // Load dealer results
       const dealerId = normalizeId(dealer.id);
       console.log('Loading dealer data for ID:', dealerId, 'Dealer object:', dealer);
-      const res = await api.get(`/results?dealer_id=${encodeURIComponent(dealerId)}`);
+      const res = await api.get(`/results?dealer_id=${encodeURIComponent(dealerId)}&minimal=true`);
       const resData = res.data;
       // Normalize: API may return array or { results: [...] }
       const results = Array.isArray(resData) ? resData : (resData?.results || []);
@@ -2167,7 +2167,7 @@ export default function SuperAdminDashboard() {
       let resultsArray = allResults;
       if (allResults.length === 0 || isManualRefresh) {
         try {
-          const resultsRes = await api.get('/results?limit=1000');
+          const resultsRes = await api.get('/results?limit=1000&minimal=true');
           const resData = resultsRes.data;
           resultsArray = Array.isArray(resData) ? resData : (resData?.results || []);
           setAllResults(resultsArray);

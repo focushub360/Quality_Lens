@@ -2666,6 +2666,7 @@ async def get_all_results(
     batch_id: Optional[str] = None,
     dealer_id: Optional[str] = None,
     timeRange: Optional[str] = Query(None),
+    minimal: bool = Query(False, description="If true, excludes heavy text fields for faster loading"),
     current_user: UserInDB = Depends(get_current_user)
 ):
     # Support 'limit' as alias for 'per_page' (frontend compatibility)
@@ -2718,8 +2719,22 @@ async def get_all_results(
     # Calculate skip
     skip = (page - 1) * per_page
     
+    # Projection to optimize loading times if minimal is True
+    projection = None
+    if minimal:
+        projection = {
+            "transcription": 0,
+            "translation": 0,
+            "summarization": 0,
+            "audio_analysis.transcription": 0,
+            "audio_analysis.translation": 0,
+            "video_analysis.frames": 0,
+            "video_analysis.raw_frames": 0,
+            "video_analysis.details": 0
+        }
+        
     # Fetch paginated results
-    results = await results_collection.find(query).sort("_id", -1).skip(skip).limit(per_page).to_list(length=per_page)
+    results = await results_collection.find(query, projection).sort("_id", -1).skip(skip).limit(per_page).to_list(length=per_page)
     return {
         "results": [clean_results(r) for r in results],
         "total": total_count,
