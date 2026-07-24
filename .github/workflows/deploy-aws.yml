@@ -46,93 +46,42 @@ jobs:
         key: ${{ secrets.EC2_SSH_KEY }}
         envs: AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,AWS_DEFAULT_REGION
         script: |
-          # Define a helper function to pull and deploy the application
           deploy_app() {
             local dir=$1
             if [ -d "$dir" ]; then
               echo "📂 Found directory: $dir. Deploying..."
               cd "$dir"
-              
-              # Pull latest code from GitHub
+
+              # ⚠️ FIX: Force the git remote to point to the correct (new) repository
+              git remote set-url origin https://github.com/focushub360/Quality_Lens.git
+
+              # Pull latest code from the correct GitHub repo
               git fetch origin main
               git reset --hard origin/main
-              
-              # Build the React production build on the host filesystem (in case host Caddy/Nginx is serving it)
+              echo "✅ Code updated to latest commit: $(git log -1 --oneline)"
+
+              # Build the React frontend
               if [ -d "frontend" ]; then
                 cd frontend
-                npm install
+                npm install --silent
                 npm run build
                 cd ..
-                
-                # Copy build to target host web servers roots if present
-                if [ -d "/srv/build" ]; then
-                  echo "Copying compiled React assets to /srv/build..."
-                  sudo cp -R frontend/build/* /srv/build/ || echo "Failed to copy to /srv/build"
-                fi
-                if [ -d "/var/www/html" ]; then
-                  echo "Copying compiled React assets to /var/www/html..."
-                  sudo cp -R frontend/build/* /var/www/html/ || echo "Failed to copy to /var/www/html"
-                fi
+                echo "✅ React frontend built successfully"
               fi
 
-              # Login to ECR from the EC2 instance
+              # Login to ECR and rebuild Docker containers
               aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | \
                 docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
 
-              # Pull latest backend image
               docker compose -f docker-compose.aws.yml pull backend
-              
-              # Rebuild caddy (which compiles React production build) and restart all containers
               docker compose -f docker-compose.aws.yml up -d --build
-              
               echo "✅ Successfully deployed at $dir"
             else
-              echo "⚠️ Directory $dir does not exist"
+              echo "⚠️ Directory $dir does not exist, skipping."
             fi
           }
 
-          # Deploy in both potential directories on the server
           deploy_app "/home/${{ secrets.EC2_USER }}/Quality_Lens"
           deploy_app "/home/${{ secrets.EC2_USER }}/videoproject_frontend"
-          
-          # Run diagnostic checks
-          echo "=== DIAGNOSTICS START ===" > /tmp/diag.log
-          echo "Current User: $USER" >> /tmp/diag.log
-          echo "PWD: $(pwd)" >> /tmp/diag.log
-          echo "Directory list of /home/${{ secrets.EC2_USER }}:" >> /tmp/diag.log
-          ls -la "/home/${{ secrets.EC2_USER }}" >> /tmp/diag.log 2>&1
-          echo "Docker Containers:" >> /tmp/diag.log
-          docker ps -a >> /tmp/diag.log 2>&1
-          echo "Docker Images:" >> /tmp/diag.log
-          docker images >> /tmp/diag.log 2>&1
-          echo "Active Systemd Services for Caddy/Nginx:" >> /tmp/diag.log
-          systemctl status caddy nginx --no-pager >> /tmp/diag.log 2>&1
-          echo "Searching for main.70e6b55e.js on system:" >> /tmp/diag.log
-          sudo find / -name "main.70e6b55e.js" 2>/dev/null >> /tmp/diag.log
-          echo "=== DIAGNOSTICS END ===" >> /tmp/diag.log
-          
-          # Install pymongo and dnspython on the host EC2 filesystem
-          pip3 install pymongo dnspython --user || echo "Failed to install pymongo"
-          
-          # Create direct upload python script
-          cat << 'EOF' > /tmp/mongo_upload.py
-import pymongo, json
-from datetime import datetime
-try:
-    with open("/tmp/diag.log", "r") as f:
-        content = f.read()
-    client = pymongo.MongoClient("mongodb+srv://appu:Prasanna460@scanner.8qogm7e.mongodb.net/citnow_analyzer?retryWrites=true&w=majority")
-    db = client.citnow_analyzer
-    db.deployment_logs.insert_one({
-        "timestamp": datetime.utcnow().isoformat(),
-        "output": content
-    })
-    print("Diag log written successfully to MongoDB!")
-except Exception as e:
-    print("Error writing log to MongoDB:", e)
-EOF
 
-          # Run the upload script
-          python3 /tmp/mongo_upload.py || echo "Failed to run upload script"
-          
-          echo "✅ Deploy processes completed!"
+          echo "✅ All deploy steps completed!"
