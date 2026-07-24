@@ -1447,14 +1447,14 @@ class UnifiedMediaAnalyzer:
                 task=task,
                 beam_size=5,
                 best_of=5,
-                temperature=0.0,
+                temperature=[0.0, 0.2, 0.4, 0.6, 0.8], # Use temperature fallback to escape loops
+                condition_on_previous_text=False, # CRITICAL: Prevents hallucination loops (वूरा वूरा)
                 vad_filter=True,
                 vad_parameters=dict(
                     min_silence_duration_ms=500,
                     speech_pad_ms=300
                 ),
-                no_speech_threshold=0.8,
-                repetition_penalty=1.0,
+                no_speech_threshold=0.6, # Stricter on silence
             )
 
             print(f"🔊 Detected language: '{info.language}' (probability: {info.language_probability:.2f})")
