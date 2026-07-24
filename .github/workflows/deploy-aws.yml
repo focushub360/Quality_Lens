@@ -46,26 +46,43 @@ jobs:
         key: ${{ secrets.EC2_SSH_KEY }}
         envs: AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,AWS_DEFAULT_REGION
         script: |
-          cd /home/${{ secrets.EC2_USER }}/Quality_Lens || cd /home/${{ secrets.EC2_USER }}/videoproject_frontend
-          
-          # Pull latest code from GitHub
-          git fetch origin main
-          git reset --hard origin/main
+          # Define a helper function to pull and deploy the application
+          deploy_app() {
+            local dir=$1
+            if [ -d "$dir" ]; then
+              echo "📂 Found directory: $dir. Deploying..."
+              cd "$dir"
+              
+              # Pull latest code from GitHub
+              git fetch origin main
+              git reset --hard origin/main
+              
+              # Build the React production build on the host filesystem (in case host Caddy/Nginx is serving it)
+              if [ -d "frontend" ]; then
+                cd frontend
+                npm install
+                npm run build
+                cd ..
+              fi
 
-          # Build the React production build on the host filesystem (in case host Caddy/Nginx is serving it)
-          cd frontend
-          npm install
-          npm run build
-          cd ..
+              # Login to ECR from the EC2 instance
+              aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | \
+                docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
 
-          # Login to ECR from the EC2 instance
-          aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | \
-            docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
+              # Pull latest backend image
+              docker compose -f docker-compose.aws.yml pull backend
+              
+              # Rebuild caddy (which compiles React production build) and restart all containers
+              docker compose -f docker-compose.aws.yml up -d --build
+              
+              echo "✅ Successfully deployed at $dir"
+            else
+              echo "⚠️ Directory $dir does not exist"
+            fi
+          }
 
-          # Pull latest backend image
-          docker compose -f docker-compose.aws.yml pull backend
+          # Deploy in both potential directories on the server
+          deploy_app "/home/${{ secrets.EC2_USER }}/Quality_Lens"
+          deploy_app "/home/${{ secrets.EC2_USER }}/videoproject_frontend"
           
-          # Rebuild caddy (which compiles React production build) and restart all containers
-          docker compose -f docker-compose.aws.yml up -d --build
-          
-          echo "✅ Backend and Frontend/Caddy successfully updated and restarted"
+          echo "✅ Deploy processes completed!"
