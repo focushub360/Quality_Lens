@@ -2703,9 +2703,7 @@ async def get_all_results(
     if current_user.role == "super_admin":
         if dealer_id:
             query["dealer_id"] = dealer_id
-        else:
-            active_dealers = await users_collection.distinct("dealer_id")
-            query["dealer_id"] = {"$in": [d for d in active_dealers if d]}
+        # Removed active_dealers restriction: super admin should see ALL data even without users
     elif current_user.role in ("dealer_admin", "branch_admin", "dealer_user"):
         # All roles see ONLY their own results (hierarchy: each user owns their uploads)
         if not current_user.dealer_id:
