@@ -7,23 +7,23 @@ import Footer from './Footer';
 
 export default function Layout({ children }) {
   return (
-    <Box sx={{ display: 'flex', minHeight: '100vh', backgroundColor: '#FAFBFC' }}>
+    <Box sx={{ display: 'flex', minHeight: '100vh', backgroundColor: '#FAFBFC', maxWidth: '100vw', overflowX: 'hidden' }}>
       {/* 🚀 Sidebar on the left */}
       <Sidebar />
 
       {/* Main Content Area */}
-      <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', width: '100%' }}>
+      <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', width: { sm: `calc(100% - 280px)` }, minWidth: 0, overflowX: 'hidden' }}>
         <Navbar />
         
         <Box 
           component="main" 
           sx={{ 
             flexGrow: 1, 
-            p: { xs: 2, sm: 3, md: 4 }, 
+            p: { xs: 1.5, sm: 2, md: 2.5 }, 
             mt: { xs: '64px', sm: '72px' }, // Offset for fixed Navbar
             width: '100%',
-            maxWidth: '1800px',
-            mx: 'auto'
+            maxWidth: '100%',
+            boxSizing: 'border-box'
           }}
         >
           {children}

@@ -134,11 +134,14 @@ class UserBase(BaseModel):
     phone_number: Optional[str] = None
     branch_id: Optional[str] = None
     branch_name: Optional[str] = None
+    is_active: bool = True
+    status: Optional[str] = "active"
 
 class UserCreate(UserBase):
     password: str
     role: str = "dealer_user" # Default role for new users
     dealer_id: Optional[str] = None # Simple string field for dealer identification
+
 class UserUpdate(BaseModel):
     # every field optional – update only what is provided
     username: Optional[str] = None
@@ -151,12 +154,16 @@ class UserUpdate(BaseModel):
     phone_number: Optional[str] = None
     branch_id: Optional[str] = None
     branch_name: Optional[str] = None
+    is_active: Optional[bool] = None
+    status: Optional[str] = None
 
 class UserInDB(UserBase):
     id: str = Field(alias="_id")  # This should accept ObjectId converted to string
     hashed_password: str
     role: str
     dealer_id: Optional[str] = None
+    is_active: bool = True
+    status: Optional[str] = "active"
     created_by_user_id: Optional[str] = None  # who created this user
     created_at: dt
     updated_at: dt
@@ -164,6 +171,13 @@ class UserInDB(UserBase):
     class Config:
         populate_by_name = True  # Allow both alias and field name
         json_encoders = {ObjectId: str}  # Convert ObjectId to string in JSON
+
+class DealerDeletePayload(BaseModel):
+    dealer_id_confirm: str
+    admin_password: str
+
+class DealerStatusPayload(BaseModel):
+    is_active: bool
 
 # --- Analysis Request/Response Models ---
 class AnalysisRequest(BaseModel):
@@ -582,6 +596,13 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Password is incorrect",
             headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    # ENFORCE INACTIVE LOGIN RESTRICTION: Block inactive users from logging in
+    if user_doc.get("is_active") is False or user_doc.get("status") == "inactive":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your account has been deactivated by Super Admin. Please contact administrator.",
         )
     
     # dealer_id is now stored as string, no conversion needed
@@ -1128,6 +1149,13 @@ async def update_user(user_id: str, payload: UserUpdate, current_user: UserInDB 
     if payload.branch_name is not None and current_user.role in ["super_admin", "dealer_admin"]:
          updates["branch_name"] = payload.branch_name
 
+    if payload.is_active is not None:
+        updates["is_active"] = payload.is_active
+        updates["status"] = "active" if payload.is_active else "inactive"
+    if payload.status is not None:
+        updates["status"] = payload.status
+        updates["is_active"] = (payload.status == "active")
+
     if not updates:
         raise HTTPException(400, detail="No valid fields to update.")
 
@@ -1193,6 +1221,101 @@ async def delete_user(user_id: str, current_user: UserInDB = Depends(get_current
 
     await users_collection.delete_one({"_id": ObjectId(user_id)})
     return Response(status_code=204)
+
+
+@app.post("/dealers/{dealer_id}/delete")
+async def delete_dealership(
+    dealer_id: str,
+    payload: DealerDeletePayload,
+    current_user: UserInDB = Depends(get_current_user)
+):
+    """
+    Super Admin high-security endpoint to delete a dealership.
+    Requires exact dealer_id verification and admin password confirmation.
+    """
+    if current_user.role != "super_admin":
+        raise HTTPException(403, detail="Only Super Admin can delete a dealership.")
+    
+    # 1. Verify admin password
+    if not verify_password(payload.admin_password, current_user.hashed_password):
+        raise HTTPException(400, detail="Invalid Super Admin password. Deletion denied.")
+        
+    # 2. Verify dealer ID confirmation text
+    clean_dealer_id = dealer_id.strip().upper()
+    confirm_id = payload.dealer_id_confirm.strip().upper()
+    
+    if clean_dealer_id != confirm_id:
+        raise HTTPException(400, detail=f"Dealer ID confirmation '{confirm_id}' does not match target dealership '{clean_dealer_id}'.")
+        
+    # 3. Cascade delete users and analysis results belonging to this dealership
+    users_cursor = users_collection.find({
+        "$or": [
+            {"dealer_id": clean_dealer_id},
+            {"dealer_id": clean_dealer_id.lower()}
+        ]
+    })
+    dealer_users = await users_cursor.to_list(length=1000)
+    user_ids = [str(u["_id"]) for u in dealer_users]
+    
+    # Delete analysis results
+    await results_collection.delete_many({
+        "$or": [
+            {"dealer_id": clean_dealer_id},
+            {"dealer_id": clean_dealer_id.lower()},
+            {"submitted_by_user_id": {"$in": user_ids}}
+        ]
+    })
+    
+    # Delete dealer users
+    await users_collection.delete_many({
+        "$or": [
+            {"dealer_id": clean_dealer_id},
+            {"dealer_id": clean_dealer_id.lower()}
+        ]
+    })
+    
+    return {"status": "success", "message": f"Dealership '{clean_dealer_id}' and all associated users & analysis data have been permanently deleted."}
+
+
+@app.put("/dealers/{dealer_id}/status")
+async def update_dealer_status(
+    dealer_id: str,
+    payload: DealerStatusPayload,
+    current_user: UserInDB = Depends(get_current_user)
+):
+    """
+    Super Admin endpoint to toggle a dealership's login access.
+    Toggling a dealer active/inactive toggles all users belonging to this dealership.
+    """
+    if current_user.role != "super_admin":
+        raise HTTPException(403, detail="Only Super Admin can update dealership status.")
+        
+    clean_dealer_id = dealer_id.strip().upper()
+    status_str = "active" if payload.is_active else "inactive"
+    
+    # Update all users belonging to this dealership
+    result = await users_collection.update_many(
+        {
+            "$or": [
+                {"dealer_id": clean_dealer_id},
+                {"dealer_id": clean_dealer_id.lower()}
+            ]
+        },
+        {
+            "$set": {
+                "is_active": payload.is_active,
+                "status": status_str,
+                "updated_at": dt.utcnow()
+            }
+        }
+    )
+    
+    return {
+        "status": "success",
+        "dealer_id": clean_dealer_id,
+        "is_active": payload.is_active,
+        "updated_users_count": result.modified_count
+    }
 
 
 

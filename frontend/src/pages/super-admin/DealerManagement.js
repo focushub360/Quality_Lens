@@ -35,7 +35,10 @@ import {
   InputAdornment,
   CardActionArea,
   alpha,
-  Badge
+  Badge,
+  Switch,
+  FormControlLabel,
+  CircularProgress
 } from '@mui/material';
 import {
   Visibility,
@@ -71,7 +74,7 @@ import {
   MoreVert,
 } from '@mui/icons-material';
 import { listUsers, createUser, updateUser, deleteUser } from '../../services/users';
-import { listDealerUsers, getDealerUserStats } from '../../services/dealer_user';
+import { listDealerUsers, getDealerUserStats, deleteDealership, updateDealerStatus } from '../../services/dealer_user';
 
 import api from '../../services/api';
 import {
@@ -255,7 +258,14 @@ const ScoreTrendChart = ({ data }) => (
 const normalizeId = (id) => {
   if (id === null || id === undefined) return null;
   const s = String(id).trim();
-  return s === '' ? null : s;
+  if (s === '') return null;
+  const lower = s.toLowerCase();
+  if (lower === 'bmw' || lower === 'bmw-kun' || lower === 'kun') return 'BMW-KUN';
+  if (lower === 'bird') return 'BIRD';
+  if (lower === 'deutschemotoren' || lower === 'deutsche' || lower === 'nin') return 'DEUTSCHEMOTOREN';
+  if (lower === 'eminent') return 'EMINENT';
+  if (lower === 'evmautokraft' || lower === 'evm') return 'EVMAUTOKRAFT';
+  return s.toUpperCase();
 };
 
 const ROLE_OPTS = [
@@ -666,6 +676,40 @@ export default function DealerManagement() {
   });
   const [userError, setUserError] = useState('');
 
+  // Security Delete Dealership State
+  const [deleteDealerDialogOpen, setDeleteDealerDialogOpen] = useState(false);
+  const [deleteConfirmId, setDeleteConfirmId] = useState('');
+  const [deleteAdminPassword, setDeleteAdminPassword] = useState('');
+  const [deleteDealerError, setDeleteDealerError] = useState('');
+  const [isDeletingDealer, setIsDeletingDealer] = useState(false);
+
+  const handleConfirmDeleteDealer = async () => {
+    setDeleteDealerError('');
+    if (!deleteConfirmId || deleteConfirmId.trim().toUpperCase() !== selectedDealer?.toUpperCase()) {
+      setDeleteDealerError(`Dealer ID confirmation does not match '${selectedDealer?.toUpperCase()}'.`);
+      return;
+    }
+    if (!deleteAdminPassword) {
+      setDeleteDealerError('Please enter your Super Admin password.');
+      return;
+    }
+    try {
+      setIsDeletingDealer(true);
+      await deleteDealership(selectedDealer, deleteConfirmId.trim(), deleteAdminPassword);
+      alert(`Dealership '${selectedDealer}' and all associated user accounts have been permanently deleted.`);
+      setDeleteDealerDialogOpen(false);
+      setDialogOpen(false);
+      setDeleteConfirmId('');
+      setDeleteAdminPassword('');
+      loadData();
+    } catch (err) {
+      console.error('Error deleting dealer:', err);
+      setDeleteDealerError(err.response?.data?.detail || err.response?.data?.error || 'Failed to delete dealership.');
+    } finally {
+      setIsDeletingDealer(false);
+    }
+  };
+
   // Dashboard data
   const [dashboardData, setDashboardData] = useState({
     qualityDistribution: [],
@@ -956,8 +1000,12 @@ export default function DealerManagement() {
   const handleEditUser = (user) => {
     setEditingUser(user);
     setUserForm({
-      username: user.username || '', email: user.email || '',
-      role: user.role || 'dealer_admin', password: '', dealer_id: user.dealer_id || ''
+      username: user.username || '',
+      email: user.email || '',
+      role: user.role || 'dealer_admin',
+      password: '',
+      dealer_id: user.dealer_id || '',
+      is_active: user.is_active !== false && user.status !== 'inactive'
     });
     setUserFormOpen(true);
   };
@@ -1419,57 +1467,84 @@ export default function DealerManagement() {
             </Typography>
           </Card>
         ) : (
-          <Grid container spacing={3} justifyContent="flex-start">
+          <Box sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)' },
+            gap: 3,
+            alignItems: 'stretch'
+          }}>
             {dealers.map((dealer, index) => (
-              <Grid item xs={12} sm={6} md={4} lg={3} key={dealer.dealer_id}>
-                <Fade in={true} timeout={600} style={{ transitionDelay: `${index * 100}ms` }}>
-                  <Card sx={{
-                    background: THEME.surfaceElevated,
-                    border: `1px solid ${THEME.border}`,
-                    borderRadius: 3,
-                    height: '100%',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    transition: 'all 0.3s ease-in-out',
-                    boxShadow: THEME.shadowSm,
-                    '&:hover': {
-                      boxShadow: THEME.shadowLg,
-                      borderColor: THEME.primaryLight,
-                      transform: 'translateY(-4px)'
-                    }
-                  }}>
-                    <CardActionArea onClick={() => handleViewDealer(dealer.dealer_id)} sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', alignItems: 'stretch' }}>
-                      <CardContent sx={{ p: 4, flexGrow: 1, display: 'flex', flexDirection: 'column', width: '100%' }}>
-                        {/* Header */}
-                        <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-                          <Avatar
-                            sx={{
-                              width: 56,
-                              height: 56,
-                              background: THEME.gradientPrimary,
-                              fontWeight: 600,
-                              fontSize: '18px',
-                              mr: 2,
-                              boxShadow: THEME.shadowMd
-                            }}
-                          >
-                            <Business sx={{ fontSize: 28 }} />
-                          </Avatar>
-                          <Box sx={{ flexGrow: 1 }}>
-                            <Typography variant="h6" sx={{
-                              color: THEME.textPrimary,
-                              fontWeight: 600,
-                              mb: 0.5,
-                              lineHeight: 1.2
-                            }}>
-                              {dealer.dealer_id}
-                            </Typography>
+              <Fade key={dealer.dealer_id} in={true} timeout={600} style={{ transitionDelay: `${index * 100}ms` }}>
+                <Card sx={{
+                  background: THEME.surfaceElevated,
+                  border: `1px solid ${THEME.border}`,
+                  borderRadius: 3,
+                  height: '520px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  transition: 'all 0.3s ease-in-out',
+                  boxShadow: THEME.shadowSm,
+                  '&:hover': {
+                    boxShadow: THEME.shadowLg,
+                    borderColor: THEME.primaryLight,
+                    transform: 'translateY(-4px)'
+                  }
+                }}>
+                  <CardActionArea onClick={() => handleViewDealer(dealer.dealer_id)} sx={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'stretch' }}>
+                    <CardContent sx={{ p: 3.5, height: '100%', display: 'flex', flexDirection: 'column', width: '100%', justifyContent: 'space-between', boxSizing: 'border-box' }}>
+                      {/* Header Section (Fixed Height) */}
+                      <Box sx={{ display: 'flex', alignItems: 'center', minHeight: 56 }}>
+                        <Avatar
+                          sx={{
+                            width: 48,
+                            height: 48,
+                            background: THEME.gradientPrimary,
+                            fontWeight: 600,
+                            fontSize: '18px',
+                            mr: 2,
+                            boxShadow: THEME.shadowMd,
+                            flexShrink: 0
+                          }}
+                        >
+                          <Business sx={{ fontSize: 24 }} />
+                        </Avatar>
+                        <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                          <Typography variant="h6" noWrap sx={{
+                            color: THEME.textPrimary,
+                            fontWeight: 700,
+                            mb: 0.5,
+                            lineHeight: 1.2,
+                            fontSize: '1.1rem'
+                          }}>
+                            {dealer.dealer_id}
+                          </Typography>
+                          <Box sx={{ display: 'flex', alignItems: 'center', mt: 0.5, gap: 0.5 }} onClick={(e) => e.stopPropagation()}>
+                            <Switch
+                              size="small"
+                              checked={dealer.users.length > 0 ? dealer.users.some(u => u.is_active !== false && u.status !== 'inactive') : true}
+                              onChange={async (e) => {
+                                e.stopPropagation();
+                                const newStatus = e.target.checked;
+                                try {
+                                  await updateDealerStatus(dealer.dealer_id, newStatus);
+                                  loadData();
+                                } catch (err) {
+                                  console.error(err);
+                                  alert('Failed to update dealership status');
+                                }
+                              }}
+                              color="success"
+                            />
                             <Chip
-                              label="Active"
+                              label={(dealer.users.length > 0 ? dealer.users.some(u => u.is_active !== false && u.status !== 'inactive') : true) ? 'Active' : 'Inactive'}
                               size="small"
                               sx={{
-                                background: THEME.successLight,
-                                color: THEME.success,
+                                background: (dealer.users.length > 0 ? dealer.users.some(u => u.is_active !== false && u.status !== 'inactive') : true)
+                                  ? THEME.successLight
+                                  : THEME.errorLight,
+                                color: (dealer.users.length > 0 ? dealer.users.some(u => u.is_active !== false && u.status !== 'inactive') : true)
+                                  ? THEME.success
+                                  : THEME.error,
                                 fontWeight: 600,
                                 fontSize: '0.75rem',
                                 height: '20px'
@@ -1477,79 +1552,81 @@ export default function DealerManagement() {
                             />
                           </Box>
                         </Box>
+                      </Box>
 
-                        <Divider sx={{ borderColor: THEME.borderLight, mb: 3 }} />
+                      <Divider sx={{ borderColor: THEME.borderLight, my: 2 }} />
 
-                        {/* Stats */}
-                        <Box sx={{ mb: 3, flexGrow: 0 }}>
-                          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2.5 }}>
-                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                              <VideoLibrary sx={{ fontSize: 20, color: THEME.primary, mr: 2 }} />
-                              <Box>
-                                <Typography variant="caption" sx={{
-                                  color: THEME.textSecondary,
-                                  fontWeight: 500,
-                                  fontSize: '0.75rem'
-                                }}>
-                                  TOTAL VIDEOS
-                                </Typography>
-                                <Typography variant="h5" sx={{
-                                  color: THEME.textPrimary,
-                                  fontWeight: 700
-                                }}>
-                                  {dealer.total_videos || 0}
-                                </Typography>
-                              </Box>
-                            </Box>
-                          </Box>
-
-                          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                              <Score sx={{ fontSize: 20, color: THEME.accent, mr: 2 }} />
-                              <Box>
-                                <Typography variant="caption" sx={{
-                                  color: THEME.textSecondary,
-                                  fontWeight: 500,
-                                  fontSize: '0.75rem'
-                                }}>
-                                  AVG QUALITY
-                                </Typography>
-                                <Typography variant="h5" sx={{
-                                  color: THEME.textPrimary,
-                                  fontWeight: 700
-                                }}>
-                                  {dealer.avg_overall_quality ? dealer.avg_overall_quality.toFixed(1) : '0.0'}
-                                </Typography>
-                              </Box>
+                      {/* Stats Section (Fixed Height) */}
+                      <Box sx={{ minHeight: 105, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                            <VideoLibrary sx={{ fontSize: 20, color: THEME.primary, mr: 2 }} />
+                            <Box>
+                              <Typography variant="caption" sx={{
+                                color: THEME.textSecondary,
+                                fontWeight: 500,
+                                fontSize: '0.75rem'
+                              }}>
+                                TOTAL VIDEOS
+                              </Typography>
+                              <Typography variant="h5" sx={{
+                                color: THEME.textPrimary,
+                                fontWeight: 700
+                              }}>
+                                {dealer.total_videos || 0}
+                              </Typography>
                             </Box>
                           </Box>
                         </Box>
 
-                        <Divider sx={{ borderColor: THEME.borderLight, mb: 3 }} />
-
-                        {/* Users */}
-                        <Box sx={{ mb: 3, flexGrow: 0 }}>
-                          <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                            <Group sx={{ fontSize: 18, color: THEME.textSecondary, mr: 1.5 }} />
-                            <Typography variant="subtitle2" sx={{
-                              color: THEME.textPrimary,
-                              fontWeight: 600,
-                              fontSize: '0.875rem'
-                            }}>
-                              ASSIGNED USERS ({dealer.users.length})
-                            </Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                            <Score sx={{ fontSize: 20, color: THEME.accent, mr: 2 }} />
+                            <Box>
+                              <Typography variant="caption" sx={{
+                                color: THEME.textSecondary,
+                                fontWeight: 500,
+                                fontSize: '0.75rem'
+                              }}>
+                                AVG QUALITY
+                              </Typography>
+                              <Typography variant="h5" sx={{
+                                color: THEME.textPrimary,
+                                fontWeight: 700
+                              }}>
+                                {dealer.avg_overall_quality ? dealer.avg_overall_quality.toFixed(1) : '0.0'}
+                              </Typography>
+                            </Box>
                           </Box>
+                        </Box>
+                      </Box>
+
+                      <Divider sx={{ borderColor: THEME.borderLight, my: 2 }} />
+
+                      {/* Users Section (Fixed Height) */}
+                      <Box sx={{ minHeight: 75, display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                          <Group sx={{ fontSize: 18, color: THEME.textSecondary, mr: 1.5 }} />
+                          <Typography variant="subtitle2" sx={{
+                            color: THEME.textPrimary,
+                            fontWeight: 600,
+                            fontSize: '0.825rem'
+                          }}>
+                            ASSIGNED USERS ({dealer.users.length})
+                          </Typography>
+                        </Box>
+                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.8, alignItems: 'center' }}>
                           {dealer.users.length === 0 ? (
                             <Typography variant="body2" sx={{
                               color: THEME.textTertiary,
                               fontStyle: 'italic',
-                              fontSize: '0.875rem'
+                              fontSize: '0.85rem'
                             }}>
                               No users assigned
                             </Typography>
                           ) : (
-                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                              {dealer.users.slice(0, 3).map((user) => (
+                            <>
+                              {dealer.users.slice(0, 2).map((user) => (
                                 <Chip
                                   key={user._id || user.id}
                                   label={user.username}
@@ -1557,52 +1634,56 @@ export default function DealerManagement() {
                                   sx={{
                                     background: user.role === 'super_admin' ? THEME.accent : THEME.primary,
                                     color: THEME.background,
-                                    fontWeight: 500,
-                                    fontSize: '0.7rem'
+                                    fontWeight: 600,
+                                    fontSize: '0.68rem',
+                                    height: '22px'
                                   }}
                                 />
                               ))}
-                              {dealer.users.length > 3 && (
+                              {dealer.users.length > 2 && (
                                 <Chip
-                                  label={`+${dealer.users.length - 3} more`}
+                                  label={`+${dealer.users.length - 2} more`}
                                   size="small"
                                   variant="outlined"
                                   sx={{
                                     borderColor: THEME.textTertiary,
                                     color: THEME.textTertiary,
-                                    fontSize: '0.7rem'
+                                    fontSize: '0.68rem',
+                                    height: '22px'
                                   }}
                                 />
                               )}
-                            </Box>
+                            </>
                           )}
                         </Box>
+                      </Box>
 
-                        <Divider sx={{ borderColor: THEME.borderLight, mb: 3 }} />
+                      <Divider sx={{ borderColor: THEME.borderLight, my: 2 }} />
 
-                        {/* Branches */}
-                        <Box sx={{ mb: 3, flexGrow: 1 }}>
-                          <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                            <AccountTree sx={{ fontSize: 18, color: THEME.textSecondary, mr: 1.5 }} />
-                            <Typography variant="subtitle2" sx={{
-                              color: THEME.textPrimary,
-                              fontWeight: 600,
-                              fontSize: '0.875rem'
-                            }}>
-                              BRANCHES ({dealer.branches_count || 0})
-                            </Typography>
-                          </Box>
+                      {/* Branches Section (Fixed Height) */}
+                      <Box sx={{ minHeight: 55, display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                          <AccountTree sx={{ fontSize: 18, color: THEME.textSecondary, mr: 1.5 }} />
+                          <Typography variant="subtitle2" sx={{
+                            color: THEME.textPrimary,
+                            fontWeight: 600,
+                            fontSize: '0.825rem'
+                          }}>
+                            BRANCHES ({dealer.branches_count || 0})
+                          </Typography>
+                        </Box>
+                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.8, alignItems: 'center' }}>
                           {(!dealer.branches_list || dealer.branches_list.length === 0) ? (
                             <Typography variant="body2" sx={{
                               color: THEME.textTertiary,
                               fontStyle: 'italic',
-                              fontSize: '0.875rem'
+                              fontSize: '0.85rem'
                             }}>
                               No branches found
                             </Typography>
                           ) : (
-                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                              {dealer.branches_list.slice(0, 3).map((branch, idx) => (
+                            <>
+                              {dealer.branches_list.slice(0, 2).map((branch, idx) => (
                                 <Chip
                                   key={branch + idx}
                                   label={branch}
@@ -1612,57 +1693,59 @@ export default function DealerManagement() {
                                     borderColor: THEME.primaryLight,
                                     color: THEME.textSecondary,
                                     fontWeight: 600,
-                                    fontSize: '0.7rem',
+                                    fontSize: '0.68rem',
+                                    height: '22px',
                                     background: THEME.surface
                                   }}
                                 />
                               ))}
-                              {dealer.branches_list.length > 3 && (
+                              {dealer.branches_list.length > 2 && (
                                 <Chip
-                                  label={`+${dealer.branches_list.length - 3} more`}
+                                  label={`+${dealer.branches_list.length - 2} more`}
                                   size="small"
                                   variant="outlined"
                                   sx={{
                                     borderColor: THEME.textTertiary,
                                     color: THEME.textTertiary,
-                                    fontSize: '0.7rem'
+                                    fontSize: '0.68rem',
+                                    height: '22px'
                                   }}
                                 />
                               )}
-                            </Box>
+                            </>
                           )}
                         </Box>
+                      </Box>
 
-                        {/* Action Button */}
-                        <Button
-                          variant="contained"
-                          fullWidth
-                          startIcon={<Analytics />}
-                          sx={{
-                            mt: 'auto',
-                            background: THEME.gradientPrimary,
-                            borderRadius: 3,
-                            py: 1.5,
-                            fontWeight: 600,
-                            textTransform: 'none',
-                            fontSize: '15px',
-                            boxShadow: THEME.shadowMd,
-                            '&:hover': {
-                              boxShadow: THEME.shadowLg,
-                              transform: 'translateY(-1px)'
-                            },
-                            transition: 'all 0.2s ease-in-out'
-                          }}
-                        >
-                          View Analytics
-                        </Button>
-                      </CardContent>
-                    </CardActionArea>
-                  </Card>
-                </Fade>
-              </Grid>
+                      {/* Action Button */}
+                      <Button
+                        variant="contained"
+                        fullWidth
+                        startIcon={<Analytics />}
+                        sx={{
+                          mt: 2,
+                          background: THEME.gradientPrimary,
+                          borderRadius: 3,
+                          py: 1.2,
+                          fontWeight: 600,
+                          textTransform: 'none',
+                          fontSize: '15px',
+                          boxShadow: THEME.shadowMd,
+                          '&:hover': {
+                            boxShadow: THEME.shadowLg,
+                            transform: 'translateY(-1px)'
+                          },
+                          transition: 'all 0.2s ease-in-out'
+                        }}
+                      >
+                        View Analytics
+                      </Button>
+                    </CardContent>
+                  </CardActionArea>
+                </Card>
+              </Fade>
             ))}
-          </Grid>
+          </Box>
         )}
         {/* Enhanced Main Dealer Dialog */}
         <Dialog
@@ -1710,23 +1793,93 @@ export default function DealerManagement() {
                   <Typography variant="h5" fontWeight={600}>
                     {selectedDealer}
                   </Typography>
-                  <Typography variant="body2" sx={{ opacity: 0.9, fontWeight: 400 }}>
-                    Performance Analytics & Management
-                  </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', mt: 0.5, gap: 1.5 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                      <Typography variant="body2" sx={{ opacity: 0.9, fontWeight: 500, fontSize: '0.85rem' }}>
+                        Login Access:
+                      </Typography>
+                      <Switch
+                        size="small"
+                        checked={dealerUsers.length > 0 ? dealerUsers.some(u => u.is_active !== false && u.status !== 'inactive') : true}
+                        onChange={async (e) => {
+                          const newStatus = e.target.checked;
+                          try {
+                            await updateDealerStatus(selectedDealer, newStatus);
+                            const updatedUsers = await listDealerUsers(selectedDealer);
+                            setDealerUsers(updatedUsers);
+                            loadData();
+                          } catch (err) {
+                            console.error(err);
+                            alert('Failed to update dealership status');
+                          }
+                        }}
+                        color="success"
+                        sx={{
+                          '& .MuiSwitch-switchBase.Mui-checked': {
+                            color: '#FFF',
+                          },
+                          '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
+                            backgroundColor: '#2E7D32',
+                          }
+                        }}
+                      />
+                    </Box>
+                    <Chip
+                      label={(dealerUsers.length > 0 ? dealerUsers.some(u => u.is_active !== false && u.status !== 'inactive') : true) ? 'ACTIVE' : 'INACTIVE'}
+                      size="small"
+                      sx={{
+                        background: (dealerUsers.length > 0 ? dealerUsers.some(u => u.is_active !== false && u.status !== 'inactive') : true)
+                          ? 'rgba(16, 185, 129, 0.2)' 
+                          : 'rgba(239, 68, 68, 0.2)',
+                        color: '#FFFFFF',
+                        border: '1px solid rgba(255, 255, 255, 0.4)',
+                        fontWeight: 700,
+                        fontSize: '0.675rem',
+                        height: '20px'
+                      }}
+                    />
+                  </Box>
                 </Box>
               </Box>
-              <IconButton
-                onClick={handleCloseDialogs}
-                sx={{
-                  color: THEME.background,
-                  background: 'rgba(255, 255, 255, 0.2)',
-                  '&:hover': {
-                    background: 'rgba(255, 255, 255, 0.3)'
-                  }
-                }}
-              >
-                <ArrowBack />
-              </IconButton>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                <Button
+                  variant="contained"
+                  size="small"
+                  startIcon={<DeleteIcon />}
+                  onClick={() => {
+                    setDeleteConfirmId('');
+                    setDeleteAdminPassword('');
+                    setDeleteDealerError('');
+                    setDeleteDealerDialogOpen(true);
+                  }}
+                  sx={{
+                    background: '#DC2626',
+                    color: '#FFFFFF',
+                    fontWeight: 600,
+                    borderRadius: 2,
+                    px: 2,
+                    textTransform: 'none',
+                    boxShadow: '0 2px 8px rgba(220, 38, 38, 0.4)',
+                    '&:hover': {
+                      background: '#B91C1C'
+                    }
+                  }}
+                >
+                  Delete Dealership
+                </Button>
+                <IconButton
+                  onClick={handleCloseDialogs}
+                  sx={{
+                    color: THEME.background,
+                    background: 'rgba(255, 255, 255, 0.2)',
+                    '&:hover': {
+                      background: 'rgba(255, 255, 255, 0.3)'
+                    }
+                  }}
+                >
+                  <ArrowBack />
+                </IconButton>
+              </Box>
             </Box>
           </DialogTitle>
 
@@ -2477,8 +2630,9 @@ export default function DealerManagement() {
                                 <TableCell>User</TableCell>
                                 <TableCell>Email</TableCell>
                                 <TableCell>Role</TableCell>
-                                <TableCell>Videos Analyzed</TableCell> {/* NEW COLUMN */}
+                                <TableCell>Videos Analyzed</TableCell>
                                 <TableCell>Dealer ID</TableCell>
+                                <TableCell>Status (Login Control)</TableCell>
                                 <TableCell align="center">Actions</TableCell>
                               </TableRow>
                             </TableHead>
@@ -2486,6 +2640,7 @@ export default function DealerManagement() {
                               {paginatedDealerUsers.map((user) => {
                                 const userId = user._id || user.id;
                                 const videosAnalyzed = userStats[userId] || 0;
+                                const isActive = user.is_active !== false && user.status !== 'inactive';
 
                                 return (
                                   <TableRow
@@ -2565,6 +2720,33 @@ export default function DealerManagement() {
                                       }}>
                                         {user.dealer_id || '—'}
                                       </Typography>
+                                    </TableCell>
+                                    <TableCell>
+                                      <Tooltip title={isActive ? "Click to deactivate user (disables login)" : "Click to activate user (enables login)"}>
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                          <Switch
+                                            size="small"
+                                            checked={isActive}
+                                            onChange={async () => {
+                                              try {
+                                                await updateUser(userId, { is_active: !isActive, status: !isActive ? 'active' : 'inactive' });
+                                                const uList = await listDealerUsers(selectedDealer);
+                                                setDealerUsers(Array.isArray(uList) ? uList : []);
+                                              } catch (err) {
+                                                console.error('Error toggling user status:', err);
+                                              }
+                                            }}
+                                            color="success"
+                                          />
+                                          <Chip
+                                            label={isActive ? 'Active' : 'Inactive'}
+                                            size="small"
+                                            color={isActive ? 'success' : 'error'}
+                                            variant="outlined"
+                                            sx={{ fontWeight: 700, fontSize: '0.7rem' }}
+                                          />
+                                        </Box>
+                                      </Tooltip>
                                     </TableCell>
                                     <TableCell align="center">
                                       <Box sx={{ display: 'flex', justifyContent: 'center', gap: 0.5 }}>
@@ -2865,6 +3047,43 @@ export default function DealerManagement() {
                 }
               }}
             />
+
+            <Box sx={{
+              mt: 2,
+              p: 2,
+              borderRadius: 2,
+              border: `1px solid ${THEME.borderLight}`,
+              backgroundColor: THEME.surface,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between'
+            }}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={userForm.is_active !== false}
+                    onChange={(e) => setUserForm({ ...userForm, is_active: e.target.checked })}
+                    color="success"
+                  />
+                }
+                label={
+                  <Box sx={{ ml: 1 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600, color: THEME.textPrimary }}>
+                      Account Status: {userForm.is_active !== false ? 'ACTIVE' : 'INACTIVE'}
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: THEME.textSecondary, display: 'block' }}>
+                      {userForm.is_active !== false ? 'User can log in under this dealer' : 'Login disabled for this user'}
+                    </Typography>
+                  </Box>
+                }
+              />
+              <Chip
+                label={userForm.is_active !== false ? 'Active' : 'Inactive'}
+                color={userForm.is_active !== false ? 'success' : 'error'}
+                size="small"
+                sx={{ fontWeight: 700 }}
+              />
+            </Box>
           </DialogContent>
 
           <DialogActions sx={{ px: 3, pb: 3 }}>
@@ -2912,6 +3131,100 @@ export default function DealerManagement() {
               }}
             >
               {editingUser ? 'Update' : 'Create'}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* HIGH-SECURITY DELETE DEALERSHIP AUTHORIZATION DIALOG */}
+        <Dialog
+          open={deleteDealerDialogOpen}
+          onClose={() => setDeleteDealerDialogOpen(false)}
+          maxWidth="xs"
+          fullWidth
+          PaperProps={{
+            sx: {
+              borderRadius: 3,
+              border: `2px solid ${THEME.error}`,
+              boxShadow: THEME.shadowXl,
+              overflow: 'hidden'
+            }
+          }}
+        >
+          <DialogTitle sx={{
+            background: 'linear-gradient(135deg, #DC2626 0%, #EF4444 100%)',
+            color: '#FFFFFF',
+            fontWeight: 700,
+            py: 2.5
+          }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+              <DeleteIcon sx={{ fontSize: 26 }} />
+              <Typography variant="h6" fontWeight={700} fontSize="1.1rem">
+                Delete Dealership Security Confirmation
+              </Typography>
+            </Box>
+          </DialogTitle>
+          <DialogContent sx={{ p: 3, pt: 3 }}>
+            {deleteDealerError && (
+              <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }} onClose={() => setDeleteDealerError('')}>
+                {deleteDealerError}
+              </Alert>
+            )}
+            <Typography variant="body2" sx={{ color: THEME.textPrimary, mb: 2.5, lineHeight: 1.6, fontWeight: 500 }}>
+              ⚠️ <strong>WARNING:</strong> You are about to permanently delete dealership <strong>{selectedDealer}</strong> and all associated user accounts, branches, and analysis records.
+            </Typography>
+
+            <Box sx={{ mb: 2.5 }}>
+              <Typography variant="caption" sx={{ color: THEME.textPrimary, fontWeight: 700, mb: 0.8, display: 'block' }}>
+                1. Type Dealership ID to confirm: <span style={{ color: '#DC2626', fontFamily: 'monospace' }}>{selectedDealer?.toUpperCase()}</span>
+              </Typography>
+              <TextField
+                fullWidth
+                size="small"
+                placeholder={`Type "${selectedDealer?.toUpperCase()}"`}
+                value={deleteConfirmId}
+                onChange={(e) => setDeleteConfirmId(e.target.value)}
+                sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2, fontFamily: 'monospace' } }}
+              />
+            </Box>
+
+            <Box sx={{ mb: 1 }}>
+              <Typography variant="caption" sx={{ color: THEME.textPrimary, fontWeight: 700, mb: 0.8, display: 'block' }}>
+                2. Super Admin Password:
+              </Typography>
+              <TextField
+                fullWidth
+                size="small"
+                type="password"
+                placeholder="Enter Super Admin Password"
+                value={deleteAdminPassword}
+                onChange={(e) => setDeleteAdminPassword(e.target.value)}
+                sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
+              />
+            </Box>
+          </DialogContent>
+          <DialogActions sx={{ p: 2.5, background: THEME.surface, borderTop: `1px solid ${THEME.border}` }}>
+            <Button
+              onClick={() => setDeleteDealerDialogOpen(false)}
+              variant="outlined"
+              sx={{ borderColor: THEME.border, color: THEME.textSecondary, borderRadius: 2 }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="contained"
+              onClick={handleConfirmDeleteDealer}
+              disabled={isDeletingDealer || deleteConfirmId.trim().toUpperCase() !== selectedDealer?.toUpperCase() || !deleteAdminPassword}
+              sx={{
+                background: '#DC2626',
+                color: '#FFFFFF',
+                fontWeight: 700,
+                px: 3,
+                borderRadius: 2,
+                '&:hover': { background: '#B91C1C' },
+                '&:disabled': { opacity: 0.5 }
+              }}
+            >
+              {isDeletingDealer ? <CircularProgress size={20} color="inherit" /> : 'Confirm Deletion'}
             </Button>
           </DialogActions>
         </Dialog>

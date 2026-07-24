@@ -62,7 +62,9 @@ The primary dashboard runs locally while connecting to the stable cloud backend.
 ```bash
 cd frontend
 npm install
-npm start
+git push origin main
+git push origin main
+
 ```
 Access the application at `http://localhost:3000`.
 

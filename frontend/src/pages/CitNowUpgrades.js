@@ -1047,8 +1047,8 @@ export default function CitNowUpgrades() {
                     Execution Milestones
                   </Typography>
                   <Typography variant="caption" sx={{ color: THEME.textSecondary, display: 'block', lineHeight: 1.5 }}>
-                    - **Milestone A (June 15):** Completion of Whisper caption API pipeline.<br />
-                    - **Milestone B (June 28):** Fully functional dashboard UI testing integration.
+                    • <strong>Milestone A (June 15):</strong> Completion of Whisper caption API pipeline.<br />
+                    • <strong>Milestone B (June 28):</strong> Fully functional dashboard UI testing integration.
                   </Typography>
                 </Grid>
                 <Grid item xs={12} md={4}>
@@ -1056,8 +1056,8 @@ export default function CitNowUpgrades() {
                     Alignment & Success Metrics
                   </Typography>
                   <Typography variant="caption" sx={{ color: THEME.textSecondary, display: 'block', lineHeight: 1.5 }}>
-                    - Video correction latency under **2.2s**.<br />
-                    - **95%** positive user experience feedback from technicians during pilot.
+                    • Video correction latency under <strong>2.2s</strong>.<br />
+                    • <strong>95%</strong> positive user experience feedback from technicians during pilot.
                   </Typography>
                 </Grid>
               </Grid>
@@ -1079,15 +1079,15 @@ export default function CitNowUpgrades() {
           <Grid item xs={12} md={4}>
             <Card sx={{ 
               borderRadius: 4, 
-              border: `1px solid rgba(0, 0, 0, 0.05)`, 
+              border: `1px solid rgba(16, 185, 129, 0.25)`, 
               background: THEME.white, 
-              boxShadow: '0 10px 25px rgba(0,0,0,0.02)',
+              boxShadow: '0 10px 25px rgba(16, 185, 129, 0.05)',
               position: 'relative',
               height: '100%'
             }}>
               <CardContent sx={{ p: 3 }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                  <Chip label="Phase 1 (Post-Pilot)" color="primary" size="small" sx={{ fontWeight: 700 }} />
+                  <Chip icon={<CheckCircle sx={{ fontSize: 16 }} />} label="Phase 1 (Completed)" color="success" size="small" sx={{ fontWeight: 700 }} />
                   <Typography variant="caption" sx={{ color: THEME.textSecondary, fontWeight: 700 }}>July - Aug</Typography>
                 </Box>
                 <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1, color: THEME.textPrimary }}>
@@ -1096,13 +1096,14 @@ export default function CitNowUpgrades() {
                 <Typography variant="body2" sx={{ color: THEME.textSecondary, mb: 2, fontSize: '0.85rem', lineHeight: 1.6 }}>
                   Identify and log enhancement areas requested during pilot operations. Deploy rapid sub-second improvements to AI translation performance.
                 </Typography>
-                <Divider sx={{ my: 2 }} />
+                <Chip icon={<CheckCircle sx={{ fontSize: 14 }} />} label="Status: Active & Completed" size="small" color="success" variant="outlined" sx={{ mb: 2, fontWeight: 700, fontSize: '0.75rem' }} />
+                <Divider sx={{ my: 1.5 }} />
                 <Typography variant="caption" sx={{ fontWeight: 700, color: THEME.textPrimary, display: 'block', mb: 0.5 }}>
                   Ownership:
                 </Typography>
                 <Typography variant="caption" sx={{ color: THEME.textSecondary, display: 'block' }}>
-                  • **Focus Engineering:** Bug fixes, pipeline refinements<br />
-                  • **BMW:** Feedback collection & approval review
+                  • <strong>Focus Engineering:</strong> Bug fixes, pipeline refinements<br />
+                  • <strong>BMW:</strong> Feedback collection & approval review
                 </Typography>
               </CardContent>
             </Card>
@@ -1111,14 +1112,14 @@ export default function CitNowUpgrades() {
           <Grid item xs={12} md={4}>
             <Card sx={{ 
               borderRadius: 4, 
-              border: `1px solid rgba(0, 0, 0, 0.05)`, 
+              border: `1px solid rgba(16, 185, 129, 0.25)`, 
               background: THEME.white, 
-              boxShadow: '0 10px 25px rgba(0,0,0,0.02)',
+              boxShadow: '0 10px 25px rgba(16, 185, 129, 0.05)',
               height: '100%'
             }}>
               <CardContent sx={{ p: 3 }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                  <Chip label="Phase 2 (Enhancement)" color="secondary" size="small" sx={{ fontWeight: 700, backgroundColor: 'rgba(0, 180, 219, 0.1)', color: THEME.accent }} />
+                  <Chip icon={<CheckCircle sx={{ fontSize: 16 }} />} label="Phase 2 (Rolled Out & Completed)" color="success" size="small" sx={{ fontWeight: 700 }} />
                   <Typography variant="caption" sx={{ color: THEME.textSecondary, fontWeight: 700 }}>Sept - Oct</Typography>
                 </Box>
                 <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1, color: THEME.textPrimary }}>
@@ -1127,13 +1128,14 @@ export default function CitNowUpgrades() {
                 <Typography variant="body2" sx={{ color: THEME.textSecondary, mb: 2, fontSize: '0.85rem', lineHeight: 1.6 }}>
                   Deploy custom branding options, including specific font files, logo overlay setups, and watermarking directly inside the video engine.
                 </Typography>
-                <Divider sx={{ my: 2 }} />
+                <Chip icon={<CheckCircle sx={{ fontSize: 14 }} />} label="Status: Rolled Out & Active" size="small" color="success" variant="outlined" sx={{ mb: 2, fontWeight: 700, fontSize: '0.75rem' }} />
+                <Divider sx={{ my: 1.5 }} />
                 <Typography variant="caption" sx={{ fontWeight: 700, color: THEME.textPrimary, display: 'block', mb: 0.5 }}>
                   Ownership:
                 </Typography>
                 <Typography variant="caption" sx={{ color: THEME.textSecondary, display: 'block' }}>
-                  • **Focus Engineering:** Styling features, watermarking pipeline<br />
-                  • **BMW:** Design specifications alignment
+                  • <strong>Focus Engineering:</strong> Styling features, watermarking pipeline<br />
+                  • <strong>BMW:</strong> Design specifications alignment
                 </Typography>
               </CardContent>
             </Card>
@@ -1163,8 +1165,8 @@ export default function CitNowUpgrades() {
                   Ownership:
                 </Typography>
                 <Typography variant="caption" sx={{ color: THEME.textSecondary, display: 'block' }}>
-                  • **Focus Engineering:** Scaled cloud infrastructure provisioning<br />
-                  • **BMW:** Dealer onboarding & change management
+                  • <strong>Focus Engineering:</strong> Scaled cloud infrastructure provisioning<br />
+                  • <strong>BMW:</strong> Dealer onboarding & change management
                 </Typography>
               </CardContent>
             </Card>

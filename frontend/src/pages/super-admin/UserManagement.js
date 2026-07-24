@@ -27,7 +27,9 @@ import {
   Tooltip,
   Stack,
   Toolbar,
-  Autocomplete
+  Autocomplete,
+  Switch,
+  FormControlLabel
 } from '@mui/material';
 import {
   Add,
@@ -88,7 +90,8 @@ export default function UserManagement() {
     role: 'dealer_admin',
     password: '',
     dealer_id: '',
-    showroom_name: ''
+    showroom_name: '',
+    is_active: true
   });
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
@@ -102,25 +105,32 @@ export default function UserManagement() {
   const [roleFilter, setRoleFilter] = useState('all');
   const [availableDealers, setAvailableDealers] = useState([]);
 
+  const handleToggleStatus = async (user) => {
+    const userId = user._id || user.id;
+    const currentActive = user.is_active !== false && user.status !== 'inactive';
+    try {
+      await updateUser(userId, { is_active: !currentActive, status: !currentActive ? 'active' : 'inactive' });
+      load();
+    } catch (err) {
+      console.error('Error updating user status:', err);
+      setError('Failed to update status');
+    }
+  };
+
   const load = async () => {
     setLoading(true);
     try {
       const data = await listUsers();
       const userList = Array.isArray(data) ? data : [];
       
-      const dealersMap = new Map();
-      userList.forEach(u => {
-        if (u.dealer_id) {
-          const did = u.dealer_id.toLowerCase().trim();
-          if (!dealersMap.has(did)) {
-            dealersMap.set(did, {
-              id: u.dealer_id,
-              name: u.showroom_name || u.dealer_id
-            });
-          }
-        }
-      });
-      setAvailableDealers(Array.from(dealersMap.values()));
+      const REGISTERED_ACTIVE_DEALERS = [
+        { id: 'BIRD', name: 'BIRD' },
+        { id: 'BMW-KUN', name: 'BMW-KUN' },
+        { id: 'DEUTSCHEMOTOREN', name: 'DEUTSCHEMOTOREN' },
+        { id: 'EMINENT', name: 'EMINENT' },
+        { id: 'EVMAUTOKRAFT', name: 'EVMAUTOKRAFT' }
+      ];
+      setAvailableDealers(REGISTERED_ACTIVE_DEALERS);
 
       const dealerAdmins = userList.filter(user => user.role === 'dealer_admin');
       setUsers(dealerAdmins);
@@ -138,7 +148,7 @@ export default function UserManagement() {
 
   useEffect(() => {
     if (!open) {
-      setForm({ username: '', email: '', role: 'dealer_admin', password: '', dealer_id: '', showroom_name: '' });
+      setForm({ username: '', email: '', role: 'dealer_admin', password: '', dealer_id: '', showroom_name: '', is_active: true });
       setEditingUser(null);
       setError('');
     }
@@ -211,7 +221,8 @@ export default function UserManagement() {
       role: user.role || 'dealer_admin',
       password: user.plain_password || '',
       dealer_id: user.dealer_id || '',
-      showroom_name: user.showroom_name || ''
+      showroom_name: user.showroom_name || '',
+      is_active: user.is_active !== false && user.status !== 'inactive'
     });
     setOpen(true);
   };
@@ -273,25 +284,28 @@ export default function UserManagement() {
     <Box sx={{
       minHeight: '100vh',
       background: 'linear-gradient(135deg, #FFFFFF 0%, #F0FDFA 100%)',
-      py: 4
+      py: 2.5,
+      px: { xs: 2, md: 3 },
+      width: '100%'
     }}>
-      <Container maxWidth="xl">
-        <Box sx={{ mb: 5 }}>
+      <Container maxWidth={false} disableGutters>
+        <Box sx={{ mb: 3 }}>
           <Box sx={{
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
             flexWrap: 'wrap',
             gap: 2,
-            mb: 2
+            mb: 1.5
           }}>
             <Box>
               <Typography
-                variant="h3"
+                variant="h4"
                 sx={{
                   fontWeight: 700,
                   color: THEME.textPrimary,
-                  mb: 1,
+                  mb: 0.5,
+                  fontSize: '1.65rem',
                   background: THEME.gradientPrimary,
                   WebkitBackgroundClip: 'text',
                   WebkitTextFillColor: 'transparent',
@@ -300,30 +314,31 @@ export default function UserManagement() {
               >
                 Administrator Management
               </Typography>
-              <Typography variant="body1" sx={{ color: THEME.textSecondary, fontSize: '1.05rem' }}>
+              <Typography variant="body2" sx={{ color: THEME.textSecondary, fontSize: '0.875rem' }}>
                 Manage system administrators and dealer admins
               </Typography>
             </Box>
 
             <Button
               variant="contained"
-              size="large"
+              size="medium"
               startIcon={<Add />}
               onClick={() => setOpen(true)}
               sx={{
-                borderRadius: 3,
-                px: 4,
-                py: 1.5,
+                borderRadius: 2.5,
+                px: 2.5,
+                py: 1,
                 fontWeight: 600,
                 textTransform: 'none',
-                fontSize: '1rem',
+                fontSize: '0.875rem',
+                whiteSpace: 'nowrap',
                 background: THEME.gradientPrimary,
                 boxShadow: THEME.shadowMd,
                 '&:hover': {
                   boxShadow: '0 6px 20px rgba(13, 161, 184, 0.4)',
-                  transform: 'translateY(-2px)'
+                  transform: 'translateY(-1px)'
                 },
-                transition: 'all 0.3s ease'
+                transition: 'all 0.2s ease'
               }}
             >
               New Administrator
@@ -447,169 +462,188 @@ export default function UserManagement() {
               background: '#FFFFFF'
             }}
           >
-            <TableContainer>
-              <Table>
+            <TableContainer sx={{ width: '100%', overflowX: 'auto' }}>
+              <Table size="small" sx={{ width: '100%', tableLayout: 'auto' }}>
                 <TableHead>
                   <TableRow sx={{
-                    background: 'linear-gradient(135deg, rgba(13, 161, 184, 0.08) 0%, rgba(12, 88, 125, 0.08) 100%)'
+                    background: 'linear-gradient(135deg, rgba(13, 161, 184, 0.08) 0%, rgba(12, 88, 125, 0.08) 100%)',
+                    '& th': { py: 1.2, px: 1.2 }
                   }}>
-                    <TableCell>
+                    <TableCell sx={{ width: '20%' }}>
                       <TableSortLabel
                         active={orderBy === 'username'}
                         direction={orderBy === 'username' ? order : 'asc'}
                         onClick={() => handleRequestSort('username')}
                       >
-                        <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 600, fontSize: '0.85rem' }}>
                           Username
                         </Typography>
                       </TableSortLabel>
                     </TableCell>
-                    <TableCell>
+                    <TableCell sx={{ width: '25%' }}>
                       <TableSortLabel
                         active={orderBy === 'email'}
                         direction={orderBy === 'email' ? order : 'asc'}
                         onClick={() => handleRequestSort('email')}
                       >
-                        <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 600, fontSize: '0.85rem' }}>
                           Email
                         </Typography>
                       </TableSortLabel>
                     </TableCell>
-                    <TableCell>
-                      <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                    <TableCell sx={{ width: '12%' }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 600, fontSize: '0.85rem' }}>
                         Role
                       </Typography>
                     </TableCell>
-                    <TableCell>
+                    <TableCell sx={{ width: '13%' }}>
                       <TableSortLabel
                         active={orderBy === 'showroom_name'}
                         direction={orderBy === 'showroom_name' ? order : 'asc'}
                         onClick={() => handleRequestSort('showroom_name')}
                       >
-                        <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 600, fontSize: '0.85rem' }}>
                           Showroom Name
                         </Typography>
                       </TableSortLabel>
                     </TableCell>
-                    <TableCell>
+                    <TableCell sx={{ width: '12%' }}>
                       <TableSortLabel
                         active={orderBy === 'dealer_id'}
                         direction={orderBy === 'dealer_id' ? order : 'asc'}
                         onClick={() => handleRequestSort('dealer_id')}
                       >
-                        <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 600, fontSize: '0.85rem' }}>
                           Dealer ID
                         </Typography>
                       </TableSortLabel>
                     </TableCell>
-                    <TableCell align="right">
-                      <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                    <TableCell sx={{ width: '12%' }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 600, fontSize: '0.85rem' }}>
+                        Status (Login)
+                      </Typography>
+                    </TableCell>
+                    <TableCell align="right" sx={{ width: '6%', pr: 2 }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 600, fontSize: '0.85rem' }}>
                         Actions
                       </Typography>
                     </TableCell>
                   </TableRow>
                 </TableHead>
-                <TableBody>
-                  {paginatedUsers.map((user) => (
-                    <TableRow
-                      key={user._id || user.id}
-                      hover
-                      sx={{
-                        '&:hover': {
-                          bgcolor: 'rgba(13, 161, 184, 0.04)',
-                          transform: 'scale(1.001)',
-                          transition: 'all 0.2s ease'
-                        },
-                        borderBottom: `1px solid ${THEME.borderLight}`
-                      }}
-                    >
-                      <TableCell>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                          <Box
-                            sx={{
-                              width: 40,
-                              height: 40,
-                              borderRadius: '50%',
-                              background: THEME.gradientPrimary,
-                              color: 'white',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              fontWeight: 700,
-                              fontSize: '1rem',
-                              boxShadow: '0 2px 8px rgba(13, 161, 184, 0.2)'
-                            }}
-                          >
-                            {user.username.charAt(0).toUpperCase()}
-                          </Box>
-                          <Typography variant="body2" sx={{ fontWeight: 600, color: THEME.textPrimary }}>
-                            {user.username}
-                          </Typography>
-                        </Box>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2" sx={{ color: THEME.textSecondary }}>
-                          {user.email}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          label="Dealer Admin"
-                          size="small"
+                  <TableBody>
+                    {paginatedUsers.map((user) => {
+                      const isActiveUser = user.is_active !== false && user.status !== 'inactive';
+                      return (
+                        <TableRow
+                          key={user._id || user.id}
+                          hover
                           sx={{
-                            bgcolor: `${THEME.primary}15`,
-                            color: THEME.primary,
-                            fontWeight: 600,
-                            fontSize: '0.75rem'
+                            '&:hover': {
+                              bgcolor: 'rgba(13, 161, 184, 0.04)'
+                            },
+                            borderBottom: `1px solid ${THEME.borderLight}`,
+                            '& td': { py: 1.2, px: 1.5 }
                           }}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2" sx={{ fontWeight: 500, color: THEME.textPrimary }}>
-                          {user.showroom_name || '—'}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2" sx={{
-                          fontFamily: 'monospace',
-                          color: user.dealer_id ? THEME.textPrimary : THEME.textSecondary
-                        }}>
-                          {user.dealer_id || '—'}
-                        </Typography>
-                      </TableCell>
-                      <TableCell align="right">
-                        <Stack direction="row" spacing={0.5} justifyContent="flex-end">
-                          <Tooltip title="Edit user">
-                            <IconButton
+                        >
+                          <TableCell>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.2 }}>
+                              <Box
+                                sx={{
+                                  width: 34,
+                                  height: 34,
+                                  borderRadius: '50%',
+                                  background: THEME.gradientPrimary,
+                                  color: 'white',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  fontWeight: 700,
+                                  fontSize: '0.875rem',
+                                  boxShadow: '0 2px 6px rgba(13, 161, 184, 0.2)',
+                                  flexShrink: 0
+                                }}
+                              >
+                                {user.username.charAt(0).toUpperCase()}
+                              </Box>
+                              <Typography variant="body2" sx={{ fontWeight: 600, color: THEME.textPrimary, fontSize: '0.85rem' }}>
+                                {user.username}
+                              </Typography>
+                            </Box>
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2" sx={{ color: THEME.textSecondary, fontSize: '0.825rem' }}>
+                              {user.email}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Chip
+                              label="Dealer Admin"
                               size="small"
-                              onClick={() => handleEdit(user)}
                               sx={{
+                                bgcolor: `${THEME.primary}15`,
                                 color: THEME.primary,
-                                '&:hover': { bgcolor: `${THEME.primary}10` }
+                                fontWeight: 600,
+                                fontSize: '0.7rem',
+                                height: 22
                               }}
-                            >
-                              <Edit fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                          <Tooltip title="Delete user">
-                            <IconButton
-                              size="small"
-                              onClick={() => handleDelete(user._id || user.id)}
-                              sx={{
-                                color: THEME.error,
-                                '&:hover': { bgcolor: `${THEME.error}10` }
-                              }}
-                            >
-                              <Delete fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                        </Stack>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2" sx={{ fontWeight: 500, color: THEME.textPrimary, fontSize: '0.85rem' }}>
+                              {user.showroom_name || '—'}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2" sx={{
+                              fontFamily: 'monospace',
+                              color: user.dealer_id ? THEME.textPrimary : THEME.textSecondary,
+                              fontSize: '0.825rem',
+                              fontWeight: 600
+                            }}>
+                              {user.dealer_id ? (user.dealer_id.toLowerCase().includes('bmw') ? 'BMW-KUN' : user.dealer_id.toUpperCase()) : '—'}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Tooltip title={isActiveUser ? "Click to Deactivate (Disables Login)" : "Click to Activate (Enables Login)"}>
+                              <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.8 }}>
+                                <Switch
+                                  size="small"
+                                  checked={isActiveUser}
+                                  onChange={() => handleToggleStatus(user)}
+                                  color="success"
+                                />
+                                <Chip
+                                  label={isActiveUser ? 'Active' : 'Inactive'}
+                                  size="small"
+                                  color={isActiveUser ? 'success' : 'error'}
+                                  variant="outlined"
+                                  sx={{ fontWeight: 700, fontSize: '0.675rem', height: 20 }}
+                                />
+                              </Box>
+                            </Tooltip>
+                          </TableCell>
+                          <TableCell align="right" sx={{ pr: 2, whiteSpace: 'nowrap' }}>
+                            <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+                              <Tooltip title="Edit user profile">
+                                <IconButton
+                                  size="small"
+                                  onClick={() => handleEdit(user)}
+                                  sx={{
+                                    color: THEME.primary,
+                                    '&:hover': { bgcolor: `${THEME.primary}10` }
+                                  }}
+                                >
+                                  <Edit fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                            </Stack>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </TableContainer>
 
             <TablePagination
               component="div"
@@ -733,19 +767,25 @@ export default function UserManagement() {
               <Autocomplete
                 freeSolo
                 options={availableDealers}
-                getOptionLabel={(option) => typeof option === 'string' ? option : `${option.name} (${option.id})`}
-                value={availableDealers.find(d => d.id === form.dealer_id) || form.dealer_id}
+                getOptionLabel={(option) => {
+                  if (typeof option === 'string') return option.toUpperCase();
+                  return option.id.toUpperCase();
+                }}
+                value={availableDealers.find(d => d.id.toLowerCase() === (form.dealer_id || '').toLowerCase()) || (form.dealer_id ? form.dealer_id.toUpperCase() : '')}
                 onChange={(event, newValue) => {
                   if (typeof newValue === 'string') {
-                    setForm({ ...form, dealer_id: newValue });
+                    const uppercaseVal = newValue.toUpperCase();
+                    setForm({ ...form, dealer_id: uppercaseVal, showroom_name: form.showroom_name || uppercaseVal });
                   } else if (newValue && newValue.id) {
-                    setForm({ ...form, dealer_id: newValue.id, showroom_name: newValue.name || form.showroom_name });
+                    setForm({ ...form, dealer_id: newValue.id, showroom_name: newValue.name || newValue.id });
                   } else {
                     setForm({ ...form, dealer_id: '' });
                   }
                 }}
                 onInputChange={(event, newInputValue) => {
-                  setForm({ ...form, dealer_id: newInputValue });
+                  if (newInputValue) {
+                    setForm({ ...form, dealer_id: newInputValue.toUpperCase() });
+                  }
                 }}
                 renderInput={(params) => (
                   <TextField
@@ -784,6 +824,42 @@ export default function UserManagement() {
                 }}
                 sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
               />
+
+              <Box sx={{
+                p: 2,
+                borderRadius: 2,
+                border: `1px solid ${THEME.borderLight}`,
+                backgroundColor: THEME.surface,
+                display: 'flex',
+                alignItems: 'center',
+                justify: 'space-between'
+              }}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={form.is_active !== false}
+                      onChange={(e) => setForm({ ...form, is_active: e.target.checked })}
+                      color="success"
+                    />
+                  }
+                  label={
+                    <Box sx={{ ml: 1 }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 600, color: THEME.textPrimary }}>
+                        Account Status: {form.is_active !== false ? 'ACTIVE' : 'INACTIVE'}
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: THEME.textSecondary, display: 'block' }}>
+                        {form.is_active !== false ? 'User can log in and perform dealer tasks' : 'Login disabled for this user under dealership'}
+                      </Typography>
+                    </Box>
+                  }
+                />
+                <Chip
+                  label={form.is_active !== false ? 'Active' : 'Inactive'}
+                  color={form.is_active !== false ? 'success' : 'error'}
+                  size="small"
+                  sx={{ fontWeight: 700 }}
+                />
+              </Box>
             </Stack>
           </DialogContent>
 

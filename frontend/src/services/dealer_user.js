@@ -102,6 +102,31 @@ export const deleteDealerUser = async (id) => {
   }
 };
 
+// 🔹 Delete Dealership (Super Admin Security Authorization)
+export const deleteDealership = async (dealerId, dealerIdConfirm, adminPassword) => {
+  try {
+    const res = await api.post(`/dealers/${dealerId}/delete`, {
+      dealer_id_confirm: dealerIdConfirm,
+      admin_password: adminPassword
+    });
+    return res.data;
+  } catch (err) {
+    throw err;
+  }
+};
+
+// 🔹 Update Dealership Active/Inactive Status
+export const updateDealerStatus = async (dealerId, isActive) => {
+  try {
+    const res = await api.put(`/dealers/${dealerId}/status`, {
+      is_active: isActive
+    });
+    return res.data;
+  } catch (err) {
+    throw err;
+  }
+};
+
 export const listMyDealerUsers = async () => {
   try {
     console.log(`🔄 [listMyDealerUsers] Fetching users for current dealer`);

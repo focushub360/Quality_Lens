@@ -2,7 +2,8 @@ import React, { useEffect, useState, useContext } from 'react';
 import {
   Box, Typography, Button, TextField, IconButton, MenuItem, Chip,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-  Paper, CircularProgress, Alert, Snackbar, Container, Grid, Divider
+  Paper, CircularProgress, Alert, Snackbar, Container, Grid, Divider,
+  Switch, FormControlLabel, Tooltip
 } from '@mui/material';
 import {
   Add, Delete, PersonOutline, CheckCircle, ArrowBack, Event
@@ -123,6 +124,19 @@ export default function DealerUsers() {
     // eslint-disable-next-line
   }, [authUser]);
 
+  const handleToggleStatus = async (user) => {
+    const userId = user._id || user.id;
+    const currentActive = user.is_active !== false && user.status !== 'inactive';
+    try {
+      await updateDealerUser(userId, { is_active: !currentActive, status: !currentActive ? 'active' : 'inactive' });
+      showSuccessMsg(`User login status updated to ${!currentActive ? 'ACTIVE' : 'INACTIVE'}`);
+      load();
+    } catch (err) {
+      console.error('Error updating status:', err);
+      setError('Failed to update login status.');
+    }
+  };
+
   const handleEdit = (user) => {
     setEditingUser(user);
     setForm({
@@ -137,7 +151,8 @@ export default function DealerUsers() {
       job_title: user.job_title && allowedJobTitles.includes(user.job_title)
         ? user.job_title
         : '',
-      phone_number: user.phone_number || ''
+      phone_number: user.phone_number || '',
+      is_active: user.is_active !== false && user.status !== 'inactive'
     });
     setViewState('edit');
   };
@@ -156,7 +171,8 @@ export default function DealerUsers() {
       branch_id: authUser?.branch_id || '',
       branch_name: authUser?.branch_name || '',
       job_title: '',
-      phone_number: ''
+      phone_number: '',
+      is_active: true
     });
     setViewState('create');
   };
@@ -326,7 +342,28 @@ export default function DealerUsers() {
                           {user.created_at ? new Date(user.created_at).toLocaleDateString() : 'N/A'}
                         </TableCell>
                         <TableCell>
-                          <CheckCircle sx={{ color: THEME.success, fontSize: 20 }} />
+                          {(() => {
+                            const isActive = user.is_active !== false && user.status !== 'inactive';
+                            return (
+                              <Tooltip title={isActive ? "Click to disable login for this user" : "Click to enable login for this user"}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                  <Switch
+                                    size="small"
+                                    checked={isActive}
+                                    onChange={() => handleToggleStatus(user)}
+                                    color="success"
+                                  />
+                                  <Chip
+                                    label={isActive ? 'Active' : 'Inactive'}
+                                    size="small"
+                                    color={isActive ? 'success' : 'error'}
+                                    variant="outlined"
+                                    sx={{ fontWeight: 700, fontSize: '0.7rem' }}
+                                  />
+                                </Box>
+                              </Tooltip>
+                            );
+                          })()}
                         </TableCell>
                         <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
                           <Button 
@@ -473,6 +510,44 @@ export default function DealerUsers() {
                       onChange={(e) => setForm({ ...form, password: e.target.value })}
                       InputProps={{ sx: { background: THEME.surface } }}
                     />
+                  </Grid>
+
+                  <Grid item xs={12}>
+                    <Box sx={{
+                      p: 2,
+                      borderRadius: 2,
+                      border: `1px solid ${THEME.border}`,
+                      backgroundColor: THEME.surface,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between'
+                    }}>
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            checked={form.is_active !== false}
+                            onChange={(e) => setForm({ ...form, is_active: e.target.checked })}
+                            color="success"
+                          />
+                        }
+                        label={
+                          <Box sx={{ ml: 1 }}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 600, color: THEME.textPrimary }}>
+                              Account Status: {form.is_active !== false ? 'ACTIVE' : 'INACTIVE'}
+                            </Typography>
+                            <Typography variant="caption" sx={{ color: THEME.textSecondary, display: 'block' }}>
+                              {form.is_active !== false ? 'User is allowed to log in and upload videos' : 'Login disabled for this user'}
+                            </Typography>
+                          </Box>
+                        }
+                      />
+                      <Chip
+                        label={form.is_active !== false ? 'Active' : 'Inactive'}
+                        color={form.is_active !== false ? 'success' : 'error'}
+                        size="small"
+                        sx={{ fontWeight: 700 }}
+                      />
+                    </Box>
                   </Grid>
                 </Grid>
               </Grid>
