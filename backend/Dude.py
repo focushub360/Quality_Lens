@@ -1751,7 +1751,18 @@ class UnifiedMediaAnalyzer:
                     transcription_language=transcription_language,
                     task='transcribe'
                 )
-                return audio_res, transcription_res
+                
+                # NATIVE WHISPER TRANSLATION: 100% reliable on EC2 (avoids Google Translate IP blocks)
+                # If target is English, we natively translate audio to English text.
+                english_res = transcription_res
+                if requested_target_language == 'en':
+                    english_res = self.transcribe_audio(
+                        audio_path,
+                        transcription_language=transcription_language,
+                        task='translate'
+                    )
+                
+                return audio_res, transcription_res, english_res
 
             print("\n⚡ STARTING PARALLEL AUDIO AND VIDEO ANALYSIS PIPELINE...")
             with concurrent.futures.ThreadPoolExecutor(max_workers=2) as parallel_executor:
@@ -1759,7 +1770,7 @@ class UnifiedMediaAnalyzer:
                 audio_future = parallel_executor.submit(run_audio_pipeline)
                 
                 video_analysis = video_future.result()
-                audio_analysis, transcription = audio_future.result()
+                audio_analysis, transcription, native_english_transcription = audio_future.result()
             
             # --- PROCESS VIDEO ANALYSIS RESULTS ---
             star_rating = results.get("citnow_metadata", {}).get("star_rating")
@@ -1799,7 +1810,14 @@ class UnifiedMediaAnalyzer:
 
             print(f"\n🌍 TRANSLATING TO {requested_target_language.upper()}")
             print("-" * 40)
-            translation = self.translate_text(transcription, target_language=requested_target_language)
+            
+            # Use Whisper's highly reliable native English translation if target is English
+            if requested_target_language == 'en':
+                translation = native_english_transcription
+                print(f"✅ Used native AI translation to English")
+            else:
+                translation = self.translate_text(transcription, target_language=requested_target_language)
+                
             results["translation"] = {
                 "translated_text": translation,
                 "target_language": requested_target_language,
