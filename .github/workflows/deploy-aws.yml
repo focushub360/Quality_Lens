@@ -63,6 +63,16 @@ jobs:
                 npm install
                 npm run build
                 cd ..
+                
+                # Copy build to target host web servers roots if present
+                if [ -d "/srv/build" ]; then
+                  echo "Copying compiled React assets to /srv/build..."
+                  sudo cp -R frontend/build/* /srv/build/ || echo "Failed to copy to /srv/build"
+                fi
+                if [ -d "/var/www/html" ]; then
+                  echo "Copying compiled React assets to /var/www/html..."
+                  sudo cp -R frontend/build/* /var/www/html/ || echo "Failed to copy to /var/www/html"
+                fi
               fi
 
               # Login to ECR from the EC2 instance
