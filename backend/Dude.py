@@ -1424,7 +1424,7 @@ class UnifiedMediaAnalyzer:
         except Exception as e:
             print(f"❌ Error loading some models: {e}")
 
-    def transcribe_audio(self, audio_path, transcription_language=None, task='translate'):
+    def transcribe_audio(self, audio_path, transcription_language=None, task='transcribe'):
         """High-performance transcription with minimal anti-repetition"""
         try:
             from faster_whisper import WhisperModel
@@ -1441,15 +1441,10 @@ class UnifiedMediaAnalyzer:
             
             whisper_lang_param = transcription_language if transcription_language != "auto" else None
 
-            # Use task='translate' to always output English regardless of source language
-            # This ensures Transcription and Summary are always in English
-            whisper_task = task if task in ('transcribe', 'translate') else 'translate'
-            print(f"🌐 Whisper task: {whisper_task} (output will be in English)")
-
             segments, info = self.faster_whisper_model.transcribe(
                 audio_path,
                 language=whisper_lang_param,
-                task=whisper_task,
+                task=task,
                 beam_size=5,
                 best_of=5,
                 temperature=0.0,
@@ -1663,10 +1658,6 @@ class UnifiedMediaAnalyzer:
         actual_target_lang = target_language if target_language is not None else self.target_language
         
         print(f"🌍 Initiating high-reliability translation to {actual_target_lang.upper()}...")
-
-        if actual_target_lang == "en":
-            print(f"🎯 Target language is English - returning original text without translation.")
-            return text
         
         if len(text.strip()) < 1:
             return text
@@ -1758,7 +1749,7 @@ class UnifiedMediaAnalyzer:
                 transcription_res = self.transcribe_audio(
                     audio_path, 
                     transcription_language=transcription_language,
-                    task='translate'  # Always translate to English
+                    task='transcribe'
                 )
                 return audio_res, transcription_res
 
@@ -1806,19 +1797,6 @@ class UnifiedMediaAnalyzer:
             results["processing_steps"].append("overall_quality_assessment")
             print(f"Overall Quality Score: {overall_quality['overall_label']} ({overall_quality['overall_score']:.1f}/10)")
 
-            print("\n📝 GENERATING SUMMARY")
-            print("-" * 40)
-            summary = self.summarize_text(transcription)
-            results["summarization"] = {
-                "summary": summary,
-                "length": len(summary),
-                "reduction_ratio": f"{((1 - len(summary)/len(transcription)) * 100):.1f}%"
-                if len(transcription) > 0
-                else "N/A",
-            }
-            results["processing_steps"].append("text_summarization")
-            print(f"Summary generated ({results['summarization']['reduction_ratio']} reduction)")
-
             print(f"\n🌍 TRANSLATING TO {requested_target_language.upper()}")
             print("-" * 40)
             translation = self.translate_text(transcription, target_language=requested_target_language)
@@ -1829,6 +1807,20 @@ class UnifiedMediaAnalyzer:
             }
             results["processing_steps"].append("translation")
             print(f"Translation completed ({len(translation)} characters)")
+
+            print("\n📝 GENERATING SUMMARY")
+            print("-" * 40)
+            # Use the translated text for summarization to ensure BART gets the target language (usually English)
+            summary = self.summarize_text(translation)
+            results["summarization"] = {
+                "summary": summary,
+                "length": len(summary),
+                "reduction_ratio": f"{((1 - len(summary)/len(translation)) * 100):.1f}%"
+                if len(translation) > 0
+                else "N/A",
+            }
+            results["processing_steps"].append("text_summarization")
+            print(f"Summary generated ({results['summarization']['reduction_ratio']} reduction)")
 
         except Exception as pipeline_e:
             print(f"\n❌ Pipeline stopped due to an error: {pipeline_e}")
