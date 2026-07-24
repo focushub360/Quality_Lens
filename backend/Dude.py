@@ -1424,7 +1424,7 @@ class UnifiedMediaAnalyzer:
         except Exception as e:
             print(f"❌ Error loading some models: {e}")
 
-    def transcribe_audio(self, audio_path, transcription_language=None, task='transcribe'):
+    def transcribe_audio(self, audio_path, transcription_language=None, task='translate'):
         """High-performance transcription with minimal anti-repetition"""
         try:
             from faster_whisper import WhisperModel
@@ -1441,9 +1441,15 @@ class UnifiedMediaAnalyzer:
             
             whisper_lang_param = transcription_language if transcription_language != "auto" else None
 
+            # Use task='translate' to always output English regardless of source language
+            # This ensures Transcription and Summary are always in English
+            whisper_task = task if task in ('transcribe', 'translate') else 'translate'
+            print(f"🌐 Whisper task: {whisper_task} (output will be in English)")
+
             segments, info = self.faster_whisper_model.transcribe(
                 audio_path,
                 language=whisper_lang_param,
+                task=whisper_task,
                 beam_size=5,
                 best_of=5,
                 temperature=0.0,
@@ -1752,7 +1758,7 @@ class UnifiedMediaAnalyzer:
                 transcription_res = self.transcribe_audio(
                     audio_path, 
                     transcription_language=transcription_language,
-                    task='transcribe'
+                    task='translate'  # Always translate to English
                 )
                 return audio_res, transcription_res
 
