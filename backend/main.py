@@ -2078,7 +2078,7 @@ async def get_analysis_status(
     task_id: str, 
     current_user: UserInDB = Depends(get_current_user)
 ):
-    """Get analysis task status with authorization"""
+    """Get analysis task status with authorization. Auto-heals stuck tasks."""
     task = await get_analysis_task(task_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found or expired")
@@ -2089,6 +2089,21 @@ async def get_analysis_status(
             status_code=403, 
             detail="Not authorized to view this task"
         )
+    
+    # AUTO-HEAL: If task is stuck in "processing" but a result exists, fix it
+    if task.get("status") == "processing":
+        existing_result = await results_collection.find_one({"task_id": task_id})
+        if existing_result:
+            result_id = str(existing_result["_id"])
+            logger.info(f"Auto-healing stuck task {task_id} — result {result_id} found in DB")
+            await update_analysis_task(task_id, {
+                "status": "completed",
+                "result_id": result_id,
+                "message": "Analysis completed successfully"
+            })
+            task["status"] = "completed"
+            task["result_id"] = result_id
+            task["message"] = "Analysis completed successfully"
     
     return task
 def load_excel_file_robustly(contents: bytes, filename: str) -> pd.DataFrame:

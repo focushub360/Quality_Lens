@@ -67,24 +67,36 @@ export function TaskProvider({ children }) {
                     const res = await api.get(endpoint);
                     const data = res.data;
 
-                    // Check for status change or completion
-                    if (data.status !== task.status) {
-                        updateTask(task.task_id, {
-                            status: data.status,
-                            message: data.message,
-                            result_id: data.result_id,
-                            error_message: data.error_message
-                        });
+                    // Always update — don't wait just for status changes
+                    updateTask(task.task_id, {
+                        status: data.status,
+                        message: data.message,
+                        result_id: data.result_id,
+                        error_message: data.error_message
+                    });
+
+                    // Safety net: if still "processing" for >5 min but has a result_id, force-complete
+                    if (data.status === 'processing' && data.result_id) {
+                        const addedAt = new Date(task.addedAt || Date.now());
+                        const minutesElapsed = (Date.now() - addedAt.getTime()) / 60000;
+                        if (minutesElapsed > 5) {
+                            console.warn(`Task ${task.task_id} stuck in processing but has result_id — force completing`);
+                            updateTask(task.task_id, {
+                                status: 'completed',
+                                result_id: data.result_id,
+                                message: 'Analysis completed'
+                            });
+                        }
                     }
                 } catch (err) {
                     console.error(`Error polling task ${task.task_id}:`, err);
-                    // Optional: Mark as failed if 404
+                    // Mark as failed if 404
                     if (err.response?.status === 404) {
                         updateTask(task.task_id, { status: 'failed', error_message: 'Task not found' });
                     }
                 }
             }
-        }, 5000); // Poll every 5s
+        }, 3000); // Poll every 3s for faster completion detection
 
         return () => clearInterval(interval);
     }, [tasks, updateTask]);
