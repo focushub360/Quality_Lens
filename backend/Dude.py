@@ -246,7 +246,8 @@ class UnifiedMediaAnalyzer:
 
             # Fallback: regex search in full plain text
             if not metadata["service_advisor"]:
-                advisor_match = re.search(r"(?:Technician|Service Advisor)[\s:]*([A-Za-z]+(?:,?\s+[A-Za-z]+)*)", page_text, re.IGNORECASE)
+                # Cap at 5 words max to prevent greedy capture of following label text
+                advisor_match = re.search(r"(?:Technician|Service Advisor)[\s:]*([A-Za-z]+(?:,?\s+[A-Za-z]+){0,4})", page_text, re.IGNORECASE)
                 if advisor_match:
                     metadata["service_advisor"] = advisor_match.group(1).strip()
 
@@ -1478,6 +1479,12 @@ class UnifiedMediaAnalyzer:
                 return "No clear speech detected in audio"
 
             full_transcription = " ".join(transcription_parts).strip()
+            
+            # Filter out garbage hallucinations — too short or punctuation only
+            GARBAGE_PATTERNS = [",", ".", "!", "?", "the", "The", "a", "A", "I", "...", " ", ",.", ".,"]
+            if len(full_transcription) < 5 or full_transcription.strip() in GARBAGE_PATTERNS:
+                print(f"⚠️ Transcription too short or garbage: '{full_transcription}' — treating as no speech")
+                return "No clear speech detected in audio"
             
             print(f"✅ Transcription successful! Length: {len(full_transcription)} characters")
             

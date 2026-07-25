@@ -689,52 +689,67 @@ export default function NewAnalysis() {
                   })()}
 
                   {/* Transcription */}
-                  {resultData.transcription?.text && (
-                    <Paper elevation={0} sx={{
-                      p: 2.5, mb: 2, borderRadius: 2,
-                      border: `1px solid ${THEME.border}`,
-                      background: THEME.surface
-                    }}>
-                      <Typography variant="subtitle2" fontWeight="700" sx={{ color: THEME.textPrimary, mb: 1 }}>
-                        📝 Transcription
-                      </Typography>
-                      <Typography variant="body2" sx={{ color: THEME.textSecondary, lineHeight: 1.7 }}>
-                        {resultData.transcription.text}
-                      </Typography>
-                    </Paper>
-                  )}
+                  {(() => {
+                    const GARBAGE = ['the', 'a', ',', '.', '!', '?', '...', ',.']
+                    const txt = resultData.transcription?.text
+                    const isValid = txt && txt.trim().length >= 10 && !GARBAGE.includes(txt.trim().toLowerCase())
+                    return isValid ? (
+                      <Paper elevation={0} sx={{
+                        p: 2.5, mb: 2, borderRadius: 2,
+                        border: `1px solid ${THEME.border}`,
+                        background: THEME.surface
+                      }}>
+                        <Typography variant="subtitle2" fontWeight="700" sx={{ color: THEME.textPrimary, mb: 1 }}>
+                          📝 Transcription
+                        </Typography>
+                        <Typography variant="body2" sx={{ color: THEME.textSecondary, lineHeight: 1.7 }}>
+                          {txt}
+                        </Typography>
+                      </Paper>
+                    ) : null
+                  })()}
 
                   {/* Summary */}
-                  {resultData.summarization?.summary && (
-                    <Paper elevation={0} sx={{
-                      p: 2.5, mb: 2, borderRadius: 2,
-                      border: `1px solid ${THEME.border}`,
-                      background: THEME.surface
-                    }}>
-                      <Typography variant="subtitle2" fontWeight="700" sx={{ color: THEME.textPrimary, mb: 1 }}>
-                        💡 Summary
-                      </Typography>
-                      <Typography variant="body2" sx={{ color: THEME.textSecondary, lineHeight: 1.7 }}>
-                        {resultData.summarization.summary}
-                      </Typography>
-                    </Paper>
-                  )}
+                  {(() => {
+                    const GARBAGE = ['the', 'a', ',', '.', '!', '?', '...', ',.']
+                    const txt = resultData.summarization?.summary
+                    const isValid = txt && txt.trim().length >= 10 && !GARBAGE.includes(txt.trim().toLowerCase())
+                    return isValid ? (
+                      <Paper elevation={0} sx={{
+                        p: 2.5, mb: 2, borderRadius: 2,
+                        border: `1px solid ${THEME.border}`,
+                        background: THEME.surface
+                      }}>
+                        <Typography variant="subtitle2" fontWeight="700" sx={{ color: THEME.textPrimary, mb: 1 }}>
+                          💡 Summary
+                        </Typography>
+                        <Typography variant="body2" sx={{ color: THEME.textSecondary, lineHeight: 1.7 }}>
+                          {txt}
+                        </Typography>
+                      </Paper>
+                    ) : null
+                  })()}
 
                   {/* Translation */}
-                  {resultData.translation?.translated_text && (
-                    <Paper elevation={0} sx={{
-                      p: 2.5, mb: 2, borderRadius: 2,
-                      border: `1px solid ${THEME.border}`,
-                      background: THEME.surface
-                    }}>
-                      <Typography variant="subtitle2" fontWeight="700" sx={{ color: THEME.textPrimary, mb: 1 }}>
-                        🌐 Translation
-                      </Typography>
-                      <Typography variant="body2" sx={{ color: THEME.textSecondary, lineHeight: 1.7 }}>
-                        {resultData.translation.translated_text}
-                      </Typography>
-                    </Paper>
-                  )}
+                  {(() => {
+                    const GARBAGE = ['the', 'a', ',', '.', '!', '?', '...', ',.']
+                    const txt = resultData.translation?.translated_text
+                    const isValid = txt && txt.trim().length >= 10 && !GARBAGE.includes(txt.trim().toLowerCase())
+                    return isValid ? (
+                      <Paper elevation={0} sx={{
+                        p: 2.5, mb: 2, borderRadius: 2,
+                        border: `1px solid ${THEME.border}`,
+                        background: THEME.surface
+                      }}>
+                        <Typography variant="subtitle2" fontWeight="700" sx={{ color: THEME.textPrimary, mb: 1 }}>
+                          🌐 Translation
+                        </Typography>
+                        <Typography variant="body2" sx={{ color: THEME.textSecondary, lineHeight: 1.7 }}>
+                          {txt}
+                        </Typography>
+                      </Paper>
+                    ) : null
+                  })()}
 
                   {/* Overall Label / Quality */}
                   {resultData.overall_quality?.overall_label && (
