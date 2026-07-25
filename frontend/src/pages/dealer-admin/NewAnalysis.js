@@ -691,8 +691,12 @@ export default function NewAnalysis() {
                   {/* Transcription */}
                   {(() => {
                     const GARBAGE = ['the', 'a', ',', '.', '!', '?', '...', ',.']
+                    const GARBAGE_PHRASES = ['no clear speech detected', 'transcription failed', 'translation failed', 'summarization failed', 'no meaningful summary']
                     const txt = resultData.transcription?.text
-                    const isValid = txt && txt.trim().length >= 10 && !GARBAGE.includes(txt.trim().toLowerCase())
+                    const isValid = txt &&
+                      txt.trim().length >= 10 &&
+                      !GARBAGE.includes(txt.trim().toLowerCase()) &&
+                      !GARBAGE_PHRASES.some(p => txt.trim().toLowerCase().includes(p))
                     return isValid ? (
                       <Paper elevation={0} sx={{
                         p: 2.5, mb: 2, borderRadius: 2,
@@ -712,8 +716,12 @@ export default function NewAnalysis() {
                   {/* Summary */}
                   {(() => {
                     const GARBAGE = ['the', 'a', ',', '.', '!', '?', '...', ',.']
+                    const GARBAGE_PHRASES = ['no clear speech detected', 'transcription failed', 'translation failed', 'summarization failed', 'no meaningful summary']
                     const txt = resultData.summarization?.summary
-                    const isValid = txt && txt.trim().length >= 10 && !GARBAGE.includes(txt.trim().toLowerCase())
+                    const isValid = txt &&
+                      txt.trim().length >= 10 &&
+                      !GARBAGE.includes(txt.trim().toLowerCase()) &&
+                      !GARBAGE_PHRASES.some(p => txt.trim().toLowerCase().includes(p))
                     return isValid ? (
                       <Paper elevation={0} sx={{
                         p: 2.5, mb: 2, borderRadius: 2,
@@ -733,8 +741,12 @@ export default function NewAnalysis() {
                   {/* Translation */}
                   {(() => {
                     const GARBAGE = ['the', 'a', ',', '.', '!', '?', '...', ',.']
+                    const GARBAGE_PHRASES = ['no clear speech detected', 'transcription failed', 'translation failed', 'summarization failed', 'no meaningful summary']
                     const txt = resultData.translation?.translated_text
-                    const isValid = txt && txt.trim().length >= 10 && !GARBAGE.includes(txt.trim().toLowerCase())
+                    const isValid = txt &&
+                      txt.trim().length >= 10 &&
+                      !GARBAGE.includes(txt.trim().toLowerCase()) &&
+                      !GARBAGE_PHRASES.some(p => txt.trim().toLowerCase().includes(p))
                     return isValid ? (
                       <Paper elevation={0} sx={{
                         p: 2.5, mb: 2, borderRadius: 2,

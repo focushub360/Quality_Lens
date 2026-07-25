@@ -246,10 +246,13 @@ class UnifiedMediaAnalyzer:
 
             # Fallback: regex search in full plain text
             if not metadata["service_advisor"]:
-                # Cap at 5 words max to prevent greedy capture of following label text
-                advisor_match = re.search(r"(?:Technician|Service Advisor)[\s:]*([A-Za-z]+(?:,?\s+[A-Za-z]+){0,4})", page_text, re.IGNORECASE)
+                # Match only a person name: letters/comma/space, max 4 words, stop before known keywords
+                advisor_match = re.search(
+                    r"(?:Technician|Service Advisor)[\s:]*([A-Za-z]+(?:[,\s]+[A-Za-z]+){0,3}?)(?=\s*(?:Email|Phone|Registration|Vehicle|Dealership|$|\d|\n|[^a-zA-Z,\s]))",
+                    page_text, re.IGNORECASE
+                )
                 if advisor_match:
-                    metadata["service_advisor"] = advisor_match.group(1).strip()
+                    metadata["service_advisor"] = advisor_match.group(1).strip().rstrip(',')
 
             if not metadata["email"]:
                 email_match = re.search(r"Email[\s:]*([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})", page_text, re.IGNORECASE)
