@@ -556,12 +556,13 @@ const CustomTreemapTooltip = ({ active, payload }) => {
 const normalizeDealerId = (id) => {
   if (!id) return 'EMINENT';
   const s = String(id).trim().toLowerCase();
-  if (s === 'bmw' || s === 'bmw-kun' || s === 'kun') return 'BMW-KUN';
-  if (s === 'bird') return 'BIRD';
-  if (s === 'deutschemotoren' || s === 'deutsche' || s === 'nin') return 'DEUTSCHEMOTOREN';
-  if (s === 'eminent') return 'EMINENT';
-  if (s === 'evmautokraft' || s === 'evm') return 'EVMAUTOKRAFT';
-  return s.toUpperCase();
+  if (s.includes('bmw') || s === 'kun') return 'BMW-KUN';
+  if (s.includes('bird')) return 'BIRD';
+  if (s.includes('deutsche') || s.includes('deutsch') || s === 'detush' || s === 'nin') return 'DEUTSCHEMOTOREN';
+  if (s.includes('eminent')) return 'EMINENT';
+  if (s.includes('evm') || s.includes('evmauto')) return 'EVMAUTOKRAFT';
+  if (s.includes('gallop') || s.includes('gallap')) return 'GALLOP';
+  return 'EMINENT'; // Fallback unregistered names to EMINENT
 };
 
 const getDealerDisplayName = (id) => {
@@ -571,9 +572,10 @@ const getDealerDisplayName = (id) => {
     'BMW-KUN': 'BMW-KUN',
     'DEUTSCHEMOTOREN': 'DEUTSCHEMOTOREN',
     'EMINENT': 'EMINENT',
-    'EVMAUTOKRAFT': 'EVMAUTOKRAFT'
+    'EVMAUTOKRAFT': 'EVMAUTOKRAFT',
+    'GALLOP': 'GALLOP'
   };
-  return exactNames[norm] || norm;
+  return exactNames[norm] || 'EMINENT';
 };
 
 // ─── Helper: Compute advisor feedback flags from results ───────────────────
@@ -2426,11 +2428,11 @@ export default function SuperAdminDashboard() {
       const avgScore = validScores.length > 0
         ? Math.round((validScores.reduce((a, b) => a + b, 0) / validScores.length) * 10) / 10 : 0;
 
-      // Dynamically initialize dealerMap from all registered dealers (from users table)
+      // Strictly initialize dealerMap with only the active registered dealers in the network
+      const ACTIVE_DEALER_IDS = ['BIRD', 'BMW-KUN', 'DEUTSCHEMOTOREN', 'EMINENT', 'EVMAUTOKRAFT', 'GALLOP'];
       const dealerMap = {};
-      dealerIds.forEach(did => {
-        const normDid = normalizeDealerId(did);
-        dealerMap[normDid] = { overall: [], video: [], audio: [], count: 0, originalName: dealerNames[did] };
+      ACTIVE_DEALER_IDS.forEach(did => {
+        dealerMap[did] = { overall: [], video: [], audio: [], count: 0 };
       });
 
       activeDataSet.forEach(r => {
@@ -2450,7 +2452,7 @@ export default function SuperAdminDashboard() {
       });
 
       let dealerPerformance = Object.entries(dealerMap).map(([did, data]) => {
-        const displayName = data.originalName || getDealerDisplayName(did);
+        const displayName = getDealerDisplayName(did);
         const avgOverall = data.overall.length > 0
           ? Math.round((data.overall.reduce((a, b) => a + b, 0) / data.overall.length) * 10) / 10
           : 0;
