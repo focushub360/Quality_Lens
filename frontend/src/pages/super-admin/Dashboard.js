@@ -815,17 +815,19 @@ const DealerPerformanceHeatmap = ({ data, selectedFilterDealer, allResults, user
 
   if (selectedFilterDealer === 'all') {
     const dealerMap = {};
+    const validDealers = new Set(data.map(d => normalizeDealerId(d.id)));
+
+    // Initialize all valid active dealers (even if they have 0 results for the current time period)
+    validDealers.forEach(did => {
+      dealerMap[did] = [];
+    });
+
+    // Populate with results, skipping garbage/unregistered dealer names
     allResults.forEach(r => {
       const rawDid = r.dealer_id || r.dealer || 'eminent';
       const did = normalizeDealerId(rawDid);
-      if (!dealerMap[did]) dealerMap[did] = [];
-      dealerMap[did].push(r);
-    });
-
-    data.forEach(d => {
-      const normId = normalizeDealerId(d.id);
-      if (!dealerMap[normId]) {
-        dealerMap[normId] = [];
+      if (validDealers.has(did)) {
+        dealerMap[did].push(r);
       }
     });
 
