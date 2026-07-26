@@ -432,14 +432,13 @@ const DealerPerformanceChart = ({ data }) => {
 const CustomTreemapContent = (props) => {
   const { x, y, width, height, name, overall, size } = props;
 
-  // Logo teal/cyan palette — medium-saturated backgrounds, white text
+  // True traffic-light colors: Red / Amber / Green
   const getScoreBg = (score) => {
-    if (score >= 8.5) return '#00897B';   // rich teal
-    if (score >= 7.5) return '#0097A7';   // deep cyan
-    if (score >= 7.0) return '#0DA1B8';   // brand primary
-    if (score >= 6.5) return '#4DB6AC';   // medium teal
-    if (score >= 5.5) return '#F4A261';   // warm amber
-    return '#E76F51';                      // coral red
+    if (score >= 7.5) return '#16a34a';   // Strong Green
+    if (score >= 7.0) return '#22c55e';   // Green
+    if (score >= 6.0) return '#f59e0b';   // Amber
+    if (score >= 5.0) return '#f97316';   // Orange
+    return '#ef4444';                      // Red
   };
 
   const bgColor = getScoreBg(overall || 0);
@@ -577,7 +576,212 @@ const getDealerDisplayName = (id) => {
   return exactNames[norm] || norm;
 };
 
+// ─── Helper: Compute advisor feedback flags from results ───────────────────
+const computeAdvisorFlags = (results = []) => {
+  const flags = [];
+  const audioScores = results.map(r => r.audio_quality_score || 0).filter(s => s > 0);
+  const avgAudio = audioScores.length > 0 ? audioScores.reduce((a, b) => a + b, 0) / audioScores.length : 0;
+  const videoScores = results.map(r => r.video_quality_score || 0).filter(s => s > 0);
+  const avgVideo = videoScores.length > 0 ? videoScores.reduce((a, b) => a + b, 0) / videoScores.length : 0;
+
+  // Inaudible: avg audio < 5
+  if (avgAudio > 0 && avgAudio < 5) flags.push({ label: 'Often Inaudible', color: '#ef4444', bg: '#fef2f2' });
+  else if (avgAudio >= 5 && avgAudio < 7) flags.push({ label: 'Audio Needs Work', color: '#f59e0b', bg: '#fffbeb' });
+
+  // Camera / video quality
+  if (avgVideo > 0 && avgVideo < 5) flags.push({ label: 'Poor Video Quality', color: '#ef4444', bg: '#fef2f2' });
+  else if (avgVideo >= 5 && avgVideo < 7) flags.push({ label: 'Video Below Avg', color: '#f59e0b', bg: '#fffbeb' });
+
+  // Good performance
+  if (avgAudio >= 8 && avgVideo >= 8) flags.push({ label: 'Top Performer', color: '#16a34a', bg: '#f0fdf4' });
+  else if (avgAudio >= 7 && avgVideo >= 7) flags.push({ label: 'Good Quality', color: '#22c55e', bg: '#f0fdf4' });
+
+  return flags;
+};
+
+// ─── Top Detected Issues Component ─────────────────────────────────────────
+const TopDetectedIssues = ({ allResults = [] }) => {
+  const issueCounts = { video: {}, audio: {}, overall: {} };
+
+  allResults.forEach(r => {
+    // Video issues
+    const vScore = r.video_quality_score || 0;
+    if (vScore < 5) { issueCounts.video['Poor Video Quality'] = (issueCounts.video['Poor Video Quality'] || 0) + 1; }
+    else if (vScore < 7) { issueCounts.video['Below Average Video'] = (issueCounts.video['Below Average Video'] || 0) + 1; }
+
+    // Audio issues — inferred from audio score
+    const aScore = r.audio_quality_score || 0;
+    if (aScore < 4) { issueCounts.audio['Inaudible / No Speech'] = (issueCounts.audio['Inaudible / No Speech'] || 0) + 1; }
+    else if (aScore < 6) { issueCounts.audio['Background Noise'] = (issueCounts.audio['Background Noise'] || 0) + 1; }
+    else if (aScore < 7) { issueCounts.audio['Low Audio Clarity'] = (issueCounts.audio['Low Audio Clarity'] || 0) + 1; }
+
+    // Overall issues
+    const oScore = r.overall_quality_score || 0;
+    const label = r.overall_quality_label || '';
+    if (label === 'Poor' || oScore < 5) { issueCounts.overall['Poor Overall Score'] = (issueCounts.overall['Poor Overall Score'] || 0) + 1; }
+    else if (label === 'Fair' || (oScore >= 5 && oScore < 7)) { issueCounts.overall['Needs Improvement'] = (issueCounts.overall['Needs Improvement'] || 0) + 1; }
+  });
+
+  const topIssues = (obj) => Object.entries(obj).sort((a, b) => b[1] - a[1]).slice(0, 4);
+
+  const categories = [
+    { key: 'video', label: '🎥 Video Issues', color: '#0ea5e9', bg: '#f0f9ff', issues: topIssues(issueCounts.video) },
+    { key: 'audio', label: '🎙️ Audio Issues', color: '#10b981', bg: '#f0fdf4', issues: topIssues(issueCounts.audio) },
+    { key: 'overall', label: '⭐ Overall Issues', color: '#f59e0b', bg: '#fffbeb', issues: topIssues(issueCounts.overall) }
+  ];
+
+  if (allResults.length === 0) return null;
+
+  return (
+    <Card sx={{ background: THEME.surfaceElevated, border: `1px solid ${THEME.border}`, borderRadius: 3, boxShadow: THEME.shadowSm, mb: 3 }}>
+      <CardContent sx={{ p: 3 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
+          <Assessment sx={{ color: '#ef4444', mr: 1.5, fontSize: 24 }} />
+          <Typography variant="h6" sx={{ color: THEME.textPrimary, fontWeight: 700 }}>
+            Top Detected Issues
+          </Typography>
+          <Chip label={`${allResults.length} videos analysed`} size="small" sx={{ ml: 'auto', fontWeight: 600, background: THEME.surface, color: THEME.textSecondary }} />
+        </Box>
+        <Grid container spacing={2}>
+          {categories.map(cat => (
+            <Grid item xs={12} md={4} key={cat.key}>
+              <Box sx={{ background: cat.bg, borderRadius: 2, p: 2, border: `1px solid ${cat.color}20`, height: '100%' }}>
+                <Typography variant="subtitle2" sx={{ color: cat.color, fontWeight: 700, mb: 1.5 }}>{cat.label}</Typography>
+                {cat.issues.length === 0 ? (
+                  <Typography variant="caption" sx={{ color: THEME.textTertiary }}>No issues detected ✓</Typography>
+                ) : cat.issues.map(([issue, count]) => (
+                  <Box key={issue} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                    <Typography variant="caption" sx={{ color: THEME.textPrimary, fontWeight: 500, flex: 1 }}>{issue}</Typography>
+                    <Chip label={count} size="small" sx={{ ml: 1, fontWeight: 700, minWidth: 36, background: cat.color, color: '#fff', fontSize: '0.7rem', height: 20 }} />
+                  </Box>
+                ))}
+              </Box>
+            </Grid>
+          ))}
+        </Grid>
+      </CardContent>
+    </Card>
+  );
+};
+
+// ─── Enhanced Service Advisor Section ──────────────────────────────────────
+const EnhancedServiceAdvisorSection = ({ allResults = [], selectedFilterDealer = 'all' }) => {
+  const advisorMap = new Map();
+
+  const filtered = selectedFilterDealer === 'all'
+    ? allResults
+    : allResults.filter(r => normalizeDealerId(r.dealer_id || r.dealer || '') === normalizeDealerId(selectedFilterDealer));
+
+  filtered.forEach(r => {
+    const name = r.citnow_metadata?.service_advisor || r.citnow_service_advisor || '';
+    if (!name || name === 'Unknown Advisor' || name.length < 2) return;
+    if (!advisorMap.has(name)) {
+      advisorMap.set(name, { name, videoScores: [], audioScores: [], overallScores: [], results: [] });
+    }
+    const a = advisorMap.get(name);
+    if (r.video_quality_score != null) a.videoScores.push(r.video_quality_score);
+    if (r.audio_quality_score != null) a.audioScores.push(r.audio_quality_score);
+    if (r.overall_quality_score != null) a.overallScores.push(r.overall_quality_score);
+    a.results.push(r);
+  });
+
+  const advisors = Array.from(advisorMap.values()).map(a => {
+    const avgVideo = a.videoScores.length > 0 ? a.videoScores.reduce((s, v) => s + v, 0) / a.videoScores.length : 0;
+    const avgAudio = a.audioScores.length > 0 ? a.audioScores.reduce((s, v) => s + v, 0) / a.audioScores.length : 0;
+    const avgOverall = a.overallScores.length > 0 ? a.overallScores.reduce((s, v) => s + v, 0) / a.overallScores.length : 0;
+    return { ...a, avgVideo, avgAudio, avgOverall, totalVideos: a.results.length, flags: computeAdvisorFlags(a.results) };
+  }).sort((a, b) => b.avgOverall - a.avgOverall).slice(0, 8);
+
+  if (advisors.length === 0) return null;
+
+  const getScoreColor = (score) => score >= 7 ? '#16a34a' : score >= 5 ? '#f59e0b' : '#ef4444';
+  const getScoreBg = (score) => score >= 7 ? '#f0fdf4' : score >= 5 ? '#fffbeb' : '#fef2f2';
+  const medals = ['🥇', '🥈', '🥉'];
+
+  return (
+    <Card sx={{ background: THEME.surfaceElevated, border: `1px solid ${THEME.border}`, borderRadius: 3, boxShadow: THEME.shadowSm, mb: 3 }}>
+      <CardContent sx={{ p: 3 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
+          <EmojiEvents sx={{ color: '#f59e0b', mr: 1.5, fontSize: 24 }} />
+          <Typography variant="h6" sx={{ color: THEME.textPrimary, fontWeight: 700 }}>
+            Top Service Advisors
+          </Typography>
+          <Chip label={`${advisors.length} advisors`} size="small" sx={{ ml: 'auto', fontWeight: 600, background: THEME.surface, color: THEME.textSecondary }} />
+        </Box>
+        <Grid container spacing={2}>
+          {advisors.map((advisor, idx) => (
+            <Grid item xs={12} sm={6} lg={3} key={advisor.name}>
+              <Box sx={{
+                background: THEME.surface, borderRadius: 2.5, p: 2,
+                border: `1px solid ${idx < 3 ? '#f59e0b40' : THEME.border}`,
+                transition: 'all 0.2s', height: '100%',
+                '&:hover': { boxShadow: '0 4px 20px rgba(0,0,0,0.10)', transform: 'translateY(-2px)' }
+              }}>
+                {/* Header */}
+                <Box sx={{ display: 'flex', alignItems: 'flex-start', mb: 1.5 }}>
+                  <Box sx={{
+                    width: 32, height: 32, borderRadius: '50%', mr: 1.5, flexShrink: 0,
+                    background: idx < 3 ? 'linear-gradient(135deg, #f59e0b, #fbbf24)' : THEME.border,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: idx < 3 ? '16px' : '12px', fontWeight: 700, color: idx < 3 ? '#fff' : THEME.textSecondary
+                  }}>
+                    {idx < 3 ? medals[idx] : idx + 1}
+                  </Box>
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: THEME.textPrimary, lineHeight: 1.2, mb: 0.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {advisor.name}
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: THEME.textTertiary, fontWeight: 500 }}>
+                      {advisor.totalVideos} video{advisor.totalVideos !== 1 ? 's' : ''}
+                    </Typography>
+                  </Box>
+                  <Box sx={{ background: getScoreBg(advisor.avgOverall), borderRadius: 1.5, px: 1, py: 0.5, textAlign: 'center', flexShrink: 0, ml: 1 }}>
+                    <Typography variant="caption" sx={{ fontWeight: 800, color: getScoreColor(advisor.avgOverall), display: 'block', lineHeight: 1, fontSize: '14px' }}>
+                      {advisor.avgOverall.toFixed(1)}
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: THEME.textTertiary, fontSize: '9px', fontWeight: 600 }}>OVERALL</Typography>
+                  </Box>
+                </Box>
+
+                {/* Score bars */}
+                <Box sx={{ mb: 1.5 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.75 }}>
+                    <Typography variant="caption" sx={{ color: THEME.textSecondary, minWidth: 42, fontWeight: 500, fontSize: '11px' }}>Video</Typography>
+                    <Box sx={{ flex: 1, height: 6, borderRadius: 3, background: THEME.borderLight, mx: 1, overflow: 'hidden' }}>
+                      <Box sx={{ height: '100%', width: `${(advisor.avgVideo / 10) * 100}%`, background: '#0ea5e9', borderRadius: 3, transition: 'width 0.8s ease' }} />
+                    </Box>
+                    <Typography variant="caption" sx={{ fontWeight: 700, color: '#0ea5e9', minWidth: 28, textAlign: 'right', fontSize: '11px' }}>{advisor.avgVideo.toFixed(1)}</Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    <Typography variant="caption" sx={{ color: THEME.textSecondary, minWidth: 42, fontWeight: 500, fontSize: '11px' }}>Audio</Typography>
+                    <Box sx={{ flex: 1, height: 6, borderRadius: 3, background: THEME.borderLight, mx: 1, overflow: 'hidden' }}>
+                      <Box sx={{ height: '100%', width: `${(advisor.avgAudio / 10) * 100}%`, background: '#10b981', borderRadius: 3, transition: 'width 0.8s ease' }} />
+                    </Box>
+                    <Typography variant="caption" sx={{ fontWeight: 700, color: '#10b981', minWidth: 28, textAlign: 'right', fontSize: '11px' }}>{advisor.avgAudio.toFixed(1)}</Typography>
+                  </Box>
+                </Box>
+
+                {/* Feedback flags */}
+                {advisor.flags.length > 0 && (
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                    {advisor.flags.map(f => (
+                      <Box key={f.label} sx={{ background: f.bg, border: `1px solid ${f.color}30`, borderRadius: 1, px: 0.75, py: 0.25 }}>
+                        <Typography variant="caption" sx={{ color: f.color, fontWeight: 600, fontSize: '10px', whiteSpace: 'nowrap' }}>{f.label}</Typography>
+                      </Box>
+                    ))}
+                  </Box>
+                )}
+              </Box>
+            </Grid>
+          ))}
+        </Grid>
+      </CardContent>
+    </Card>
+  );
+};
+
 const DealerPerformanceHeatmap = ({ data, selectedFilterDealer, allResults, users }) => {
+
   let rows = [];
   let title = "Dealership Performance Heatmap (Treemap)";
 
@@ -838,25 +1042,34 @@ const GroupedHorizontalBarChart = ({ data }) => {
       video: Number(avgVideo.toFixed(1)),
       audio: Number(avgAudio.toFixed(1))
     };
-  }).sort((a, b) => b.overall - a.overall).slice(0, 5);
+  }).sort((a, b) => b.overall - a.overall).slice(0, 6);
+
+  // Score-based color for bar fill
+  const getScoreColor = (score) => {
+    if (score >= 7.0) return '#22c55e';
+    if (score >= 5.0) return '#f59e0b';
+    return '#ef4444';
+  };
 
   if (!chartData || chartData.length === 0) {
     return (
-      <Box sx={{ height: 320, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <Box sx={{ height: 380, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <Typography variant="body2" sx={{ color: THEME.textTertiary }}>No dealer score data available</Typography>
       </Box>
     );
   }
 
+  const chartHeight = Math.max(380, chartData.length * 85);
+
   return (
-    <Box sx={{ width: '100%', height: 320 }}>
+    <Box sx={{ width: '100%', height: chartHeight }}>
       <ResponsiveContainer width="100%" height="100%">
         <RechartsBarChart
           layout="vertical"
           data={chartData}
-          margin={{ top: 10, right: 35, left: -10, bottom: 20 }}
-          barGap={2}
-          barCategoryGap={12}
+          margin={{ top: 10, right: 55, left: 5, bottom: 20 }}
+          barGap={4}
+          barCategoryGap={20}
         >
           <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={THEME.borderLight} />
           <XAxis
@@ -864,25 +1077,30 @@ const GroupedHorizontalBarChart = ({ data }) => {
             domain={[0, 10]}
             ticks={[0, 2, 4, 6, 8, 10]}
             stroke={THEME.textSecondary}
-            fontSize={11}
+            fontSize={12}
+            tickLine={false}
+            axisLine={{ stroke: THEME.border }}
           />
           <YAxis
             type="category"
             dataKey="name"
             stroke={THEME.textSecondary}
-            fontSize={10.5}
-            fontWeight={600}
-            width={98}
+            fontSize={12}
+            fontWeight={700}
+            width={115}
+            tickLine={false}
+            axisLine={false}
           />
           <RechartsTooltip
             formatter={(value, name) => [`${value}/10`, name]}
             contentStyle={{
-              background: THEME.background,
+              background: '#fff',
               border: `1px solid ${THEME.border}`,
-              borderRadius: 8,
-              boxShadow: THEME.shadowMd,
-              fontSize: '12px',
-              fontWeight: 600
+              borderRadius: 10,
+              boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+              fontSize: '13px',
+              fontWeight: 600,
+              padding: '10px 14px'
             }}
           />
           <Legend
@@ -890,25 +1108,17 @@ const GroupedHorizontalBarChart = ({ data }) => {
             verticalAlign="bottom"
             align="center"
             iconType="circle"
-            iconSize={8}
-            wrapperStyle={{
-              paddingTop: '6px',
-              fontSize: '11px',
-              fontWeight: 600,
-              color: THEME.textSecondary,
-              width: '100%',
-              left: 0,
-              textAlign: 'center'
-            }}
+            iconSize={9}
+            wrapperStyle={{ paddingTop: '10px', fontSize: '12px', fontWeight: 600, color: THEME.textSecondary }}
           />
-          <Bar dataKey="overall" name="Overall" fill="#1E2265" radius={[0, 4, 4, 0]} barSize={7}>
-            <LabelList dataKey="overall" position="right" offset={4} style={{ fontSize: '10px', fontWeight: 700, fill: '#1E2265' }} />
+          <Bar dataKey="overall" name="Overall" fill="#6366f1" radius={[0, 6, 6, 0]} barSize={12}>
+            <LabelList dataKey="overall" position="right" offset={6} style={{ fontSize: '11px', fontWeight: 700, fill: '#6366f1' }} />
           </Bar>
-          <Bar dataKey="video" name="Video" fill="#0096C7" radius={[0, 4, 4, 0]} barSize={7}>
-            <LabelList dataKey="video" position="right" offset={4} style={{ fontSize: '10px', fontWeight: 700, fill: '#0096C7' }} />
+          <Bar dataKey="video" name="Video" fill="#0ea5e9" radius={[0, 6, 6, 0]} barSize={12}>
+            <LabelList dataKey="video" position="right" offset={6} style={{ fontSize: '11px', fontWeight: 700, fill: '#0ea5e9' }} />
           </Bar>
-          <Bar dataKey="audio" name="Audio" fill="#D91B82" radius={[0, 4, 4, 0]} barSize={7}>
-            <LabelList dataKey="audio" position="right" offset={4} style={{ fontSize: '10px', fontWeight: 700, fill: '#D91B82' }} />
+          <Bar dataKey="audio" name="Audio" fill="#10b981" radius={[0, 6, 6, 0]} barSize={12}>
+            <LabelList dataKey="audio" position="right" offset={6} style={{ fontSize: '11px', fontWeight: 700, fill: '#10b981' }} />
           </Bar>
         </RechartsBarChart>
       </ResponsiveContainer>
@@ -2106,6 +2316,9 @@ export default function SuperAdminDashboard() {
         case 'month':
           cutoff = new Date(refDate.getTime() - 30 * 24 * 60 * 60 * 1000);
           break;
+        case 'year':
+          cutoff = new Date(refDate.getTime() - 365 * 24 * 60 * 60 * 1000);
+          break;
         case 'quarter':
         default:
           cutoff = new Date(refDate.getTime() - 90 * 24 * 60 * 60 * 1000);
@@ -2131,6 +2344,8 @@ export default function SuperAdminDashboard() {
         return results.slice(0, Math.max(1, Math.floor(totalCount * 0.25)));
       case 'month':
         return results.slice(0, Math.max(1, Math.floor(totalCount * 0.65)));
+      case 'year':
+        return results;
       case 'quarter':
       default:
         return results;
@@ -2478,7 +2693,7 @@ export default function SuperAdminDashboard() {
               backdropFilter: 'blur(10px)',
               gap: 0.5
             }}>
-              {['day', 'week', 'month', 'quarter'].map((range) => {
+              {['day', 'week', 'month', 'quarter', 'year'].map((range) => {
                 const isActive = timeRange === range;
                 return (
                   <Button
@@ -2593,7 +2808,7 @@ export default function SuperAdminDashboard() {
           {/* Charts Section */}
           <Grid container spacing={2} sx={{ mb: 6 }} alignItems="stretch">
             {/* Performance Trend */}
-            <Grid item xs={12} sm={4} md={4} lg={4}>
+            <Grid item xs={12}>
               <Card sx={{
                 background: THEME.surfaceElevated,
                 border: `1px solid ${THEME.border}`,
@@ -2637,7 +2852,7 @@ export default function SuperAdminDashboard() {
             </Grid>
 
             {/* Quality Distribution */}
-            <Grid item xs={12} sm={4} md={4} lg={4}>
+            <Grid item xs={12}>
               <Card sx={{
                 background: THEME.surfaceElevated,
                 border: `1px solid ${THEME.border}`,
@@ -2672,7 +2887,7 @@ export default function SuperAdminDashboard() {
             </Grid>
 
             {/* Top 5 Performers */}
-            <Grid item xs={12} sm={4} md={4} lg={4}>
+            <Grid item xs={12}>
               <Card sx={{
                 background: THEME.surfaceElevated,
                 border: `1px solid ${THEME.border}`,
@@ -2806,7 +3021,7 @@ export default function SuperAdminDashboard() {
 
           <Grid container spacing={2} justifyContent="center" alignItems="stretch">
             {/* Dealer Performance Chart (Spider Chart) */}
-            <Grid item xs={12} sm={4} md={4} lg={4}>
+            <Grid item xs={12}>
               <Card sx={{
                 background: THEME.surfaceElevated,
                 border: `1px solid ${THEME.border}`,
@@ -2829,7 +3044,7 @@ export default function SuperAdminDashboard() {
             </Grid>
 
             {/* Dealer Volume / Share Pie Chart */}
-            <Grid item xs={12} sm={4} md={4} lg={4}>
+            <Grid item xs={12}>
               <Card sx={{
                 background: THEME.surfaceElevated,
                 border: `1px solid ${THEME.border}`,
@@ -2849,7 +3064,7 @@ export default function SuperAdminDashboard() {
             </Grid>
 
             {/* Grouped Horizontal Bar Chart - Quality Scores */}
-            <Grid item xs={12} sm={4} md={4} lg={4}>
+            <Grid item xs={12}>
               <Card sx={{
                 background: THEME.surfaceElevated,
                 border: `1px solid ${THEME.border}`,
@@ -2898,6 +3113,24 @@ export default function SuperAdminDashboard() {
             allResults={allResults} 
             users={users} 
           />
+
+          {/* Top Detected Issues */}
+          <Box sx={{ mt: 3 }}>
+            <TopDetectedIssues
+              allResults={selectedFilterDealer === 'all'
+                ? allResults
+                : allResults.filter(r => normalizeDealerId(r.dealer_id || r.dealer || '') === normalizeDealerId(selectedFilterDealer))
+              }
+            />
+          </Box>
+
+          {/* Top Service Advisors */}
+          <Box sx={{ mt: 3 }}>
+            <EnhancedServiceAdvisorSection
+              allResults={allResults}
+              selectedFilterDealer={selectedFilterDealer}
+            />
+          </Box>
         </Box>
 
         {/* Recent Activity Section */}
