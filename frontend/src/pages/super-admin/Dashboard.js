@@ -453,16 +453,14 @@ const CustomTreemapContent = (props) => {
   const { x, y, width, height, name, overall, size } = props;
 
   const bgColor = getHeatmapColor(overall || 0);
-  // Use white text on dark cells, dark text on light cells
-  const textColor = (overall || 0) >= 5.5 && (overall || 0) < 6.5 ? 'rgba(0,0,0,0.85)' : '#FFFFFF';
-  const subColor = (overall || 0) >= 5.5 && (overall || 0) < 6.5 ? 'rgba(0,0,0,0.65)' : 'rgba(255,255,255,0.88)';
+  // Dark text only on the salmon/light-red band, white elsewhere
+  const textColor = (overall || 0) >= 5.5 && (overall || 0) < 6.5 ? 'rgba(0,0,0,0.82)' : '#FFFFFF';
 
-  const showText = width > 55 && height > 40;
-  const showSubText = width > 90 && height > 65;
-  const showScore = width > 70 && height > 52;
+  const showText = width > 55 && height > 38;
 
-  // Truncate long names
-  const displayName = name && name.length > 18 ? name.substring(0, 16) + '…' : name;
+  // Truncate long names to fit the block
+  const maxChars = Math.max(6, Math.floor(width / 9));
+  const displayName = name && name.length > maxChars ? name.substring(0, maxChars - 1) + '…' : name;
 
   return (
     <g>
@@ -476,55 +474,24 @@ const CustomTreemapContent = (props) => {
           stroke: '#ffffff',
           strokeWidth: 2,
           strokeOpacity: 1,
-          rx: 2
         }}
       />
+      {/* Name only — score & videos shown on hover via tooltip */}
       {showText && (
         <text
           x={x + width / 2}
-          y={y + height / 2 - (showSubText ? 12 : 0)}
+          y={y + height / 2}
           textAnchor="middle"
           dominantBaseline="middle"
           style={{
             fill: textColor,
-            fontSize: Math.min(15, Math.max(10, width / 9)) + 'px',
+            fontSize: Math.min(16, Math.max(10, width / 8)) + 'px',
             fontWeight: 700,
             fontFamily: 'Outfit, Inter, sans-serif',
+            pointerEvents: 'none',
           }}
         >
           {displayName}
-        </text>
-      )}
-      {showScore && (
-        <text
-          x={x + width / 2}
-          y={y + height / 2 + (showSubText ? 8 : 10)}
-          textAnchor="middle"
-          dominantBaseline="middle"
-          style={{
-            fill: subColor,
-            fontSize: '12px',
-            fontWeight: 600,
-            fontFamily: 'Outfit, Inter, sans-serif',
-          }}
-        >
-          {(overall || 0).toFixed(1)}/10
-        </text>
-      )}
-      {showSubText && (
-        <text
-          x={x + width / 2}
-          y={y + height / 2 + 26}
-          textAnchor="middle"
-          dominantBaseline="middle"
-          style={{
-            fill: subColor,
-            fontSize: '11px',
-            fontWeight: 500,
-            fontFamily: 'Outfit, Inter, sans-serif',
-          }}
-        >
-          {size} video{size !== 1 ? 's' : ''}
         </text>
       )}
     </g>
@@ -924,10 +891,10 @@ const DealerPerformanceHeatmap = ({ data, selectedFilterDealer, allResults, user
           </Typography>
         </Box>
         {rows.length > 0 ? (
-          <Box sx={{ display: 'flex', gap: 3, alignItems: 'flex-start' }}>
-            {/* Treemap */}
+          <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
+            {/* Treemap — takes full remaining width */}
             <Box sx={{ flex: 1, minWidth: 0 }}>
-              <ResponsiveContainer width="100%" height={420}>
+              <ResponsiveContainer width="100%" height={520}>
                 <Treemap
                   data={rows}
                   dataKey="size"
@@ -941,22 +908,25 @@ const DealerPerformanceHeatmap = ({ data, selectedFilterDealer, allResults, user
               </ResponsiveContainer>
             </Box>
 
-            {/* Legend panel */}
-            <Box sx={{ width: 180, flexShrink: 0, pt: 1 }}>
-              <Typography variant="caption" sx={{ color: THEME.textSecondary, fontWeight: 700, display: 'block', mb: 1.5, textTransform: 'uppercase', letterSpacing: '0.05em', fontSize: '11px' }}>
+            {/* Compact legend */}
+            <Box sx={{ width: 160, flexShrink: 0, pt: 1 }}>
+              <Typography variant="caption" sx={{ color: THEME.textSecondary, fontWeight: 700, display: 'block', mb: 1.5, textTransform: 'uppercase', letterSpacing: '0.05em', fontSize: '10px' }}>
                 Quality Score
               </Typography>
               {HEATMAP_LEGEND.map(({ label, color }) => (
-                <Box key={label} sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                  <Box sx={{ width: 18, height: 14, borderRadius: '3px', background: color, mr: 1, flexShrink: 0, border: '1px solid rgba(0,0,0,0.1)' }} />
-                  <Typography variant="caption" sx={{ color: THEME.textSecondary, fontWeight: 500, fontSize: '11px', lineHeight: 1.3 }}>
+                <Box key={label} sx={{ display: 'flex', alignItems: 'center', mb: 0.85 }}>
+                  <Box sx={{ width: 16, height: 13, borderRadius: '3px', background: color, mr: 1, flexShrink: 0, border: '1px solid rgba(0,0,0,0.08)' }} />
+                  <Typography variant="caption" sx={{ color: THEME.textSecondary, fontWeight: 500, fontSize: '10.5px', lineHeight: 1.3 }}>
                     {label}
                   </Typography>
                 </Box>
               ))}
-              <Box sx={{ mt: 2.5, pt: 2, borderTop: `1px solid ${THEME.borderLight}` }}>
-                <Typography variant="caption" sx={{ color: THEME.textTertiary, fontWeight: 500, fontSize: '10px', display: 'block' }}>
-                  Block size = number of videos analysed
+              <Box sx={{ mt: 2, pt: 1.5, borderTop: `1px solid ${THEME.borderLight}` }}>
+                <Typography variant="caption" sx={{ color: THEME.textTertiary, fontWeight: 500, fontSize: '10px', display: 'block', fontStyle: 'italic' }}>
+                  Block size = videos analysed
+                </Typography>
+                <Typography variant="caption" sx={{ color: THEME.textTertiary, fontWeight: 500, fontSize: '10px', display: 'block', fontStyle: 'italic', mt: 0.5 }}>
+                  Hover for score details
                 </Typography>
               </Box>
             </Box>
