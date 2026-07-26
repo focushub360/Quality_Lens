@@ -1069,7 +1069,7 @@ const GroupedHorizontalBarChart = ({ data }) => {
       video: Number(avgVideo.toFixed(1)),
       audio: Number(avgAudio.toFixed(1))
     };
-  }).sort((a, b) => b.overall - a.overall).slice(0, 6);
+  }).sort((a, b) => b.overall - a.overall);
 
   // Score-based color for bar fill
   const getScoreColor = (score) => {
@@ -1160,7 +1160,7 @@ const DealerSharePieChart = ({ dealers, selectedDealerId }) => {
   let title = "Dealer Share Distribution";
 
   if (selectedDealerId === 'all' || !selectedDealerId) {
-    const activeDealers = (dealers || []).slice(0, 6);
+    const activeDealers = dealers || [];
     pieData = activeDealers.map((d, i) => ({
       name: d.name,
       value: d.videos || (10 - i * 1.2),
@@ -2287,6 +2287,7 @@ export default function SuperAdminDashboard() {
   const [selectedDealer, setSelectedDealer] = useState(null);
   const [dealerDetailOpen, setDealerDetailOpen] = useState(false);
   const [selectedFilterDealer, setSelectedFilterDealer] = useState('all');
+  const [rankingsLimit, setRankingsLimit] = useState(10); // Default to Top 10
 
   /* 
    * Helper: Calculate Performance Trend
@@ -3035,26 +3036,49 @@ export default function SuperAdminDashboard() {
                 Comparative analysis and ranking of dealership performance
               </Typography>
             </Box>
-            <TextField
-              select
-              size="small"
-              label="Select Dealership"
-              value={selectedFilterDealer}
-              onChange={(e) => setSelectedFilterDealer(e.target.value)}
-              sx={{
-                minWidth: 240,
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: 2
-                }
-              }}
-            >
-              <MenuItem value="all">All Dealerships</MenuItem>
-              {dashboardData.dealerRankings.map((dealer) => (
-                <MenuItem key={dealer.id} value={dealer.id}>
-                  {dealer.name}
-                </MenuItem>
-              ))}
-            </TextField>
+            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+              {selectedFilterDealer === 'all' && (
+                <TextField
+                  select
+                  size="small"
+                  label="Limit Rankings"
+                  value={rankingsLimit}
+                  onChange={(e) => setRankingsLimit(Number(e.target.value))}
+                  sx={{
+                    minWidth: 160,
+                    '& .MuiOutlinedInput-root': {
+                      borderRadius: 2
+                    }
+                  }}
+                >
+                  <MenuItem value={3}>Top 3 Dealers</MenuItem>
+                  <MenuItem value={5}>Top 5 Dealers</MenuItem>
+                  <MenuItem value={10}>Top 10 Dealers</MenuItem>
+                  <MenuItem value={50}>Top 50 Dealers</MenuItem>
+                  <MenuItem value={1000}>All Dealers</MenuItem>
+                </TextField>
+              )}
+              <TextField
+                select
+                size="small"
+                label="Select Dealership"
+                value={selectedFilterDealer}
+                onChange={(e) => setSelectedFilterDealer(e.target.value)}
+                sx={{
+                  minWidth: 200,
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: 2
+                  }
+                }}
+              >
+                <MenuItem value="all">All Dealerships</MenuItem>
+                {dashboardData.dealerRankings.map((dealer) => (
+                  <MenuItem key={dealer.id} value={dealer.id}>
+                    {dealer.name}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Box>
           </Box>
 
           <Grid container spacing={2} justifyContent="center" alignItems="stretch">
@@ -3073,14 +3097,14 @@ export default function SuperAdminDashboard() {
                   <DealerPerformanceChart 
                     data={
                       selectedFilterDealer === 'all'
-                        ? dashboardData.dealerRankings
+                        ? dashboardData.dealerRankings.slice(0, rankingsLimit)
                         : dashboardData.dealerRankings.filter(d => d.id === selectedFilterDealer)
                     } 
                   />
                 </CardContent>
               </Card>
             </Grid>
-
+ 
             {/* Dealer Volume / Share Pie Chart */}
             <Grid item xs={12}>
               <Card sx={{
@@ -3094,13 +3118,17 @@ export default function SuperAdminDashboard() {
               }}>
                 <CardContent sx={{ p: 2, flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
                   <DealerSharePieChart
-                    dealers={dashboardData.dealerRankings}
+                    dealers={
+                      selectedFilterDealer === 'all'
+                        ? dashboardData.dealerRankings.slice(0, rankingsLimit)
+                        : dashboardData.dealerRankings.filter(d => d.id === selectedFilterDealer)
+                    }
                     selectedDealerId={selectedFilterDealer}
                   />
                 </CardContent>
               </Card>
             </Grid>
-
+ 
             {/* Grouped Horizontal Bar Chart - Quality Scores */}
             <Grid item xs={12}>
               <Card sx={{
@@ -3133,7 +3161,7 @@ export default function SuperAdminDashboard() {
                     <GroupedHorizontalBarChart
                       data={
                         selectedFilterDealer === 'all'
-                          ? dashboardData.dealerRankings
+                          ? dashboardData.dealerRankings.slice(0, rankingsLimit)
                           : dashboardData.dealerRankings.filter(d => d.id === selectedFilterDealer || normalizeDealerId(d.id || d.name) === normalizeDealerId(selectedFilterDealer))
                       }
                       selectedDealerId={selectedFilterDealer}
@@ -3143,13 +3171,17 @@ export default function SuperAdminDashboard() {
               </Card>
             </Grid>
           </Grid>
-
+ 
           {/* Dealer / User Performance Heatmap */}
           <DealerPerformanceHeatmap 
-            data={dashboardData.dealerRankings} 
-            selectedFilterDealer={selectedFilterDealer} 
-            allResults={allResults} 
-            users={users} 
+            data={
+              selectedFilterDealer === 'all'
+                ? dashboardData.dealerRankings.slice(0, rankingsLimit)
+                : dashboardData.dealerRankings.filter(d => d.id === selectedFilterDealer)
+            } 
+            selectedFilterDealer={selectedFilterDealer}
+            allResults={allResults}
+            users={users}
           />
 
           {/* Top Detected Issues */}
