@@ -429,69 +429,102 @@ const DealerPerformanceChart = ({ data }) => {
 
 
 
+// Score → color bands matching Tableau-style heatmap (dark red → light red → light green → dark green)
+const getHeatmapColor = (score) => {
+  // Score out of 10
+  if (score >= 8.5) return '#1a7a1a';  // Dark Green  (90-100%)
+  if (score >= 7.5) return '#2da44e';  // Medium Green (70-90%)
+  if (score >= 6.5) return '#57c17e';  // Light Green  (50-70%)
+  if (score >= 5.5) return '#e8a09a';  // Light Red    (30-50%)
+  if (score >= 4.0) return '#c94040';  // Medium Red   (10-30%)
+  return '#8B1A1A';                    // Dark Red     (0-10%)
+};
+
+const HEATMAP_LEGEND = [
+  { label: '< 4.0  (Poor)',      color: '#8B1A1A' },
+  { label: '4.0 – 5.5  (Below Avg)', color: '#c94040' },
+  { label: '5.5 – 6.5  (Fair)',  color: '#e8a09a' },
+  { label: '6.5 – 7.5  (Good)',  color: '#57c17e' },
+  { label: '7.5 – 8.5  (Great)', color: '#2da44e' },
+  { label: '> 8.5  (Excellent)', color: '#1a7a1a' },
+];
+
 const CustomTreemapContent = (props) => {
   const { x, y, width, height, name, overall, size } = props;
 
-  // True traffic-light colors: Red / Amber / Green
-  const getScoreBg = (score) => {
-    if (score >= 7.5) return '#16a34a';   // Strong Green
-    if (score >= 7.0) return '#22c55e';   // Green
-    if (score >= 6.0) return '#f59e0b';   // Amber
-    if (score >= 5.0) return '#f97316';   // Orange
-    return '#ef4444';                      // Red
-  };
+  const bgColor = getHeatmapColor(overall || 0);
+  // Use white text on dark cells, dark text on light cells
+  const textColor = (overall || 0) >= 5.5 && (overall || 0) < 6.5 ? 'rgba(0,0,0,0.85)' : '#FFFFFF';
+  const subColor = (overall || 0) >= 5.5 && (overall || 0) < 6.5 ? 'rgba(0,0,0,0.65)' : 'rgba(255,255,255,0.88)';
 
-  const bgColor = getScoreBg(overall || 0);
+  const showText = width > 55 && height > 40;
+  const showSubText = width > 90 && height > 65;
+  const showScore = width > 70 && height > 52;
 
-  const showText = width > 50 && height > 35;
-  const showSubText = width > 80 && height > 55;
+  // Truncate long names
+  const displayName = name && name.length > 18 ? name.substring(0, 16) + '…' : name;
 
   return (
     <g>
       <rect
-        x={x}
-        y={y}
-        width={width}
-        height={height}
+        x={x + 1}
+        y={y + 1}
+        width={Math.max(0, width - 2)}
+        height={Math.max(0, height - 2)}
         style={{
           fill: bgColor,
-          stroke: '#fff',
-          strokeWidth: 3,
+          stroke: '#ffffff',
+          strokeWidth: 2,
           strokeOpacity: 1,
+          rx: 2
         }}
       />
       {showText && (
         <text
           x={x + width / 2}
-          y={y + height / 2 - (showSubText ? 10 : 0)}
+          y={y + height / 2 - (showSubText ? 12 : 0)}
           textAnchor="middle"
           dominantBaseline="middle"
           style={{
-            fill: '#FFFFFF',
-            fontSize: Math.min(18, Math.max(12, width / 7)) + 'px',
+            fill: textColor,
+            fontSize: Math.min(15, Math.max(10, width / 9)) + 'px',
             fontWeight: 700,
-            fontFamily: 'Outfit, sans-serif',
-            textShadow: '0 1px 4px rgba(0,0,0,0.25)'
+            fontFamily: 'Outfit, Inter, sans-serif',
           }}
         >
-          {name}
+          {displayName}
+        </text>
+      )}
+      {showScore && (
+        <text
+          x={x + width / 2}
+          y={y + height / 2 + (showSubText ? 8 : 10)}
+          textAnchor="middle"
+          dominantBaseline="middle"
+          style={{
+            fill: subColor,
+            fontSize: '12px',
+            fontWeight: 600,
+            fontFamily: 'Outfit, Inter, sans-serif',
+          }}
+        >
+          {(overall || 0).toFixed(1)}/10
         </text>
       )}
       {showSubText && (
         <text
           x={x + width / 2}
-          y={y + height / 2 + 14}
+          y={y + height / 2 + 26}
           textAnchor="middle"
           dominantBaseline="middle"
           style={{
-            fill: 'rgba(255,255,255,0.92)',
-            fontSize: '13px',
-            fontWeight: 600,
-            fontFamily: 'Outfit, sans-serif',
-            textShadow: '0 1px 3px rgba(0,0,0,0.2)'
+            fill: subColor,
+            fontSize: '11px',
+            fontWeight: 500,
+            fontFamily: 'Outfit, Inter, sans-serif',
           }}
         >
-          ★ {(overall || 0).toFixed(1)} · {size} videos
+          {size} video{size !== 1 ? 's' : ''}
         </text>
       )}
     </g>
@@ -891,22 +924,47 @@ const DealerPerformanceHeatmap = ({ data, selectedFilterDealer, allResults, user
           </Typography>
         </Box>
         {rows.length > 0 ? (
-          <ResponsiveContainer width="100%" height={360}>
-            <Treemap
-              data={rows}
-              dataKey="size"
-              aspectRatio={4 / 3}
-              stroke="#fff"
-              fill="#8884d8"
-              content={<CustomTreemapContent />}
-            >
-              <RechartsTooltip content={<CustomTreemapTooltip />} />
-            </Treemap>
-          </ResponsiveContainer>
+          <Box sx={{ display: 'flex', gap: 3, alignItems: 'flex-start' }}>
+            {/* Treemap */}
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              <ResponsiveContainer width="100%" height={420}>
+                <Treemap
+                  data={rows}
+                  dataKey="size"
+                  aspectRatio={4 / 3}
+                  stroke="#fff"
+                  fill="#2da44e"
+                  content={<CustomTreemapContent />}
+                >
+                  <RechartsTooltip content={<CustomTreemapTooltip />} />
+                </Treemap>
+              </ResponsiveContainer>
+            </Box>
+
+            {/* Legend panel */}
+            <Box sx={{ width: 180, flexShrink: 0, pt: 1 }}>
+              <Typography variant="caption" sx={{ color: THEME.textSecondary, fontWeight: 700, display: 'block', mb: 1.5, textTransform: 'uppercase', letterSpacing: '0.05em', fontSize: '11px' }}>
+                Quality Score
+              </Typography>
+              {HEATMAP_LEGEND.map(({ label, color }) => (
+                <Box key={label} sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                  <Box sx={{ width: 18, height: 14, borderRadius: '3px', background: color, mr: 1, flexShrink: 0, border: '1px solid rgba(0,0,0,0.1)' }} />
+                  <Typography variant="caption" sx={{ color: THEME.textSecondary, fontWeight: 500, fontSize: '11px', lineHeight: 1.3 }}>
+                    {label}
+                  </Typography>
+                </Box>
+              ))}
+              <Box sx={{ mt: 2.5, pt: 2, borderTop: `1px solid ${THEME.borderLight}` }}>
+                <Typography variant="caption" sx={{ color: THEME.textTertiary, fontWeight: 500, fontSize: '10px', display: 'block' }}>
+                  Block size = number of videos analysed
+                </Typography>
+              </Box>
+            </Box>
+          </Box>
         ) : (
           <Box sx={{ py: 6, textAlign: 'center' }}>
             <Typography variant="body2" sx={{ color: THEME.textTertiary }}>
-              No performance data available for Treemap
+              No performance data available for Heatmap
             </Typography>
           </Box>
         )}
@@ -914,6 +972,7 @@ const DealerPerformanceHeatmap = ({ data, selectedFilterDealer, allResults, user
     </Card>
   );
 };
+
 
 
 
