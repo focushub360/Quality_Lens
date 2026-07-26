@@ -2279,7 +2279,7 @@ export default function SuperAdminDashboard() {
     recentActivity: []
   });
   const [loading, setLoading] = useState(true);
-  const [timeRange, setTimeRange] = useState('week');
+  const [timeRange, setTimeRange] = useState('year'); // Default to year to show full database results on load
   const [refreshCounter, setRefreshCounter] = useState(0);
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState(0);
@@ -2359,7 +2359,23 @@ export default function SuperAdminDashboard() {
         return !isNaN(d.getTime()) && d >= cutoff;
       });
 
-      if (filtered.length > 0) return filtered;
+      // Count how many of the 6 active dealers have records in this filtered list
+      const activeDealersWithData = new Set();
+      filtered.forEach(r => {
+        const rawDid = r.dealer_id || r.dealer;
+        if (rawDid) {
+          const did = normalizeDealerId(rawDid);
+          if (['BIRD', 'BMW-KUN', 'DEUTSCHEMOTOREN', 'EMINENT', 'EVMAUTOKRAFT', 'GALLOP'].includes(did)) {
+            activeDealersWithData.add(did);
+          }
+        }
+      });
+
+      // Only return filtered date list if it contains data for at least 3 dealers.
+      // Otherwise, if the recent window is too sparse, fall back to historical sliced data so charts are populated.
+      if (filtered.length > 0 && activeDealersWithData.size >= 3) {
+        return filtered;
+      }
     }
 
     // Time-based proportional fallback if database timestamps are identical/static
