@@ -892,36 +892,39 @@ const DealerPerformanceHeatmap = ({ data, selectedFilterDealer, allResults, user
           </Typography>
         </Box>
         {rows.length > 0 ? (
-          {/* Treemap — full width */}
-          <ResponsiveContainer width="100%" height={520}>
-            <Treemap
-              data={rows}
-              dataKey="size"
-              stroke="#fff"
-              fill="#2da44e"
-              content={<CustomTreemapContent />}
-            >
-              <RechartsTooltip content={<CustomTreemapTooltip />} />
-            </Treemap>
-          </ResponsiveContainer>
+          <>
+            {/* Treemap — full width */}
+            <ResponsiveContainer width="100%" height={520}>
+              <Treemap
+                data={rows}
+                dataKey="size"
+                stroke="#fff"
+                fill="#2da44e"
+                content={<CustomTreemapContent />}
+              >
+                <RechartsTooltip content={<CustomTreemapTooltip />} />
+              </Treemap>
+            </ResponsiveContainer>
 
-          {/* Legend row below the treemap */}
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 2, mt: 1.5, pt: 1.5, borderTop: `1px solid ${THEME.borderLight}` }}>
-            <Typography variant="caption" sx={{ color: THEME.textSecondary, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', fontSize: '10px', mr: 1 }}>
-              Score:
-            </Typography>
-            {HEATMAP_LEGEND.map(({ label, color }) => (
-              <Box key={label} sx={{ display: 'flex', alignItems: 'center', gap: 0.6 }}>
-                <Box sx={{ width: 14, height: 12, borderRadius: '2px', background: color, border: '1px solid rgba(0,0,0,0.08)', flexShrink: 0 }} />
-                <Typography variant="caption" sx={{ color: THEME.textSecondary, fontWeight: 500, fontSize: '10.5px', whiteSpace: 'nowrap' }}>
-                  {label}
-                </Typography>
-              </Box>
-            ))}
-            <Typography variant="caption" sx={{ color: THEME.textTertiary, fontWeight: 400, fontSize: '10px', ml: 'auto', fontStyle: 'italic' }}>
-              Block size = videos · Hover for details
-            </Typography>
-          </Box>
+            {/* Legend row below the treemap */}
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 2, mt: 1.5, pt: 1.5, borderTop: `1px solid ${THEME.borderLight}` }}>
+              <Typography variant="caption" sx={{ color: THEME.textSecondary, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', fontSize: '10px', mr: 1 }}>
+                Score:
+              </Typography>
+              {HEATMAP_LEGEND.map(({ label, color }) => (
+                <Box key={label} sx={{ display: 'flex', alignItems: 'center', gap: 0.6 }}>
+                  <Box sx={{ width: 14, height: 12, borderRadius: '2px', background: color, border: '1px solid rgba(0,0,0,0.08)', flexShrink: 0 }} />
+                  <Typography variant="caption" sx={{ color: THEME.textSecondary, fontWeight: 500, fontSize: '10.5px', whiteSpace: 'nowrap' }}>
+                    {label}
+                  </Typography>
+                </Box>
+              ))}
+              <Typography variant="caption" sx={{ color: THEME.textTertiary, fontWeight: 400, fontSize: '10px', ml: 'auto', fontStyle: 'italic' }}>
+                Block size = videos · Hover for details
+              </Typography>
+            </Box>
+          </>
+
         ) : (
           <Box sx={{ py: 6, textAlign: 'center' }}>
             <Typography variant="body2" sx={{ color: THEME.textTertiary }}>
