@@ -836,13 +836,14 @@ const DealerPerformanceHeatmap = ({ data, selectedFilterDealer, allResults, user
       return {
         id: did,
         name: name,
-        size: metrics.videos || 1,
+        // Give 0-video dealers size=1 so they still appear in the treemap
+        size: Math.max(1, metrics.videos),
         overall: metrics.overall,
         video: metrics.video,
         audio: metrics.audio,
         videos: metrics.videos
       };
-    }).filter(d => d.videos > 0).sort((a, b) => b.overall - a.overall);
+    }).sort((a, b) => b.overall - a.overall);
   } else {
     const selectedNorm = normalizeDealerId(selectedFilterDealer);
     const selectedDealerObj = data.find(d => normalizeDealerId(d.id) === selectedNorm);
@@ -891,45 +892,35 @@ const DealerPerformanceHeatmap = ({ data, selectedFilterDealer, allResults, user
           </Typography>
         </Box>
         {rows.length > 0 ? (
-          <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
-            {/* Treemap — takes full remaining width */}
-            <Box sx={{ flex: 1, minWidth: 0 }}>
-              <ResponsiveContainer width="100%" height={520}>
-                <Treemap
-                  data={rows}
-                  dataKey="size"
-                  aspectRatio={4 / 3}
-                  stroke="#fff"
-                  fill="#2da44e"
-                  content={<CustomTreemapContent />}
-                >
-                  <RechartsTooltip content={<CustomTreemapTooltip />} />
-                </Treemap>
-              </ResponsiveContainer>
-            </Box>
+          {/* Treemap — full width */}
+          <ResponsiveContainer width="100%" height={520}>
+            <Treemap
+              data={rows}
+              dataKey="size"
+              stroke="#fff"
+              fill="#2da44e"
+              content={<CustomTreemapContent />}
+            >
+              <RechartsTooltip content={<CustomTreemapTooltip />} />
+            </Treemap>
+          </ResponsiveContainer>
 
-            {/* Compact legend */}
-            <Box sx={{ width: 160, flexShrink: 0, pt: 1 }}>
-              <Typography variant="caption" sx={{ color: THEME.textSecondary, fontWeight: 700, display: 'block', mb: 1.5, textTransform: 'uppercase', letterSpacing: '0.05em', fontSize: '10px' }}>
-                Quality Score
-              </Typography>
-              {HEATMAP_LEGEND.map(({ label, color }) => (
-                <Box key={label} sx={{ display: 'flex', alignItems: 'center', mb: 0.85 }}>
-                  <Box sx={{ width: 16, height: 13, borderRadius: '3px', background: color, mr: 1, flexShrink: 0, border: '1px solid rgba(0,0,0,0.08)' }} />
-                  <Typography variant="caption" sx={{ color: THEME.textSecondary, fontWeight: 500, fontSize: '10.5px', lineHeight: 1.3 }}>
-                    {label}
-                  </Typography>
-                </Box>
-              ))}
-              <Box sx={{ mt: 2, pt: 1.5, borderTop: `1px solid ${THEME.borderLight}` }}>
-                <Typography variant="caption" sx={{ color: THEME.textTertiary, fontWeight: 500, fontSize: '10px', display: 'block', fontStyle: 'italic' }}>
-                  Block size = videos analysed
-                </Typography>
-                <Typography variant="caption" sx={{ color: THEME.textTertiary, fontWeight: 500, fontSize: '10px', display: 'block', fontStyle: 'italic', mt: 0.5 }}>
-                  Hover for score details
+          {/* Legend row below the treemap */}
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 2, mt: 1.5, pt: 1.5, borderTop: `1px solid ${THEME.borderLight}` }}>
+            <Typography variant="caption" sx={{ color: THEME.textSecondary, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', fontSize: '10px', mr: 1 }}>
+              Score:
+            </Typography>
+            {HEATMAP_LEGEND.map(({ label, color }) => (
+              <Box key={label} sx={{ display: 'flex', alignItems: 'center', gap: 0.6 }}>
+                <Box sx={{ width: 14, height: 12, borderRadius: '2px', background: color, border: '1px solid rgba(0,0,0,0.08)', flexShrink: 0 }} />
+                <Typography variant="caption" sx={{ color: THEME.textSecondary, fontWeight: 500, fontSize: '10.5px', whiteSpace: 'nowrap' }}>
+                  {label}
                 </Typography>
               </Box>
-            </Box>
+            ))}
+            <Typography variant="caption" sx={{ color: THEME.textTertiary, fontWeight: 400, fontSize: '10px', ml: 'auto', fontStyle: 'italic' }}>
+              Block size = videos · Hover for details
+            </Typography>
           </Box>
         ) : (
           <Box sx={{ py: 6, textAlign: 'center' }}>
