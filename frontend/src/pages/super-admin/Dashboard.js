@@ -2330,7 +2330,11 @@ export default function SuperAdminDashboard() {
     });
 
     if (validWithDates.length > 0) {
-      const maxTime = Math.max(...validWithDates.map(r => new Date(r.created_at || r.date || r.createdAt || r.timestamp || r.analysis_date).getTime()));
+      const maxTime = validWithDates.reduce((max, r) => {
+        const rawDate = r.created_at || r.date || r.createdAt || r.timestamp || r.analysis_date;
+        const time = new Date(rawDate).getTime();
+        return time > max ? time : max;
+      }, 0);
       const refDate = new Date(maxTime);
 
       let cutoff = new Date();
@@ -2403,11 +2407,15 @@ export default function SuperAdminDashboard() {
     setError(null);
 
     try {
+      // Explicitly get authorization token from localStorage to prevent auth interceptor race conditions
+      const token = localStorage.getItem('auth_token');
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+
       // 1. Load users if not loaded yet
       let usersArray = users;
       if (users.length === 0 || isManualRefresh) {
-        const usersData = await listUsers();
-        usersArray = Array.isArray(usersData) ? usersData : [];
+        const usersRes = await api.get('/users/', { headers });
+        usersArray = Array.isArray(usersRes.data) ? usersRes.data : [];
         setUsers(usersArray);
       }
 
@@ -2426,7 +2434,7 @@ export default function SuperAdminDashboard() {
       let resultsArray = allResults;
       if (allResults.length === 0 || isManualRefresh) {
         try {
-          const resultsRes = await api.get('/results?limit=1000&minimal=true');
+          const resultsRes = await api.get('/results?limit=1000&minimal=true', { headers });
           const resData = resultsRes.data;
           resultsArray = Array.isArray(resData) ? resData : (resData?.results || []);
           setAllResults(resultsArray);
