@@ -1086,7 +1086,7 @@ const GroupedHorizontalBarChart = ({ data }) => {
     );
   }
 
-  const chartHeight = Math.max(380, chartData.length * 85);
+  const chartHeight = Math.max(300, chartData.length * 65);
 
   return (
     <Box sx={{ width: '100%', height: chartHeight }}>
@@ -3083,7 +3083,7 @@ export default function SuperAdminDashboard() {
 
           <Grid container spacing={2} justifyContent="center" alignItems="stretch">
             {/* Dealer Performance Chart (Spider Chart) */}
-            <Grid item xs={12} md={3.5}>
+            <Grid item xs={12} md={6}>
               <Card sx={{
                 background: THEME.surfaceElevated,
                 border: `1px solid ${THEME.border}`,
@@ -3106,7 +3106,7 @@ export default function SuperAdminDashboard() {
             </Grid>
  
             {/* Dealer Volume / Share Pie Chart */}
-            <Grid item xs={12} md={3.5}>
+            <Grid item xs={12} md={6}>
               <Card sx={{
                 background: THEME.surfaceElevated,
                 border: `1px solid ${THEME.border}`,
@@ -3130,7 +3130,7 @@ export default function SuperAdminDashboard() {
             </Grid>
  
             {/* Grouped Horizontal Bar Chart - Quality Scores */}
-            <Grid item xs={12} md={5}>
+            <Grid item xs={12}>
               <Card sx={{
                 background: THEME.surfaceElevated,
                 border: `1px solid ${THEME.border}`,
