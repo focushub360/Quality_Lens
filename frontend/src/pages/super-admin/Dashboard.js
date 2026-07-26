@@ -2435,7 +2435,12 @@ export default function SuperAdminDashboard() {
         let rawDid = r.dealer_id || r.dealer;
         if (!rawDid) return; // Skip if no dealer info
         let did = normalizeDealerId(rawDid);
-        if (!dealerMap[did]) dealerMap[did] = { overall: [], video: [], audio: [], count: 0 };
+        
+        // Skip results for dealers that aren't actively registered in our system
+        if (!dealerMap[did]) {
+          return;
+        }
+
         dealerMap[did].count++;
         if (r.overall_quality_score != null) dealerMap[did].overall.push(r.overall_quality_score);
         if (r.video_quality_score != null) dealerMap[did].video.push(r.video_quality_score);
