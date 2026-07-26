@@ -2424,26 +2424,16 @@ export default function SuperAdminDashboard() {
       const avgScore = validScores.length > 0
         ? Math.round((validScores.reduce((a, b) => a + b, 0) / validScores.length) * 10) / 10 : 0;
 
-      // Master registered dealer network names
-      const REGISTERED_DEALER_NAMES = {
-        'BIRD': 'BIRD',
-        'BMW-KUN': 'BMW-KUN',
-        'DEUTSCHEMOTOREN': 'DEUTSCHEMOTOREN',
-        'EMINENT': 'EMINENT',
-        'EVMAUTOKRAFT': 'EVMAUTOKRAFT'
-      };
-
-      // Ensure all registered dealers exist in map
-      const dealerMap = {
-        'BIRD': { overall: [], video: [], audio: [], count: 0 },
-        'BMW-KUN': { overall: [], video: [], audio: [], count: 0 },
-        'DEUTSCHEMOTOREN': { overall: [], video: [], audio: [], count: 0 },
-        'EMINENT': { overall: [], video: [], audio: [], count: 0 },
-        'EVMAUTOKRAFT': { overall: [], video: [], audio: [], count: 0 }
-      };
+      // Dynamically initialize dealerMap from all registered dealers (from users table)
+      const dealerMap = {};
+      dealerIds.forEach(did => {
+        const normDid = normalizeDealerId(did);
+        dealerMap[normDid] = { overall: [], video: [], audio: [], count: 0, originalName: dealerNames[did] };
+      });
 
       activeDataSet.forEach(r => {
-        let rawDid = r.dealer_id || r.dealer || 'eminent';
+        let rawDid = r.dealer_id || r.dealer;
+        if (!rawDid) return; // Skip if no dealer info
         let did = normalizeDealerId(rawDid);
         if (!dealerMap[did]) dealerMap[did] = { overall: [], video: [], audio: [], count: 0 };
         dealerMap[did].count++;
@@ -2453,14 +2443,14 @@ export default function SuperAdminDashboard() {
       });
 
       let dealerPerformance = Object.entries(dealerMap).map(([did, data]) => {
-        const displayName = REGISTERED_DEALER_NAMES[did] || getDealerDisplayName(did);
+        const displayName = data.originalName || getDealerDisplayName(did);
         const avgOverall = data.overall.length > 0
           ? Math.round((data.overall.reduce((a, b) => a + b, 0) / data.overall.length) * 10) / 10
-          : (did === 'BMW-KUN' ? 7.0 : did === 'bird' ? 6.9 : did === 'eminent' ? 7.1 : 6.8);
+          : 0;
         const avgVideo = data.video.length > 0
-          ? Math.round((data.video.reduce((a, b) => a + b, 0) / data.video.length) * 10) / 10 : avgOverall;
+          ? Math.round((data.video.reduce((a, b) => a + b, 0) / data.video.length) * 10) / 10 : 0;
         const avgAudio = data.audio.length > 0
-          ? Math.round((data.audio.reduce((a, b) => a + b, 0) / data.audio.length) * 10) / 10 : avgOverall;
+          ? Math.round((data.audio.reduce((a, b) => a + b, 0) / data.audio.length) * 10) / 10 : 0;
 
         return {
           id: did,
