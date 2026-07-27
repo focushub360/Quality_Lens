@@ -2430,13 +2430,46 @@ export default function SuperAdminDashboard() {
         }
       });
 
-      // 2. Load all results if not loaded yet
+      // 2. Load all results iteratively from the database
       let resultsArray = allResults;
       if (allResults.length === 0 || isManualRefresh) {
         try {
-          const resultsRes = await api.get('/results?limit=1000&minimal=true', { headers });
-          const resData = resultsRes.data;
-          resultsArray = Array.isArray(resData) ? resData : (resData?.results || []);
+          let pageNum = 1;
+          let allLoadedResults = [];
+          let fetchMore = true;
+          const pageSize = 1000;
+          const maxPages = 50; // Safety cap to prevent infinite loops
+
+          while (fetchMore && pageNum <= maxPages) {
+            const resultsRes = await api.get(`/results?page=${pageNum}&per_page=${pageSize}&minimal=true`, { headers });
+            const resData = resultsRes.data;
+            const rawResults = resData?.results || resData || [];
+
+            let chunk = [];
+            if (Array.isArray(rawResults)) {
+              chunk = rawResults;
+            } else if (typeof rawResults === 'object') {
+              const values = Object.values(rawResults);
+              if (values.length > 0 && Array.isArray(values[0])) {
+                chunk = values[0];
+              }
+            }
+
+            if (!Array.isArray(chunk) || chunk.length === 0) {
+              fetchMore = false;
+              break;
+            }
+
+            allLoadedResults = [...allLoadedResults, ...chunk];
+
+            if (chunk.length < pageSize) {
+              fetchMore = false;
+            } else {
+              pageNum++;
+            }
+          }
+
+          resultsArray = allLoadedResults;
           setAllResults(resultsArray);
         } catch (resError) {
           console.warn('Could not load results for trends:', resError);
