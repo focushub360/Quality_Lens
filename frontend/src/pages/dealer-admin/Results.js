@@ -247,7 +247,7 @@ export default function Results() {
       setRows(results);
       setAllRows(results);
       setCurrentPageBackend(2);
-      setHasMore(false); // disable lazy loading since we filter client-side
+      setHasMore(rawResults.length === 100); // enable lazy loading if we received a full page of 100 results from backend
 
       // Only show current user's own stats - no other users
       setUserStats([]);
@@ -305,14 +305,32 @@ export default function Results() {
 
       const res = await api.get(endpoint);
       const data = res.data;
-      const nextResults = data.results || data || [];
+      const rawNextResults = data.results || data || [];
 
-      console.log(`Loaded page ${currentPageBackend}: ${nextResults.length} results`);
+      console.log(`Loaded page ${currentPageBackend}: ${rawNextResults.length} results`);
 
-      if (nextResults.length === 0) {
+      if (rawNextResults.length === 0) {
         setHasMore(false);
         console.log('No more results, setting hasMore to false');
       } else {
+        // Apply the same client-side user filter
+        let nextResults = rawNextResults;
+        const currentUserId = authUser?.id || authUser?._id || authUser?.user_id;
+        if (currentUserId && nextResults.length > 0) {
+          nextResults = nextResults.filter(r => {
+            const submittedBy = r.submitted_by_user_id
+              || r.user_id
+              || r.submitted_by
+              || r.created_by;
+            return submittedBy === currentUserId
+              || submittedBy === String(currentUserId)
+              || String(submittedBy) === String(currentUserId);
+          });
+        }
+
+        // Filter out failed videos completely
+        nextResults = nextResults.filter(r => r.status !== 'failed' && !r.error_message);
+
         // ✅ Update BOTH states
         setRows(prev => [...prev, ...nextResults]);
         setAllRows(prev => [...prev, ...nextResults]); // Also update allRows
@@ -329,7 +347,7 @@ export default function Results() {
           setHasMore(totalLoaded < data.total);
         } else {
           // If we got fewer than 100 results, assume no more data
-          setHasMore(nextResults.length === 100);
+          setHasMore(rawNextResults.length === 100);
         }
       }
 
