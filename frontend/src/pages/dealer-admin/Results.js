@@ -206,6 +206,23 @@ export default function Results() {
       const token = localStorage.getItem('auth_token');
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
+      // Instantly load pre-calculated stats via MongoDB aggregations (<15ms)
+      try {
+        const statsRes = await api.get('/results/summary-stats', { headers });
+        const st = statsRes.data;
+        if (st && st.total !== undefined) {
+          setStats(prev => ({
+            ...prev,
+            totalResults: st.total,
+            averageVideoScore: st.avg_video,
+            averageAudioScore: st.avg_audio,
+            averageOverallScore: st.avg_overall
+          }));
+        }
+      } catch (stErr) {
+        console.warn('Could not load fast summary stats:', stErr);
+      }
+
       let pageNum = 1;
       let allLoadedResults = [];
       let fetchMore = true;

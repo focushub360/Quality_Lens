@@ -2673,6 +2673,66 @@ async def get_bulk_excel_data(batch_id: str, chunk: int = 0, current_user: UserI
     }
 
 
+@app.get("/results/summary-stats")
+async def get_summary_stats(
+    dealer_id: Optional[str] = None,
+    timeRange: Optional[str] = Query(None),
+    current_user: UserInDB = Depends(get_current_user)
+):
+    """Fast aggregation endpoint returning overall averages and counts across all records for the user/dealer."""
+    query: Dict[str, Any] = {}
+    if current_user.role == "super_admin":
+        if dealer_id:
+            query["dealer_id"] = dealer_id
+    elif current_user.role in ("dealer_admin", "branch_admin", "dealer_user"):
+        if current_user.dealer_id:
+            query["dealer_id"] = current_user.dealer_id
+        query["submitted_by_user_id"] = str(current_user.id)
+
+    if timeRange and timeRange.lower() != "all":
+        now = dt.utcnow()
+        if timeRange.lower() == "day":
+            start_date = now - timedelta(days=1)
+        elif timeRange.lower() == "week":
+            start_date = now - timedelta(weeks=1)
+        elif timeRange.lower() == "month":
+            start_date = now - timedelta(days=30)
+        elif timeRange.lower() == "quarter":
+            start_date = now - timedelta(days=90)
+        elif timeRange.lower() == "year":
+            start_date = now - timedelta(days=365)
+        else:
+            start_date = None
+        if start_date:
+            query["created_at"] = {"$gte": start_date}
+
+    query["status"] = {"$ne": "failed"}
+
+    pipeline = [
+        {"$match": query},
+        {
+            "$group": {
+                "_id": None,
+                "total_results": {"$sum": 1},
+                "avg_video_score": {"$avg": "$video_quality_score"},
+                "avg_audio_score": {"$avg": "$audio_quality_score"},
+                "avg_overall_score": {"$avg": "$overall_quality_score"}
+            }
+        }
+    ]
+
+    stats = await results_collection.aggregate(pipeline).to_list(1)
+    if stats:
+        st = stats[0]
+        return {
+            "total": st.get("total_results", 0),
+            "avg_video": round(st.get("avg_video_score") or 0, 1),
+            "avg_audio": round(st.get("avg_audio_score") or 0, 1),
+            "avg_overall": round(st.get("avg_overall_score") or 0, 1)
+        }
+    return {"total": 0, "avg_video": 0.0, "avg_audio": 0.0, "avg_overall": 0.0}
+
+
 @app.get("/results", response_class=ORJSONResponse)
 async def get_all_results(
     page: int = 1,
