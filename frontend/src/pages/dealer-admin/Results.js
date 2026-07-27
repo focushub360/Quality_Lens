@@ -195,20 +195,30 @@ export default function Results() {
 
 
 
-  const loadData = async (silent = false) => {
+    const loadData = async (silent = false) => {
     if (!silent) setLoading(true);
     try {
-      // Check for batchId in the URL
       const urlParams = new URLSearchParams(window.location.search);
       const batchId = urlParams.get('batchId');
       
-      // Explicitly get authorization token from localStorage to prevent auth interceptor race conditions on mount
       const token = localStorage.getItem('auth_token');
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
       // Instantly load pre-calculated stats via MongoDB aggregations (<15ms)
       try {
-        const statsRes = await api.get('/results/summary-stats', { headers });
+        let statsEndpoint = '/results/summary-stats?';
+        if (searchTerm) statsEndpoint += `&search=${encodeURIComponent(searchTerm)}`;
+        if (dateFilter && dateFilter !== 'All Time') {
+            const timeMap = {
+                'Today': 'day',
+                'Yesterday': 'day',
+                'Last 7 Days': 'week',
+                'Last 30 Days': 'month'
+            };
+            if(timeMap[dateFilter]) statsEndpoint += `&timeRange=${timeMap[dateFilter]}`;
+        }
+        
+        const statsRes = await api.get(statsEndpoint, { headers });
         const st = statsRes.data;
         if (st && st.total !== undefined) {
           setStats(prev => ({
@@ -223,62 +233,39 @@ export default function Results() {
         console.warn('Could not load fast summary stats:', stErr);
       }
 
-      let pageNum = 1;
-      let allLoadedResults = [];
-      let fetchMore = true;
-      const pageSize = 1000;
-      const maxPages = 50; // Safety guard to prevent infinite loops
+      // Fetch server-paginated data
+      const endpointParams = new URLSearchParams();
+      endpointParams.append('page', page + 1); // API is 1-indexed, UI is 0-indexed
+      endpointParams.append('per_page', rowsPerPage);
+      if (batchId) endpointParams.append('batch_id', batchId);
+      if (searchTerm) endpointParams.append('search', searchTerm);
+      if (dealershipFilter) endpointParams.append('search', dealershipFilter); // Approximate filter if dealer is string
+      
+      if (dateFilter && dateFilter !== 'All Time') {
+            const timeMap = {
+                'Today': 'day',
+                'Yesterday': 'day', 
+                'Last 7 Days': 'week',
+                'Last 30 Days': 'month'
+            };
+            if(timeMap[dateFilter]) endpointParams.append('timeRange', timeMap[dateFilter]);
+      }
 
-      while (fetchMore && pageNum <= maxPages) {
-        const endpoint = batchId 
-          ? `/results?page=${pageNum}&per_page=${pageSize}&batch_id=${batchId}`
-          : `/results?page=${pageNum}&per_page=${pageSize}`;
-
-        const res = await api.get(endpoint, { headers });
-        const data = res.data;
-        const rawResults = data.results || data || [];
-
-        let results = [];
-        if (Array.isArray(rawResults)) {
-          results = rawResults;
-        } else if (typeof rawResults === 'object') {
+      const res = await api.get(`/results?${endpointParams.toString()}`, { headers });
+      const data = res.data;
+      let rawResults = data.results || data || [];
+      
+      // Handle array wrapping
+      if (!Array.isArray(rawResults) && typeof rawResults === 'object') {
           const values = Object.values(rawResults);
           if (values.length > 0 && Array.isArray(values[0])) {
-            results = values[0];
+            rawResults = values[0];
           }
-        }
-
-        // If we didn't get a valid array or it's empty, stop immediately to prevent infinite loops on error responses
-        if (!Array.isArray(results) || results.length === 0) {
-          fetchMore = false;
-          break;
-        }
-
-        allLoadedResults = [...allLoadedResults, ...results];
-
-        // Terminate if we received less than the requested page size
-        if (results.length < pageSize) {
-          fetchMore = false;
-        } else {
-          pageNum++;
-        }
       }
+      
+      if (!Array.isArray(rawResults)) rawResults = [];
 
-      let finalResults = allLoadedResults;
-
-      // 🔐 HIERARCHY FILTER: Each user sees only THEIR OWN uploaded analyses
-      const currentUserId = authUser?.id || authUser?._id || authUser?.user_id;
-      if (currentUserId && finalResults.length > 0) {
-        finalResults = finalResults.filter(r => {
-          const submittedBy = r.submitted_by_user_id
-            || r.user_id
-            || r.submitted_by
-            || r.created_by;
-          return submittedBy === currentUserId
-            || submittedBy === String(currentUserId)
-            || String(submittedBy) === String(currentUserId);
-        });
-      }
+      let finalResults = rawResults;
 
       // Filter out failed videos completely from the dashboard
       finalResults = finalResults.filter(r => r.status !== 'failed' && !r.error_message);
@@ -286,10 +273,15 @@ export default function Results() {
       // Update states safely
       setRows(finalResults);
       setAllRows(finalResults);
-      setCurrentPageBackend(2);
-      setHasMore(false); // disable lazy loading since we loaded all data
+      setCurrentPageBackend(page + 2);
+      
+      // Update hasMore logically based on total
+      if (data.total !== undefined) {
+          setHasMore((page + 1) * rowsPerPage < data.total);
+      } else {
+          setHasMore(finalResults.length === rowsPerPage);
+      }
 
-      // Only show current user's own stats - no other users
       setUserStats([]);
 
     } catch (error) {
@@ -303,12 +295,17 @@ export default function Results() {
   };
 
   useEffect(() => {
-    loadData();
+    const timer = setTimeout(() => {
+      loadData();
+    }, 300);
     const interval = setInterval(() => {
       loadData(true);
     }, 15000);
-    return () => clearInterval(interval);
-  }, [refreshCounter]);
+    return () => {
+      clearTimeout(timer);
+      clearInterval(interval);
+    };
+  }, [page, rowsPerPage, searchTerm, dateFilter, dealershipFilter, refreshCounter]);
 
 
   const handleViewDetails = (result) => {
@@ -328,90 +325,9 @@ export default function Results() {
     }
   };
 
-  const loadNextPage = async () => {
-    if (!hasMore) {
-      console.log('No more data to load');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const urlParams = new URLSearchParams(window.location.search);
-      const batchId = urlParams.get('batchId');
-      
-      const endpoint = batchId 
-        ? `/results?page=${currentPageBackend}&per_page=100&batch_id=${batchId}`
-        : `/results?page=${currentPageBackend}&per_page=100`;
-
-      const res = await api.get(endpoint);
-      const data = res.data;
-      const rawNextResults = data.results || data || [];
-
-      console.log(`Loaded page ${currentPageBackend}: ${rawNextResults.length} results`);
-
-      if (rawNextResults.length === 0) {
-        setHasMore(false);
-        console.log('No more results, setting hasMore to false');
-      } else {
-        // Apply the same client-side user filter
-        let nextResults = rawNextResults;
-        const currentUserId = authUser?.id || authUser?._id || authUser?.user_id;
-        if (currentUserId && nextResults.length > 0) {
-          nextResults = nextResults.filter(r => {
-            const submittedBy = r.submitted_by_user_id
-              || r.user_id
-              || r.submitted_by
-              || r.created_by;
-            return submittedBy === currentUserId
-              || submittedBy === String(currentUserId)
-              || String(submittedBy) === String(currentUserId);
-          });
-        }
-
-        // Filter out failed videos completely
-        nextResults = nextResults.filter(r => r.status !== 'failed' && !r.error_message);
-
-        // ✅ Update BOTH states
-        setRows(prev => [...prev, ...nextResults]);
-        setAllRows(prev => [...prev, ...nextResults]); // Also update allRows
-
-        // Update page counter
-        setCurrentPageBackend(prev => prev + 1);
-
-        // ✅ Check if still has more based on backend response
-        if (data.has_more !== undefined) {
-          setHasMore(data.has_more);
-        } else if (data.total !== undefined) {
-          // Calculate if we've loaded all data
-          const totalLoaded = rows.length + nextResults.length;
-          setHasMore(totalLoaded < data.total);
-        } else {
-          // If we got fewer than 100 results, assume no more data
-          setHasMore(rawNextResults.length === 100);
-        }
-      }
-
-    } catch (error) {
-      console.error('Error loading next page:', error);
-      setHasMore(false); // Stop trying if there's an error
-    } finally {
-      setLoading(false);
-    }
-  };
+  const loadNextPage = () => { /* Deprecated */ };
   // Pagination handlers
-  const handleChangePage = (event, newPage) => {
-    setPage(newPage);
-
-    // Calculate the row index for the last item on the new page
-    const lastRowIndex = (newPage + 1) * rowsPerPage;
-
-    // Check if we need to load more data
-    // Load more when we're within 2 pages of the end of loaded data
-    if (hasMore && lastRowIndex >= allRows.length - (rowsPerPage * 2)) {
-      console.log(`Loading more data. Last row index: ${lastRowIndex}, All rows: ${allRows.length}`);
-      loadNextPage();
-    }
-  };
+  const handleChangePage = (event, newPage) => { setPage(newPage); };
 
   const handleChangeRowsPerPage = (event) => {
     setRowsPerPage(parseInt(event.target.value, 10));
@@ -427,84 +343,12 @@ export default function Results() {
     )
   ).sort();
 
-  const filteredRows = (allRows || []).filter(r => {
-    const term = searchTerm.toLowerCase();
-    const dm = r.citnow_metadata || {};
-    const dealershipMatch = !dealershipFilter || (dm.dealership || '') === dealershipFilter;
-    
-    // Date filter logic
-    let dateMatch = true;
-    if (dateFilter !== 'All Time' && r.created_at) {
-      const rowDate = new Date(r.created_at);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      
-      if (dateFilter === 'Today') {
-        dateMatch = rowDate >= today;
-      } else if (dateFilter === 'Yesterday') {
-        const yesterday = new Date(today);
-        yesterday.setDate(yesterday.getDate() - 1);
-        dateMatch = rowDate >= yesterday && rowDate < today;
-      } else if (dateFilter === 'Last 7 Days') {
-        const last7 = new Date(today);
-        last7.setDate(last7.getDate() - 7);
-        dateMatch = rowDate >= last7;
-      } else if (dateFilter === 'Last 30 Days') {
-        const last30 = new Date(today);
-        last30.setDate(last30.getDate() - 30);
-        dateMatch = rowDate >= last30;
-      }
-    }
+  const filteredRows = rows;
 
-    const searchMatch = (
-      (dm.dealership || '').toLowerCase().includes(term) ||
-      (dm.vehicle || dm.registration || '').toLowerCase().includes(term) ||
-      (dm.email || '').toLowerCase().includes(term) ||
-      (dm.phone || '').toLowerCase().includes(term) ||
-      (dm.service_advisor || '').toLowerCase().includes(term)
-    );
-    return dealershipMatch && searchMatch && dateMatch;
-  });
-
-  // Calculate stats dynamically based on filteredRows
-  useEffect(() => {
-    if (filteredRows.length > 0) {
-      const avgVideo = filteredRows.reduce((sum, r) => sum + (r.video_analysis?.quality_score || r.video_quality_score || 0), 0) / filteredRows.length;
-      const avgAudio = filteredRows.reduce((sum, r) => sum + (r.audio_analysis?.score || r.audio_quality_score || 0), 0) / filteredRows.length;
-      const avgOverall = filteredRows.reduce((sum, r) => sum + (r.overall_quality?.overall_score || r.overall_quality_score || 0), 0) / filteredRows.length;
-
-      const distribution = { excellent: 0, good: 0, fair: 0, poor: 0 };
-      filteredRows.forEach(r => {
-        const score = r.overall_quality?.overall_score || r.overall_quality_score || 0;
-        if (score >= 8) distribution.excellent++;
-        else if (score >= 6) distribution.good++;
-        else if (score >= 4) distribution.fair++;
-        else distribution.poor++;
-      });
-
-      setStats({
-        totalResults: filteredRows.length,
-        averageVideoScore: avgVideo,
-        averageAudioScore: avgAudio,
-        averageOverallScore: avgOverall,
-        qualityDistribution: distribution
-      });
-    } else {
-      setStats({
-        totalResults: 0,
-        averageVideoScore: 0,
-        averageAudioScore: 0,
-        averageOverallScore: 0,
-        qualityDistribution: { excellent: 0, good: 0, fair: 0, poor: 0 }
-      });
-    }
-  }, [filteredRows.length]);
+  // Stats are now fetched server-side
 
   // Get current page data
-  const paginatedRows = filteredRows.slice(
-    page * rowsPerPage,
-    page * rowsPerPage + rowsPerPage
-  );
+  const paginatedRows = rows;
 
   // Add this useEffect to debug pagination
   useEffect(() => {
