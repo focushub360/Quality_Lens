@@ -202,34 +202,45 @@ export default function Results() {
       const urlParams = new URLSearchParams(window.location.search);
       const batchId = urlParams.get('batchId');
       
-      const endpoint = batchId 
-        ? `/results?page=1&per_page=100&batch_id=${batchId}`
-        : `/results?page=1&per_page=100`;
+      let pageNum = 1;
+      let allLoadedResults = [];
+      let fetchMore = true;
+      const pageSize = 1000;
 
-      // Load results
-      const res = await api.get(endpoint);
-      const data = res.data;
+      while (fetchMore) {
+        const endpoint = batchId 
+          ? `/results?page=${pageNum}&per_page=${pageSize}&batch_id=${batchId}`
+          : `/results?page=${pageNum}&per_page=${pageSize}`;
 
-      // Handle NEW format securely
-      let rawResults = data.results || data || [];
+        const res = await api.get(endpoint);
+        const data = res.data;
+        const rawResults = data.results || data || [];
 
-      // Ensure it's an array before processing
-      let results = [];
-      if (Array.isArray(rawResults)) {
-        results = rawResults;
-      } else if (typeof rawResults === 'object') {
-        const values = Object.values(rawResults);
-        if (values.length > 0 && Array.isArray(values[0])) {
-          results = values[0];
+        let results = [];
+        if (Array.isArray(rawResults)) {
+          results = rawResults;
+        } else if (typeof rawResults === 'object') {
+          const values = Object.values(rawResults);
+          if (values.length > 0 && Array.isArray(values[0])) {
+            results = values[0];
+          }
+        }
+
+        allLoadedResults = [...allLoadedResults, ...results];
+
+        if (rawResults.length < pageSize) {
+          fetchMore = false;
+        } else {
+          pageNum++;
         }
       }
 
-      // 🔐 HIERARCHY FILTER: Each user sees only THEIR OWN uploaded analyses
-      // Try all possible ID field names from authUser
-      const currentUserId = authUser?.id || authUser?._id || authUser?.user_id;
+      let finalResults = allLoadedResults;
 
-      if (currentUserId && results.length > 0) {
-        results = results.filter(r => {
+      // 🔐 HIERARCHY FILTER: Each user sees only THEIR OWN uploaded analyses
+      const currentUserId = authUser?.id || authUser?._id || authUser?.user_id;
+      if (currentUserId && finalResults.length > 0) {
+        finalResults = finalResults.filter(r => {
           const submittedBy = r.submitted_by_user_id
             || r.user_id
             || r.submitted_by
@@ -241,13 +252,13 @@ export default function Results() {
       }
 
       // Filter out failed videos completely from the dashboard
-      results = results.filter(r => r.status !== 'failed' && !r.error_message);
+      finalResults = finalResults.filter(r => r.status !== 'failed' && !r.error_message);
 
       // Update states safely
-      setRows(results);
-      setAllRows(results);
+      setRows(finalResults);
+      setAllRows(finalResults);
       setCurrentPageBackend(2);
-      setHasMore(rawResults.length === 100); // enable lazy loading if we received a full page of 100 results from backend
+      setHasMore(false); // disable lazy loading since we loaded all data
 
       // Only show current user's own stats - no other users
       setUserStats([]);
