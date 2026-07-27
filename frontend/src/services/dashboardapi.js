@@ -6,8 +6,8 @@ export const dashboardApi = {
   // Get all results and process on frontend
   getDealerDashboard: async (timeRange = 'week') => {
     try {
-      // Get larger limit to have enough data for calculations
-      const response = await api.get(`/results?limit=1000&minimal=true`);
+      // Pass timeRange to the backend to utilize server-side date indexing and filtering
+      const response = await api.get(`/results?limit=1000&minimal=true&timeRange=${timeRange}`);
       return response.data;
     } catch (error) {
       console.error('Error fetching results for dashboard:', error);
