@@ -3066,6 +3066,15 @@ async def get_dealer_dashboard_overview(
     daily_map = {}
 
     for r in results:
+        # Normalize created_at
+        created_at = r.get("created_at")
+        if isinstance(created_at, str):
+            try:
+                created_at = dt.fromisoformat(created_at.replace("Z", "+00:00"))
+            except ValueError:
+                created_at = dt.min
+        r["_parsed_date"] = created_at if isinstance(created_at, dt) else dt.min
+
         # Quality distribution
         label = r.get("overall_quality_label")
         if label:
@@ -3101,9 +3110,8 @@ async def get_dealer_dashboard_overview(
             advisor_map[advisor]["a_scores"].append(r["audio_quality_score"])
             
         # Daily Performance
-        created_at = r.get("created_at")
-        if created_at:
-            date_str = created_at.strftime("%d %b")
+        if r["_parsed_date"] > dt.min:
+            date_str = r["_parsed_date"].strftime("%d %b")
             if date_str not in daily_map:
                 daily_map[date_str] = {"scores": [], "v_scores": [], "a_scores": []}
             if r.get("overall_quality_score") is not None:
@@ -3130,13 +3138,9 @@ async def get_dealer_dashboard_overview(
 
     # Format Daily
     dailyPerformance = []
-    # Ensure they are sorted by actual date logic if needed, but since it's just strings we'll leave it in insertion order assuming results are somewhat chronological (they aren't, so sort).
-    # But wait, date_str format "%d %b" is hard to sort string-wise.
-    # Let's extract sorted keys by creating a mapping to datetime.
     daily_tuples = []
     for k, v in daily_map.items():
         try:
-            # this works for current year
             dt_obj = dt.strptime(f"{k} {dt.now().year}", "%d %b %Y")
             daily_tuples.append((dt_obj, k, v))
         except:
@@ -3153,7 +3157,7 @@ async def get_dealer_dashboard_overview(
         ))
 
     # Recent videos
-    results.sort(key=lambda x: x.get("created_at", dt.min), reverse=True)
+    results.sort(key=lambda x: x["_parsed_date"], reverse=True)
     recent_analyses = [RecentAnalysis(**clean_results(r)) for r in results[:5]]
 
     return DealerAdminDashboardOverview(
