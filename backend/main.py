@@ -242,6 +242,22 @@ class RecentAnalysis(BaseModel):
     status: Optional[str] = "completed"
     error_message: Optional[str] = None
 
+class ServiceAdvisorPerformance(BaseModel):
+    name: str
+    videos: int
+    score: float
+    videoScore: float
+    audioScore: float
+    overall: float
+    video: float
+    audio: float
+
+class DailyPerformance(BaseModel):
+    name: str
+    score: float
+    video: float
+    audio: float
+
 class DealerAdminDashboardOverview(BaseModel):
     dealer_id: str
     total_videos_analyzed: int
@@ -250,6 +266,8 @@ class DealerAdminDashboardOverview(BaseModel):
     low_quality_video_count: int
     low_quality_audio_count: int
     recent_analyses: List[RecentAnalysis]
+    serviceAdvisors: List[ServiceAdvisorPerformance]
+    dailyPerformance: List[DailyPerformance]
     last_updated: dt
 
 class ProfileUpdate(BaseModel):
@@ -2980,47 +2998,163 @@ async def scan_all_dbs():
     return results
 
 @app.get("/dashboard/dealer/overview", response_model=DealerAdminDashboardOverview)
-async def get_dealer_dashboard_overview(current_user: UserInDB = Depends(get_current_user)):
+async def get_dealer_dashboard_overview(
+    timeRange: Optional[str] = Query(None),
+    current_user: UserInDB = Depends(get_current_user)
+):
     """
     Retrieves aggregated data for a specific Dealer Admin or Branch Admin dashboard.
     """
-    if current_user.role not in ["dealer_admin", "branch_admin"]:
+    if current_user.role not in ["dealer_admin", "branch_admin", "dealer_user"]:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to access dealer dashboard.")
     if not current_user.dealer_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Dealer Admin is not assigned to a dealer.")
 
     dealer_id_str = current_user.dealer_id
 
-    # Match all records for this dealer (including pending/failed/completed)
+    # Base match
     dealer_status_match = {"dealer_id": dealer_id_str}
     
-    total_videos = await results_collection.count_documents(dealer_status_match)
+    # 🔐 Hierarchy Filter: Dealer User sees only their own uploads.
+    # A Branch Admin or Dealer Admin sees everything for their scope.
+    if current_user.role == "dealer_user":
+        dealer_status_match["submitted_by_user_id"] = str(current_user.id)
+    elif current_user.role == "branch_admin" and current_user.branch_id:
+        dealer_status_match["branch_id"] = current_user.branch_id
 
-    avg_overall_quality_agg = await results_collection.aggregate([
-        {"$match": {**dealer_status_match, "overall_quality_score": {"$exists": True, "$ne": None}}},
-        {"$group": {"_id": None, "average": {"$avg": "$overall_quality_score"}}}
-    ]).to_list(1)
-    avg_overall_quality = avg_overall_quality_agg[0]["average"] if avg_overall_quality_agg else 0
+    if timeRange and timeRange.lower() != "all":
+        now = dt.utcnow()
+        if timeRange.lower() == "today":
+            start_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        elif timeRange.lower() == "week":
+            start_date = now - timedelta(days=7)
+        elif timeRange.lower() == "month":
+            start_date = now - timedelta(days=30)
+        elif timeRange.lower() == "quarter":
+            start_date = now - timedelta(days=90)
+        elif timeRange.lower() == "year":
+            start_date = now - timedelta(days=365)
+        else:
+            start_date = now - timedelta(days=7)
+        if start_date:
+            dealer_status_match["created_at"] = {"$gte": start_date}
 
-    quality_distribution_raw = await results_collection.aggregate([
-        {"$match": dealer_status_match},
-        {"$group": {"_id": "$overall_quality_label", "count": {"$sum": 1}}}
-    ]).to_list(None)
-    quality_distribution = {item['_id']: item['count'] for item in quality_distribution_raw if item['_id']}
+    projection = {
+        "overall_quality_score": 1,
+        "video_quality_score": 1,
+        "audio_quality_score": 1,
+        "overall_quality_label": 1,
+        "video_quality_label": 1,
+        "audio_clarity_level": 1,
+        "citnow_metadata.service_advisor": 1,
+        "created_at": 1,
+        "input_source": 1
+    }
 
-    low_quality_videos = await results_collection.count_documents({
-        **dealer_status_match,
-        "video_quality_label": {"$in": ["Poor", "Very Poor", "Analysis Failed", "Error"]}
-    })
-    low_quality_audio = await results_collection.count_documents({
-        **dealer_status_match,
-        "audio_clarity_level": {"$in": ["Poor", "Very Poor", "Unusable", "Analysis Failed", "No Audio"]}
-    })
+    results = await results_collection.find(dealer_status_match, projection).to_list(None)
 
-    recent_videos_raw = await results_collection.find(
-        dealer_status_match
-    ).sort("created_at", -1).limit(5).to_list(5)
-    recent_analyses = [RecentAnalysis(**clean_results(r)) for r in recent_videos_raw]
+    total_videos = len(results)
+    
+    valid_scores = [r["overall_quality_score"] for r in results if r.get("overall_quality_score") is not None]
+    avg_overall_quality = sum(valid_scores) / len(valid_scores) if valid_scores else 0.0
+
+    quality_distribution = {}
+    low_quality_videos = 0
+    low_quality_audio = 0
+
+    advisor_map = {}
+    daily_map = {}
+
+    for r in results:
+        # Quality distribution
+        label = r.get("overall_quality_label")
+        if label:
+            quality_distribution[label] = quality_distribution.get(label, 0) + 1
+        
+        # Low quality
+        v_label = r.get("video_quality_label")
+        if v_label in ["Poor", "Very Poor", "Analysis Failed", "Error"]:
+            low_quality_videos += 1
+            
+        a_label = r.get("audio_clarity_level")
+        if a_label in ["Poor", "Very Poor", "Unusable", "Analysis Failed", "No Audio"]:
+            low_quality_audio += 1
+
+        # Service Advisors
+        meta = r.get("citnow_metadata", {})
+        if isinstance(meta, dict):
+            advisor = meta.get("service_advisor")
+            if not advisor:
+                advisor = "Unknown Advisor"
+        else:
+            advisor = "Unknown Advisor"
+            
+        if advisor not in advisor_map:
+            advisor_map[advisor] = {"videos": 0, "scores": [], "v_scores": [], "a_scores": []}
+            
+        advisor_map[advisor]["videos"] += 1
+        if r.get("overall_quality_score") is not None:
+            advisor_map[advisor]["scores"].append(r["overall_quality_score"])
+        if r.get("video_quality_score") is not None:
+            advisor_map[advisor]["v_scores"].append(r["video_quality_score"])
+        if r.get("audio_quality_score") is not None:
+            advisor_map[advisor]["a_scores"].append(r["audio_quality_score"])
+            
+        # Daily Performance
+        created_at = r.get("created_at")
+        if created_at:
+            date_str = created_at.strftime("%d %b")
+            if date_str not in daily_map:
+                daily_map[date_str] = {"scores": [], "v_scores": [], "a_scores": []}
+            if r.get("overall_quality_score") is not None:
+                daily_map[date_str]["scores"].append(r["overall_quality_score"])
+            if r.get("video_quality_score") is not None:
+                daily_map[date_str]["v_scores"].append(r["video_quality_score"])
+            if r.get("audio_quality_score") is not None:
+                daily_map[date_str]["a_scores"].append(r["audio_quality_score"])
+
+    # Format Advisors
+    serviceAdvisors = []
+    for name, data in advisor_map.items():
+        avg_score = sum(data["scores"])/len(data["scores"]) if data["scores"] else 0
+        avg_v = sum(data["v_scores"])/len(data["v_scores"]) if data["v_scores"] else 0
+        avg_a = sum(data["a_scores"])/len(data["a_scores"]) if data["a_scores"] else 0
+        
+        serviceAdvisors.append(ServiceAdvisorPerformance(
+            name=name, videos=data["videos"],
+            score=round(avg_score, 1), videoScore=round(avg_v, 1), audioScore=round(avg_a, 1),
+            overall=round(avg_score, 1), video=round(avg_v, 1), audio=round(avg_a, 1)
+        ))
+        
+    serviceAdvisors.sort(key=lambda x: x.overall, reverse=True)
+
+    # Format Daily
+    dailyPerformance = []
+    # Ensure they are sorted by actual date logic if needed, but since it's just strings we'll leave it in insertion order assuming results are somewhat chronological (they aren't, so sort).
+    # But wait, date_str format "%d %b" is hard to sort string-wise.
+    # Let's extract sorted keys by creating a mapping to datetime.
+    daily_tuples = []
+    for k, v in daily_map.items():
+        try:
+            # this works for current year
+            dt_obj = dt.strptime(f"{k} {dt.now().year}", "%d %b %Y")
+            daily_tuples.append((dt_obj, k, v))
+        except:
+            daily_tuples.append((dt.min, k, v))
+            
+    daily_tuples.sort(key=lambda x: x[0])
+    
+    for dt_obj, k, v in daily_tuples:
+        avg_score = sum(v["scores"])/len(v["scores"]) if v["scores"] else 0
+        avg_v = sum(v["v_scores"])/len(v["v_scores"]) if v["v_scores"] else 0
+        avg_a = sum(v["a_scores"])/len(v["a_scores"]) if v["a_scores"] else 0
+        dailyPerformance.append(DailyPerformance(
+            name=k, score=round(avg_score, 1), video=round(avg_v, 1), audio=round(avg_a, 1)
+        ))
+
+    # Recent videos
+    results.sort(key=lambda x: x.get("created_at", dt.min), reverse=True)
+    recent_analyses = [RecentAnalysis(**clean_results(r)) for r in results[:5]]
 
     return DealerAdminDashboardOverview(
         dealer_id=dealer_id_str,
@@ -3030,6 +3164,8 @@ async def get_dealer_dashboard_overview(current_user: UserInDB = Depends(get_cur
         low_quality_video_count=low_quality_videos,
         low_quality_audio_count=low_quality_audio,
         recent_analyses=recent_analyses,
+        serviceAdvisors=serviceAdvisors,
+        dailyPerformance=dailyPerformance,
         last_updated=dt.utcnow()
     )
 

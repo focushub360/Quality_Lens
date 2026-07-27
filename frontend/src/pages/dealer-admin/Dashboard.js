@@ -47,6 +47,7 @@ import {
 } from '@mui/icons-material';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart as RechartsBarChart, Bar, PieChart as RechartsPieChart, Pie, Cell, Legend, ComposedChart, LabelList, ReferenceLine } from 'recharts';
 import { dashboardApi } from '../../services/dashboardapi';
+import api from '../../services/api';
 import { AuthContext } from '../../contexts/AuthContext';
 
 
@@ -581,54 +582,48 @@ export default function DealerAdminDashboard() {
       </LineChart>
     </ResponsiveContainer>
   );
-  const loadDashboardData = async () => {
+    const loadDashboardData = async () => {
     setLoading(true);
     setError(null);
     try {
-      // Single API call to get all results
-      const response = await dashboardApi.getDealerDashboard(timeRange);
+      const token = localStorage.getItem('auth_token');
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
-      // Handle different response formats
-      let resultsArray = [];
-
-      if (Array.isArray(response)) {
-        resultsArray = response;
-      } else if (response && response.results && Array.isArray(response.results)) {
-        resultsArray = response.results;
-      } else if (response && typeof response === 'object') {
-        const values = Object.values(response);
-        if (values.length > 0 && Array.isArray(values[0])) {
-          resultsArray = values[0];
-        }
+      let endpoint = '/dashboard/dealer/overview';
+      if (timeRange && timeRange !== 'all') {
+         endpoint += `?timeRange=${timeRange}`;
       }
 
-      // 🔐 HIERARCHY FILTER: Each user sees only THEIR OWN uploaded analyses
-      // The backend returns all results for the dealer group — we filter by logged-in user
-      const currentUserId = authUser?.id || authUser?._id || authUser?.user_id;
-      if (currentUserId) {
-        resultsArray = resultsArray.filter(r => {
-          const submittedBy = r.submitted_by_user_id || r.user_id;
-          return submittedBy === currentUserId || submittedBy === String(currentUserId);
-        });
-        console.log(`🔐 Filtered to ${resultsArray.length} results for user: ${authUser?.username} (${currentUserId})`);
-      } else {
-        console.warn('⚠️ No user ID found in authUser — showing all results');
-      }
-
-      // Store raw results for trend calculations
-      setAllResults(resultsArray);
-
-      // Process data on frontend
-      const processedData = processDashboardData(resultsArray, timeRange);
+      const response = await api.get(endpoint, { headers });
+      const data = response.data;
 
       // Update dealer info
       setDealerInfo({
         name: authUser?.showroom_name || 'Your Dealership',
         location: 'Your Location',
-        id: 'current'
+        id: data.dealer_id || 'current'
+      });
+      
+      const completionRate = data.total_videos_analyzed > 0 
+          ? Math.round(((data.total_videos_analyzed - data.low_quality_video_count) / data.total_videos_analyzed) * 100)
+          : 0;
+
+      const qualityBreakdown = Object.entries(data.quality_distribution || {}).map(([name, value]) => ({ name, value }));
+
+      setDashboardData({
+        overview: {
+          totalVideos: data.total_videos_analyzed || 0,
+          averageScore: data.average_overall_quality || 0,
+          serviceAdvisors: (data.serviceAdvisors || []).length,
+          completionRate: completionRate
+        },
+        dailyPerformance: data.dailyPerformance || [],
+        serviceAdvisors: data.serviceAdvisors || [],
+        qualityBreakdown: qualityBreakdown,
+        recentVideos: data.recent_analyses || [],
+        performanceTrend: data.serviceAdvisors || []
       });
 
-      setDashboardData(processedData);
       setLoading(false);
     } catch (error) {
       console.error('Error loading dashboard data:', error);
