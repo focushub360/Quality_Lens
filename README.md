@@ -1,4 +1,4 @@
-# 🎥 CitNow Video Analysis Platform
+# 🎥 CitNow Video Analysis Platform (Quality Lens)
 
 [![Status: Active](https://img.shields.io/badge/Status-Active-brightgreen.svg)]()
 [![Platform: Web](https://img.shields.io/badge/Platform-Web-blue.svg)]()
@@ -56,23 +56,29 @@ The repository is organized as a monorepo for seamless development and deploymen
 
 ## 🚦 Getting Started
 
-### 1. Local Development (Frontend)
-The primary dashboard runs locally while connecting to the stable cloud backend.
+### 1. Local Development (Frontend Only)
+> [!WARNING]
+> Do **NOT** run the backend on a local/low-spec machine. The AI processing engine (Faster-Whisper, PyTorch, Video Analysis) requires substantial CPU/GPU resources and will crash or freeze low-spec systems.
+
+For local development, you should run the frontend locally on your machine, and it will automatically connect to the live, cloud-hosted backend for all API calls.
 
 ```bash
 cd frontend
 npm install
-git push origin main
-git push origin main
-
+npm start
 ```
-Access the application at `http://localhost:3000`.
+*Access the primary admin dashboard at `http://localhost:3000`.*
 
-### 2. Backend Deployment
-The backend is optimized for deployment on **Hugging Face Spaces** or any Docker-ready cloud provider.
+### 2. Server / Cloud Deployment (Backend)
+The backend is optimized for deployment on AWS EC2 or any Docker-ready high-spec cloud provider.
 
 - **Cloud Instance**: AWS EC2 Instance (served via Caddy proxy)
-- **API Entrypoint**: `https://qualitylensfocustech.duckdns.org`
+- **Production API URL**: `https://qualitylensfocustech.duckdns.org`
+
+To deploy the backend to your live server using Docker Compose:
+```bash
+docker compose -f docker-compose.yml up --build
+```
 
 ---
 
