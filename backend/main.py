@@ -325,6 +325,11 @@ async def create_mongo_indexes():
         await results_collection.create_index([("audio_clarity_level", 1)])
         await results_collection.create_index([("status", 1)])
 
+        # Composite indexes for fast filtered+sorted queries (dashboard & results pages)
+        await results_collection.create_index([("dealer_id", 1), ("created_at", -1)], name="idx_dealer_created")
+        await results_collection.create_index([("submitted_by_user_id", 1), ("created_at", -1)], name="idx_user_created")
+        await results_collection.create_index([("dealer_id", 1), ("status", 1), ("created_at", -1)], name="idx_dealer_status_created")
+
         # Indexes for batch_jobs collection
         await batch_collection.create_index([("status", 1)])
         await batch_collection.create_index([("created_at", -1)])
