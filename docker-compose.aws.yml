@@ -13,6 +13,8 @@ services:
     environment:
       - PORT=8000
       - LOG_LEVEL=INFO
+      # Redis Cache Configuration
+      - REDIS_URL=redis://redis:6379/0
       # Database connection (MongoDB Atlas URI)
       - MONGODB_URI=mongodb+srv://appu:Prasanna460@scanner.8qogm7e.mongodb.net/citnow_analyzer?retryWrites=true&w=majority
       - MONGODB_DB_NAME=citnow_analyzer
@@ -35,6 +37,13 @@ services:
       - MAX_WORKERS=2
       - CONCURRENCY_LIMIT=1
       - PROCESS_TIMEOUT_SECONDS=900
+    depends_on:
+      - redis
+    restart: always
+
+  redis:
+    image: redis:7-alpine
+    container_name: citnow_redis
     restart: always
 
   caddy:
@@ -51,6 +60,7 @@ services:
       - caddy_config:/config
     depends_on:
       - backend
+      - redis
 
 volumes:
   caddy_data:
