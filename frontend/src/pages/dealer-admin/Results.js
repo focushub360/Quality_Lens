@@ -202,17 +202,22 @@ export default function Results() {
       const urlParams = new URLSearchParams(window.location.search);
       const batchId = urlParams.get('batchId');
       
+      // Explicitly get authorization token from localStorage to prevent auth interceptor race conditions on mount
+      const token = localStorage.getItem('auth_token');
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+
       let pageNum = 1;
       let allLoadedResults = [];
       let fetchMore = true;
       const pageSize = 1000;
+      const maxPages = 50; // Safety guard to prevent infinite loops
 
-      while (fetchMore) {
+      while (fetchMore && pageNum <= maxPages) {
         const endpoint = batchId 
           ? `/results?page=${pageNum}&per_page=${pageSize}&batch_id=${batchId}`
           : `/results?page=${pageNum}&per_page=${pageSize}`;
 
-        const res = await api.get(endpoint);
+        const res = await api.get(endpoint, { headers });
         const data = res.data;
         const rawResults = data.results || data || [];
 
@@ -226,9 +231,16 @@ export default function Results() {
           }
         }
 
+        // If we didn't get a valid array or it's empty, stop immediately to prevent infinite loops on error responses
+        if (!Array.isArray(results) || results.length === 0) {
+          fetchMore = false;
+          break;
+        }
+
         allLoadedResults = [...allLoadedResults, ...results];
 
-        if (rawResults.length < pageSize) {
+        // Terminate if we received less than the requested page size
+        if (results.length < pageSize) {
           fetchMore = false;
         } else {
           pageNum++;
