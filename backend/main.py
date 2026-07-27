@@ -2682,6 +2682,7 @@ async def get_bulk_excel_data(batch_id: str, chunk: int = 0, current_user: UserI
 async def get_summary_stats(
     dealer_id: Optional[str] = None,
     timeRange: Optional[str] = Query(None),
+    search: Optional[str] = Query(None),
     current_user: UserInDB = Depends(get_current_user)
 ):
     """Fast aggregation endpoint returning overall averages and counts across all records for the user/dealer."""
@@ -2710,6 +2711,17 @@ async def get_summary_stats(
             start_date = None
         if start_date:
             query["created_at"] = {"$gte": start_date}
+
+    if search:
+        search_regex = {"$regex": search, "$options": "i"}
+        query["$or"] = [
+            {"citnow_metadata.dealership": search_regex},
+            {"citnow_metadata.vehicle": search_regex},
+            {"citnow_metadata.registration": search_regex},
+            {"citnow_metadata.email": search_regex},
+            {"citnow_metadata.phone": search_regex},
+            {"citnow_metadata.service_advisor": search_regex},
+        ]
 
     query["status"] = {"$ne": "failed"}
 
@@ -2746,6 +2758,7 @@ async def get_all_results(
     batch_id: Optional[str] = None,
     dealer_id: Optional[str] = None,
     timeRange: Optional[str] = Query(None),
+    search: Optional[str] = Query(None, description="Search term for filtering by metadata"),
     minimal: bool = Query(False, description="If true, excludes heavy text fields for faster loading"),
     current_user: UserInDB = Depends(get_current_user)
 ):
@@ -2779,6 +2792,17 @@ async def get_all_results(
             start_date = None
         if start_date:
             query["created_at"] = {"$gte": start_date}
+
+    if search:
+        search_regex = {"$regex": search, "$options": "i"}
+        query["$or"] = [
+            {"citnow_metadata.dealership": search_regex},
+            {"citnow_metadata.vehicle": search_regex},
+            {"citnow_metadata.registration": search_regex},
+            {"citnow_metadata.email": search_regex},
+            {"citnow_metadata.phone": search_regex},
+            {"citnow_metadata.service_advisor": search_regex},
+        ]
 
     # RBAC scoping
     if current_user.role == "super_admin":
