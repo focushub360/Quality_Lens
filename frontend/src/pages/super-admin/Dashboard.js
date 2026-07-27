@@ -2400,165 +2400,82 @@ export default function SuperAdminDashboard() {
     }
   };
 
-  const loadDashboardData = async (isManualRefresh = false) => {
-    if (allResults.length === 0 || isManualRefresh) {
+    const loadDashboardData = async (isManualRefresh = false) => {
+    if (isManualRefresh || !dashboardData.overview.totalVideos) {
       setLoading(true);
     }
     setError(null);
 
     try {
-      // Explicitly get authorization token from localStorage to prevent auth interceptor race conditions
       const token = localStorage.getItem('auth_token');
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
-      // 1. Load users if not loaded yet
-      let usersArray = users;
-      if (users.length === 0 || isManualRefresh) {
-        const usersRes = await api.get('/users/', { headers });
-        usersArray = Array.isArray(usersRes.data) ? usersRes.data : [];
-        setUsers(usersArray);
+      // 1. Fetch Users
+      const usersRes = await api.get('/users/', { headers });
+      const usersArray = Array.isArray(usersRes.data) ? usersRes.data : [];
+      setUsers(usersArray);
+
+      // 2. Fetch Server-Side Dashboard Overview (Lightning Fast)
+      let endpoint = '/dashboard/super-admin/overview';
+      if (timeRange && timeRange !== 'all') {
+         endpoint += `?timeRange=${timeRange}`;
       }
+      
+      const res = await api.get(endpoint, { headers });
+      const data = res.data;
 
-      const dealerNames = {};
-      const dealerIds = new Set();
-      usersArray.forEach(u => {
-        if (u.dealer_id) {
-          dealerIds.add(u.dealer_id);
-          if (u.showroom_name) {
-            dealerNames[u.dealer_id] = u.showroom_name;
-          }
-        }
-      });
-
-      // 2. Load all results iteratively from the database
-      let resultsArray = allResults;
-      if (allResults.length === 0 || isManualRefresh) {
-        try {
-          let pageNum = 1;
-          let allLoadedResults = [];
-          let fetchMore = true;
-          const pageSize = 1000;
-          const maxPages = 50; // Safety cap to prevent infinite loops
-
-          while (fetchMore && pageNum <= maxPages) {
-            const resultsRes = await api.get(`/results?page=${pageNum}&per_page=${pageSize}&minimal=true`, { headers });
-            const resData = resultsRes.data;
-            const rawResults = resData?.results || resData || [];
-
-            let chunk = [];
-            if (Array.isArray(rawResults)) {
-              chunk = rawResults;
-            } else if (typeof rawResults === 'object') {
-              const values = Object.values(rawResults);
-              if (values.length > 0 && Array.isArray(values[0])) {
-                chunk = values[0];
-              }
-            }
-
-            if (!Array.isArray(chunk) || chunk.length === 0) {
-              fetchMore = false;
-              break;
-            }
-
-            allLoadedResults = [...allLoadedResults, ...chunk];
-
-            if (chunk.length < pageSize) {
-              fetchMore = false;
-            } else {
-              pageNum++;
-            }
-          }
-
-          resultsArray = allLoadedResults;
-          setAllResults(resultsArray);
-        } catch (resError) {
-          console.warn('Could not load results for trends:', resError);
-        }
-      }
-
-      // 3. Apply timeRange filter dynamically
-      const activeDataSet = filterByTimeRange(resultsArray, timeRange);
-      const totalVideos = activeDataSet.length;
-
-      const validScores = activeDataSet
-        .filter(r => r.overall_quality_score != null)
-        .map(r => r.overall_quality_score);
-      const avgScore = validScores.length > 0
-        ? Math.round((validScores.reduce((a, b) => a + b, 0) / validScores.length) * 10) / 10 : 0;
-
-      // Strictly initialize dealerMap with only the active registered dealers in the network
+      // Map dealer summaries
       const ACTIVE_DEALER_IDS = ['BIRD', 'BMW-KUN', 'DEUTSCHEMOTOREN', 'EMINENT', 'EVMAUTOKRAFT', 'GALLOP'];
-      const dealerMap = {};
-      ACTIVE_DEALER_IDS.forEach(did => {
-        dealerMap[did] = { overall: [], video: [], audio: [], count: 0 };
-      });
-
-      activeDataSet.forEach(r => {
-        let rawDid = r.dealer_id || r.dealer;
-        if (!rawDid) return; // Skip if no dealer info
-        let did = normalizeDealerId(rawDid);
-        
-        // Skip results for dealers that aren't actively registered in our system
-        if (!dealerMap[did]) {
-          return;
-        }
-
-        dealerMap[did].count++;
-        if (r.overall_quality_score != null) dealerMap[did].overall.push(r.overall_quality_score);
-        if (r.video_quality_score != null) dealerMap[did].video.push(r.video_quality_score);
-        if (r.audio_quality_score != null) dealerMap[did].audio.push(r.audio_quality_score);
-      });
-
-      let dealerPerformance = Object.entries(dealerMap).map(([did, data]) => {
-        const displayName = getDealerDisplayName(did);
-        const avgOverall = data.overall.length > 0
-          ? Math.round((data.overall.reduce((a, b) => a + b, 0) / data.overall.length) * 10) / 10
-          : 0;
-        const avgVideo = data.video.length > 0
-          ? Math.round((data.video.reduce((a, b) => a + b, 0) / data.video.length) * 10) / 10 : 0;
-        const avgAudio = data.audio.length > 0
-          ? Math.round((data.audio.reduce((a, b) => a + b, 0) / data.audio.length) * 10) / 10 : 0;
-
-        return {
-          id: did,
-          name: displayName,
-          videos: data.count,
-          overall: avgOverall,
-          video: avgVideo,
-          audio: avgAudio,
+      
+      let dealerPerformance = (data.dealers_summary || [])
+        .map(d => ({
+          id: normalizeDealerId(d.dealer_id),
+          name: getDealerDisplayName(d.dealer_id),
+          videos: d.total_videos,
+          overall: d.avg_overall_quality || 0,
+          video: d.avg_video_quality || 0,
+          audio: d.avg_audio_quality || 0,
           users: 0
-        };
-      }).sort((a, b) => b.overall - a.overall);
+        }))
+        .filter(d => ACTIVE_DEALER_IDS.includes(d.id))
+        .sort((a, b) => b.overall - a.overall);
 
-      // Transform Quality Distribution dynamically for selected time range
-      const distMap = {};
-      activeDataSet.forEach(r => {
-        const label = r.overall_quality_label || (r.overall_quality_score >= 8 ? 'Excellent' : r.overall_quality_score >= 6 ? 'Good' : 'Fair');
-        if (label) distMap[label] = (distMap[label] || 0) + 1;
+      // Add missing active dealers with 0s
+      ACTIVE_DEALER_IDS.forEach(id => {
+          if (!dealerPerformance.find(d => d.id === id)) {
+              dealerPerformance.push({
+                  id,
+                  name: getDealerDisplayName(id),
+                  videos: 0, overall: 0, video: 0, audio: 0, users: 0
+              });
+          }
       });
-      let qualityDist = Object.entries(distMap).map(([name, value]) => ({ name, value }));
+      dealerPerformance.sort((a, b) => b.overall - a.overall);
+
+      // Map quality distribution
+      const qualityDist = Object.entries(data.quality_distribution || {}).map(([name, value]) => ({ name, value }));
 
       setDashboardData({
         overview: {
-          totalDealers: dealerIds.size || dealerPerformance.length || 0,
-          totalVideos: totalVideos,
+          totalDealers: ACTIVE_DEALER_IDS.length,
+          totalVideos: data.total_videos_analyzed || 0,
           totalUsers: usersArray.length,
-          averageScore: avgScore,
+          averageScore: data.average_overall_quality || 0,
           performanceChange: 0
         },
         performanceTrend: calculateDealerPerformanceTrend(dealerPerformance),
         dealerRankings: dealerPerformance,
         qualityDistribution: qualityDist,
         topPerformers: {
-          overall: dealerPerformance.slice(0, 5).map((d, i) => ({ ...d, rank: i + 1 })),
-          video: dealerPerformance.slice(0, 5).map((d, i) => ({ ...d, rank: i + 1 })),
-          audio: dealerPerformance.slice(0, 5).map((d, i) => ({ ...d, rank: i + 1 }))
+          overall: [...dealerPerformance].sort((a,b) => b.overall - a.overall).slice(0, 5).map((d, i) => ({ ...d, rank: i + 1 })),
+          video: [...dealerPerformance].sort((a,b) => b.video - a.video).slice(0, 5).map((d, i) => ({ ...d, rank: i + 1 })),
+          audio: [...dealerPerformance].sort((a,b) => b.audio - a.audio).slice(0, 5).map((d, i) => ({ ...d, rank: i + 1 }))
         },
         recentActivity: []
       });
+
     } catch (error) {
       console.error('Error loading dashboard data:', error);
-      console.error('Error details:', error.response?.data || error.message);
       setError('Failed to load dashboard data. Please try again.');
     } finally {
       setLoading(false);
