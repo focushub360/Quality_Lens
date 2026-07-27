@@ -29,6 +29,8 @@ from fastapi.responses import ORJSONResponse, JSONResponse, FileResponse, Respon
 from pydantic import BaseModel, Field # Added Field for MongoDB _id alias
 from s3_storage import s3_storage
 
+import redis.asyncio as aioredis
+
 
 # --- RBAC Specific Imports ---
 from passlib.context import CryptContext
@@ -46,6 +48,78 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from Dude import UnifiedMediaAnalyzer # Assuming HELLO.py is in the same directory
 import uuid
 
+
+# NEW: Redis Cache Manager for scaling to 1000+ users
+class RedisCacheManager:
+    def __init__(self):
+        self.redis_url = os.getenv("REDIS_URL")
+        self.redis = None
+        self.enabled = False
+
+    async def connect(self):
+        if not self.redis_url:
+            logger.info("REDIS_URL not set in env. Caching is disabled.")
+            return
+        try:
+            self.redis = aioredis.from_url(self.redis_url, encoding="utf-8", decode_responses=True)
+            # Test connection
+            await self.redis.ping()
+            self.enabled = True
+            logger.info("Redis cache connection established successfully.")
+        except Exception as e:
+            logger.warning(f"Could not connect to Redis: {e}. Caching is disabled.")
+            self.redis = None
+            self.enabled = False
+
+    async def close(self):
+        if self.redis:
+            await self.redis.close()
+            logger.info("Redis cache connection closed.")
+
+    async def get(self, key: str) -> Optional[str]:
+        if not self.enabled or not self.redis:
+            return None
+        try:
+            return await self.redis.get(key)
+        except Exception as e:
+            logger.warning(f"Redis GET failed for key {key}: {e}")
+            return None
+
+    async def set(self, key: str, value: str, expire: int = 300):
+        if not self.enabled or not self.redis:
+            return
+        try:
+            await self.redis.set(key, value, ex=expire)
+        except Exception as e:
+            logger.warning(f"Redis SET failed for key {key}: {e}")
+
+    async def delete(self, key: str):
+        if not self.enabled or not self.redis:
+            return
+        try:
+            await self.redis.delete(key)
+        except Exception as e:
+            logger.warning(f"Redis DELETE failed for key {key}: {e}")
+
+    async def delete_pattern(self, pattern: str):
+        if not self.enabled or not self.redis:
+            return
+        try:
+            keys = await self.redis.keys(pattern)
+            if keys:
+                await self.redis.delete(*keys)
+        except Exception as e:
+            logger.warning(f"Redis delete_pattern failed for pattern {pattern}: {e}")
+
+cache_manager = RedisCacheManager()
+
+async def invalidate_dealer_cache(dealer_id: str):
+    try:
+        await cache_manager.delete_pattern(f"dashboard:dealer:{dealer_id}:*")
+        await cache_manager.delete_pattern("dashboard:super_admin:*")
+        logger.info(f"Invalidated cache keys for dealer: {dealer_id}")
+    except Exception as e:
+        logger.warning(f"Failed to invalidate cache for dealer {dealer_id}: {e}")
 
 analysis_tasks_collection = None 
 
@@ -538,6 +612,9 @@ async def lifespan(app: FastAPI):
     await connect_to_mongo()
     await create_mongo_indexes()
     
+    # 1.5 Connect to Redis Cache
+    await cache_manager.connect()
+    
     # 2. Create initial Super Admin (if not exists)
     await create_initial_super_admin_if_not_exists()
 
@@ -573,6 +650,7 @@ async def lifespan(app: FastAPI):
     
     logger.info("Closing MongoDB connection.")
     await close_mongo_connection()
+    await cache_manager.close()
 
 # -----------------------------
 # CORS Middleware - COMPLETE FIX
@@ -1476,6 +1554,8 @@ async def process_single_analysis_task(
             processed_results["created_at"] = dt.utcnow()
         res = await results_collection.insert_one(processed_results.copy())
         result_id = str(res.inserted_id)
+        if processed_results.get("dealer_id"):
+            await invalidate_dealer_cache(processed_results["dealer_id"])
         
         # Update task with success
         await update_analysis_task(task_id, {
@@ -1781,6 +1861,8 @@ async def _process_single_batch_url_item(
                     logger.debug(f"Failed to parse Excel date string {excel_date}: {ex}")
 
         await results_collection.insert_one(processed_results)
+        if processed_results.get("dealer_id"):
+            await invalidate_dealer_cache(processed_results["dealer_id"])
 
         await batch_collection.update_one(
             {"_id": ObjectId(batch_id)}, 
@@ -2425,8 +2507,11 @@ async def delete_bulk_job(batch_id: str, current_user: UserInDB = Depends(get_cu
     
     batch_cancellation_flags[batch_id] = True
     
+    dealer_id = batch.get("dealer_id")
     delete_results = await results_collection.delete_many({"batch_id": batch_id})
     delete_excel_data = await excel_data_collection.delete_many({"batch_id": batch_id})
+    if dealer_id:
+        await invalidate_dealer_cache(dealer_id)
     delete_batch = await batch_collection.delete_one({"_id": object_id})
     
     if delete_batch.deleted_count == 0:
@@ -3012,6 +3097,16 @@ async def get_dealer_dashboard_overview(
 
     dealer_id_str = current_user.dealer_id
 
+    user_id_suffix = f":{current_user.id}" if current_user.role == "dealer_user" else ""
+    cache_key = f"dashboard:dealer:{dealer_id_str}:{current_user.role}{user_id_suffix}:{timeRange or 'week'}"
+    
+    cached_data = await cache_manager.get(cache_key)
+    if cached_data:
+        try:
+            return DealerAdminDashboardOverview(**json.loads(cached_data))
+        except Exception as e:
+            logger.warning(f"Failed to parse cached dealer overview: {e}")
+
     # Base match
     dealer_status_match = {"dealer_id": dealer_id_str}
     
@@ -3160,7 +3255,7 @@ async def get_dealer_dashboard_overview(
     results.sort(key=lambda x: x["_parsed_date"], reverse=True)
     recent_analyses = [RecentAnalysis(**clean_results(r)) for r in results[:5]]
 
-    return DealerAdminDashboardOverview(
+    response = DealerAdminDashboardOverview(
         dealer_id=dealer_id_str,
         total_videos_analyzed=total_videos,
         average_overall_quality=round(avg_overall_quality, 1),
@@ -3172,6 +3267,11 @@ async def get_dealer_dashboard_overview(
         dailyPerformance=dailyPerformance,
         last_updated=dt.utcnow()
     )
+    try:
+        await cache_manager.set(cache_key, response.model_dump_json(), expire=300)
+    except Exception as e:
+        logger.warning(f"Failed to cache dealer overview: {e}")
+    return response
 
 
 
