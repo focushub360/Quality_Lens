@@ -642,12 +642,14 @@ const TopDetectedIssues = ({ allResults = [] }) => {
           <Typography variant="h6" sx={{ color: THEME.textPrimary, fontWeight: 700 }}>
             Top Detected Issues
           </Typography>
-          <Chip label={`${allResults.length} videos analysed`} size="small" sx={{ ml: 'auto', fontWeight: 600, background: THEME.surface, color: THEME.textSecondary }} />
         </Box>
-        <Grid container spacing={2}>
+        <Box sx={{ display: 'flex', gap: 3, width: '100%' }}>
           {categories.map(cat => (
-            <Grid item xs={12} md={4} key={cat.key}>
-              <Box sx={{ background: cat.bg, borderRadius: 2, p: 2, border: `1px solid ${cat.color}20`, height: '100%' }}>
+            <Box key={cat.key} sx={{
+              flex: 1,
+              display: 'flex'
+            }}>
+              <Box sx={{ background: cat.bg, borderRadius: 2, p: 2, border: `1px solid ${cat.color}20`, width: '100%', display: 'flex', flexDirection: 'column' }}>
                 <Typography variant="subtitle2" sx={{ color: cat.color, fontWeight: 700, mb: 1.5 }}>{cat.label}</Typography>
                 {cat.issues.length === 0 ? (
                   <Typography variant="caption" sx={{ color: THEME.textTertiary }}>No issues detected ✓</Typography>
@@ -658,9 +660,9 @@ const TopDetectedIssues = ({ allResults = [] }) => {
                   </Box>
                 ))}
               </Box>
-            </Grid>
+            </Box>
           ))}
-        </Grid>
+        </Box>
       </CardContent>
     </Card>
   );
@@ -668,7 +670,7 @@ const TopDetectedIssues = ({ allResults = [] }) => {
 
 // ─── Enhanced Service Advisor Section ──────────────────────────────────────
 const EnhancedServiceAdvisorSection = ({ allResults = [], selectedFilterDealer = 'all' }) => {
-  const [minUploadsFilter, setMinUploadsFilter] = React.useState(0);
+  const [minUploadsFilter, setMinUploadsFilter] = React.useState(25);
   const advisorMap = new Map();
 
   const filtered = selectedFilterDealer === 'all'
@@ -679,12 +681,25 @@ const EnhancedServiceAdvisorSection = ({ allResults = [], selectedFilterDealer =
     const name = r.citnow_metadata?.service_advisor || r.citnow_service_advisor || '';
     if (!name || name === 'Unknown Advisor' || name.length < 2) return;
     if (!advisorMap.has(name)) {
-      advisorMap.set(name, { name, videoScores: [], audioScores: [], overallScores: [], results: [] });
+      advisorMap.set(name, { 
+        name, 
+        videoScores: [], 
+        audioScores: [], 
+        overallScores: [], 
+        results: [],
+        dealerships: new Set()
+      });
     }
     const a = advisorMap.get(name);
     if (r.video_quality_score != null) a.videoScores.push(r.video_quality_score);
     if (r.audio_quality_score != null) a.audioScores.push(r.audio_quality_score);
     if (r.overall_quality_score != null) a.overallScores.push(r.overall_quality_score);
+    
+    const dName = r.citnow_dealership || r.citnow_metadata?.dealership || '';
+    if (dName && dName.trim()) {
+      a.dealerships.add(dName.trim());
+    }
+    
     a.results.push(r);
   });
 
@@ -692,9 +707,15 @@ const EnhancedServiceAdvisorSection = ({ allResults = [], selectedFilterDealer =
     const avgVideo = a.videoScores.length > 0 ? a.videoScores.reduce((s, v) => s + v, 0) / a.videoScores.length : 0;
     const avgAudio = a.audioScores.length > 0 ? a.audioScores.reduce((s, v) => s + v, 0) / a.audioScores.length : 0;
     const avgOverall = a.overallScores.length > 0 ? a.overallScores.reduce((s, v) => s + v, 0) / a.overallScores.length : 0;
-    return { ...a, avgVideo, avgAudio, avgOverall, totalVideos: a.results.length, flags: computeAdvisorFlags(a.results) };
-  }).filter(a => a.totalVideos >= minUploadsFilter)
-    .sort((a, b) => b.avgOverall - a.avgOverall)
+    const dealership = a.dealerships.size > 0 ? Array.from(a.dealerships)[0] : '';
+    return { ...a, avgVideo, avgAudio, avgOverall, totalVideos: a.results.length, dealership, flags: computeAdvisorFlags(a.results) };
+  }).filter(a => a.totalVideos >= minUploadsFilter && a.avgOverall >= 7) // Only show good rated (score >= 7)
+    .sort((a, b) => {
+      if (Math.abs(b.avgOverall - a.avgOverall) < 0.001) {
+        return b.totalVideos - a.totalVideos;
+      }
+      return b.avgOverall - a.avgOverall;
+    })
     .slice(0, 8);
 
   if (advisors.length === 0 && minUploadsFilter === 0) return null;
@@ -730,89 +751,87 @@ const EnhancedServiceAdvisorSection = ({ allResults = [], selectedFilterDealer =
               }}
               label=""
             >
-              <MenuItem value={0}>All Uploads</MenuItem>
-              <MenuItem value={5}>Min 5 uploads</MenuItem>
-              <MenuItem value={10}>Min 10 uploads</MenuItem>
-              <MenuItem value={20}>Min 20 uploads</MenuItem>
+              <MenuItem value={25}>Min 25 uploads</MenuItem>
+              <MenuItem value={100}>Min 100 uploads</MenuItem>
+              <MenuItem value={200}>Min 200 uploads</MenuItem>
+              <MenuItem value={500}>Min 500 uploads</MenuItem>
             </TextField>
             <Chip label={`${advisors.length} advisors`} size="small" sx={{ fontWeight: 600, background: THEME.surface, color: THEME.textSecondary }} />
           </Box>
         </Box>
         {advisors.length === 0 ? (
           <Typography variant="body2" sx={{ color: THEME.textTertiary, textAlign: 'center', py: 4 }}>
-            No service advisors found with at least {minUploadsFilter} uploads.
+            No service advisors found with at least {minUploadsFilter} uploads and a rating of 7.0+.
           </Typography>
         ) : (
-          <Grid container spacing={2}>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
             {advisors.map((advisor, idx) => (
-              <Grid item xs={12} sm={6} lg={3} key={advisor.name} sx={{ display: 'flex' }}>
+              <Box key={advisor.name} sx={{
+                width: { xs: '100%', sm: 'calc(50% - 12px)', md: 'calc(33.333% - 16px)' },
+                boxSizing: 'border-box',
+                display: 'flex'
+              }}>
                 <Box sx={{
                   background: THEME.surface, borderRadius: 2.5, p: 2,
                   border: `1px solid ${idx < 3 ? '#f59e0b40' : THEME.border}`,
                   transition: 'all 0.2s', width: '100%',
                   display: 'flex', flexDirection: 'column',
                   justifyContent: 'space-between',
+                  height: 180,
                   '&:hover': { boxShadow: '0 4px 20px rgba(0,0,0,0.10)', transform: 'translateY(-2px)' }
                 }}>
-                  {/* Top content wrapper */}
-                  <Box>
-                    {/* Header */}
-                    <Box sx={{ display: 'flex', alignItems: 'flex-start', mb: 1.5 }}>
-                      <Box sx={{
-                        width: 32, height: 32, borderRadius: '50%', mr: 1.5, flexShrink: 0,
-                        background: idx < 3 ? 'linear-gradient(135deg, #f59e0b, #fbbf24)' : THEME.border,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: idx < 3 ? '16px' : '12px', fontWeight: 700, color: idx < 3 ? '#fff' : THEME.textSecondary
-                      }}>
-                        {idx < 3 ? medals[idx] : idx + 1}
-                      </Box>
-                      <Box sx={{ flex: 1, minWidth: 0 }}>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: THEME.textPrimary, lineHeight: 1.2, mb: 0.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {advisor.name}
-                        </Typography>
-                        <Typography variant="caption" sx={{ color: THEME.textTertiary, fontWeight: 500 }}>
-                          {advisor.totalVideos} video{advisor.totalVideos !== 1 ? 's' : ''}
-                        </Typography>
-                      </Box>
-                      <Box sx={{ background: getScoreBg(advisor.avgOverall), borderRadius: 1.5, px: 1, py: 0.5, textAlign: 'center', flexShrink: 0, ml: 1 }}>
-                        <Typography variant="caption" sx={{ fontWeight: 800, color: getScoreColor(advisor.avgOverall), display: 'block', lineHeight: 1, fontSize: '14px' }}>
-                          {advisor.avgOverall.toFixed(1)}
-                        </Typography>
-                        <Typography variant="caption" sx={{ color: THEME.textTertiary, fontSize: '9px', fontWeight: 600 }}>OVERALL</Typography>
-                      </Box>
+                  {/* Header */}
+                  <Box sx={{ display: 'flex', alignItems: 'flex-start', mb: 1.5 }}>
+                    <Box sx={{
+                      width: 32, height: 32, borderRadius: '50%', mr: 1.5, flexShrink: 0,
+                      background: idx < 3 ? 'linear-gradient(135deg, #f59e0b, #fbbf24)' : THEME.border,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: idx < 3 ? '16px' : '12px', fontWeight: 700, color: idx < 3 ? '#fff' : THEME.textSecondary
+                    }}>
+                      {idx < 3 ? medals[idx] : idx + 1}
                     </Box>
-
-                    {/* Score bars */}
-                    <Box sx={{ mb: 2 }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.75 }}>
-                        <Typography variant="caption" sx={{ color: THEME.textSecondary, minWidth: 42, fontWeight: 500, fontSize: '11px' }}>Video</Typography>
-                        <Box sx={{ flex: 1, height: 6, borderRadius: 3, background: THEME.borderLight, mx: 1, overflow: 'hidden' }}>
-                          <Box sx={{ height: '100%', width: `${(advisor.avgVideo / 10) * 100}%`, background: '#0ea5e9', borderRadius: 3, transition: 'width 0.8s ease' }} />
-                        </Box>
-                        <Typography variant="caption" sx={{ fontWeight: 700, color: '#0ea5e9', minWidth: 28, textAlign: 'right', fontSize: '11px' }}>{advisor.avgVideo.toFixed(1)}</Typography>
-                      </Box>
-                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        <Typography variant="caption" sx={{ color: THEME.textSecondary, minWidth: 42, fontWeight: 500, fontSize: '11px' }}>Audio</Typography>
-                        <Box sx={{ flex: 1, height: 6, borderRadius: 3, background: THEME.borderLight, mx: 1, overflow: 'hidden' }}>
-                          <Box sx={{ height: '100%', width: `${(advisor.avgAudio / 10) * 100}%`, background: '#10b981', borderRadius: 3, transition: 'width 0.8s ease' }} />
-                        </Box>
-                        <Typography variant="caption" sx={{ fontWeight: 700, color: '#10b981', minWidth: 28, textAlign: 'right', fontSize: '11px' }}>{advisor.avgAudio.toFixed(1)}</Typography>
-                      </Box>
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700, color: THEME.textPrimary, lineHeight: 1.2, mb: 0.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {advisor.name}
+                      </Typography>
+                      {advisor.dealership && (
+                        <Typography variant="caption" sx={{ color: THEME.textSecondary, fontWeight: 600, display: 'block', mb: 0.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          🏢 {advisor.dealership}
+                        </Typography>
+                      )}
+                      <Typography variant="caption" sx={{ color: THEME.textTertiary, fontWeight: 500 }}>
+                        {advisor.totalVideos} video{advisor.totalVideos !== 1 ? 's' : ''}
+                      </Typography>
+                    </Box>
+                    <Box sx={{ background: getScoreBg(advisor.avgOverall), borderRadius: 1.5, px: 1, py: 0.5, textAlign: 'center', flexShrink: 0, ml: 1 }}>
+                      <Typography variant="caption" sx={{ fontWeight: 800, color: getScoreColor(advisor.avgOverall), display: 'block', lineHeight: 1, fontSize: '14px' }}>
+                        {advisor.avgOverall.toFixed(1)}
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: THEME.textTertiary, fontSize: '9px', fontWeight: 600 }}>OVERALL</Typography>
                     </Box>
                   </Box>
 
-                  {/* Feedback flags container (Always at bottom with fixed placeholder height) */}
-                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, minHeight: 24, mt: 1, alignItems: 'center' }}>
-                    {advisor.flags.map(f => (
-                      <Box key={f.label} sx={{ background: f.bg, border: `1px solid ${f.color}30`, borderRadius: 1, px: 0.75, py: 0.25 }}>
-                        <Typography variant="caption" sx={{ color: f.color, fontWeight: 600, fontSize: '10px', whiteSpace: 'nowrap' }}>{f.label}</Typography>
+                  {/* Score bars */}
+                  <Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.75 }}>
+                      <Typography variant="caption" sx={{ color: THEME.textSecondary, minWidth: 42, fontWeight: 500, fontSize: '11px' }}>Video</Typography>
+                      <Box sx={{ flex: 1, height: 6, borderRadius: 3, background: THEME.borderLight, mx: 1, overflow: 'hidden' }}>
+                        <Box sx={{ height: '100%', width: `${(advisor.avgVideo / 10) * 100}%`, background: '#0ea5e9', borderRadius: 3, transition: 'width 0.8s ease' }} />
                       </Box>
-                    ))}
+                      <Typography variant="caption" sx={{ fontWeight: 700, color: '#0ea5e9', minWidth: 28, textAlign: 'right', fontSize: '11px' }}>{advisor.avgVideo.toFixed(1)}</Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                      <Typography variant="caption" sx={{ color: THEME.textSecondary, minWidth: 42, fontWeight: 500, fontSize: '11px' }}>Audio</Typography>
+                      <Box sx={{ flex: 1, height: 6, borderRadius: 3, background: THEME.borderLight, mx: 1, overflow: 'hidden' }}>
+                        <Box sx={{ height: '100%', width: `${(advisor.avgAudio / 10) * 100}%`, background: '#10b981', borderRadius: 3, transition: 'width 0.8s ease' }} />
+                      </Box>
+                      <Typography variant="caption" sx={{ fontWeight: 700, color: '#10b981', minWidth: 28, textAlign: 'right', fontSize: '11px' }}>{advisor.avgAudio.toFixed(1)}</Typography>
+                    </Box>
                   </Box>
                 </Box>
-              </Grid>
+              </Box>
             ))}
-          </Grid>
+          </Box>
         )}
       </CardContent>
     </Card>
@@ -3070,14 +3089,19 @@ export default function SuperAdminDashboard() {
             </Box>
           </Box>
 
-          <Grid container spacing={2} justifyContent="center" alignItems="stretch">
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
             {/* Dealer Performance Chart (Spider Chart) */}
-            <Grid item xs={12} md={6}>
+            <Box sx={{
+              width: { xs: '100%', md: 'calc(50% - 12px)' },
+              boxSizing: 'border-box',
+              display: 'flex'
+            }}>
               <Card sx={{
                 background: THEME.surfaceElevated,
                 border: `1px solid ${THEME.border}`,
                 borderRadius: 3,
                 boxShadow: THEME.shadowSm,
+                width: '100%',
                 height: '100%',
                 userSelect: 'none',
                 cursor: 'pointer'
@@ -3092,15 +3116,20 @@ export default function SuperAdminDashboard() {
                   />
                 </CardContent>
               </Card>
-            </Grid>
+            </Box>
  
             {/* Dealer Volume / Share Pie Chart */}
-            <Grid item xs={12} md={6}>
+            <Box sx={{
+              width: { xs: '100%', md: 'calc(50% - 12px)' },
+              boxSizing: 'border-box',
+              display: 'flex'
+            }}>
               <Card sx={{
                 background: THEME.surfaceElevated,
                 border: `1px solid ${THEME.border}`,
                 borderRadius: 3,
                 boxShadow: THEME.shadowSm,
+                width: '100%',
                 height: '100%',
                 display: 'flex',
                 flexDirection: 'column'
@@ -3116,8 +3145,8 @@ export default function SuperAdminDashboard() {
                   />
                 </CardContent>
               </Card>
-            </Grid>
-          </Grid>
+            </Box>
+          </Box>
  
           {/* Dealer / User Performance Heatmap */}
           <DealerPerformanceHeatmap 
