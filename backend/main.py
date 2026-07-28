@@ -310,8 +310,8 @@ class SuperAdminDashboardOverview(BaseModel):
 class RecentAnalysis(BaseModel):
     id: str = Field(alias="_id")
     original_url: str = Field(alias="input_source")
-    overall_quality_label: Optional[str]
-    overall_quality_score: Optional[float]
+    overall_quality_label: Optional[str] = None
+    overall_quality_score: Optional[float] = None
     created_at: dt
     status: Optional[str] = "completed"
     error_message: Optional[str] = None
