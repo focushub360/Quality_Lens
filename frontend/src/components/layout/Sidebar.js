@@ -299,8 +299,8 @@ export default function Sidebar() {
       color: THEME.textPrimary,
       borderRight: `1px solid ${THEME.divider}`
     }}>
-      <Box sx={{ p: 2.5, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100px', overflow: 'hidden' }}>
-        <img src="/qualitylens-logo.png" alt="QualityLens" style={{ width: '100%', maxWidth: '215px', maxHeight: '68px', objectFit: 'contain' }} />
+      <Box sx={{ px: 1, py: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100px', overflow: 'hidden' }}>
+        <img src="/qualitylens-logo.png" alt="QualityLens" style={{ width: '100%', maxWidth: '260px', maxHeight: '84px', objectFit: 'contain' }} />
       </Box>
 
       <Divider sx={{ mx: 2, mb: 2, borderColor: THEME.divider }} />
