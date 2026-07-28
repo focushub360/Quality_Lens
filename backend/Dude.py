@@ -1617,7 +1617,7 @@ class UnifiedMediaAnalyzer:
                 )
                 summary = tokenizer.decode(summary_ids[0], skip_special_tokens=True)
 
-            # --- Smart fallback for short/repetitive text ---
+            # --- High-reliability dynamic summarizer for short/repetitive text ---
             text_lower = text.lower()
             if (
                 len(text.split()) < 100 or
@@ -1625,33 +1625,67 @@ class UnifiedMediaAnalyzer:
                 text_lower.count("sir") > 3
             ):
                 import re
-
-                # Vehicle ID detection
-                vehicle_match = re.search(r"\b[a-zA-Z]{2}\s?\d{2}\s?[a-zA-Z]{1,2}\s?\d{3,4}\b", text)
-                vehicle_id = vehicle_match.group(0).replace(" ", "").upper() if vehicle_match else "The vehicle"
-
-                # Speaker name detection
+                summary_parts = []
+                
+                # 1. Greeting detection
+                greetings = ["good morning", "good afternoon", "good evening", "hello", "hi", "hey", "welcome", "morning", "afternoon", "evening"]
+                has_greeting = any(g in text_lower for g in greetings)
+                
+                # 2. Speaker / Advisor name detection
                 speaker_match = re.search(r"this is (?!the|a |an |vehicle|video)([a-zA-Z\s]+)", text_lower)
+                speaker_name = None
                 if speaker_match:
-                    speaker = speaker_match.group(1).strip().title().split()[0:2]
-                    speaker = " ".join(speaker)
-                else:
-                    speaker = None
+                    name_parts = speaker_match.group(1).strip().title().split()
+                    if name_parts:
+                        speaker_name = " ".join(name_parts[0:2])
+                
+                if has_greeting and speaker_name:
+                    summary_parts.append(f"The advisor ({speaker_name}) greets the customer.")
+                elif has_greeting:
+                    summary_parts.append("The advisor greets the customer.")
+                elif speaker_name:
+                    summary_parts.append(f"The video is presented by advisor {speaker_name}.")
+                
+                # 3. Vehicle / Plate ID detection
+                vehicle_match = re.search(r"\b[a-zA-Z]{2}\s?\d{2}\s?[a-zA-Z]{1,2}\s?\d{3,4}\b", text)
+                vehicle_id = vehicle_match.group(0).replace(" ", "").upper() if vehicle_match else None
+                if vehicle_id:
+                    summary_parts.append(f"The advisor presents vehicle {vehicle_id}.")
+                
+                # 4. Extract key topics actually mentioned in the transcript
+                topics = []
+                if any(w in text_lower for w in ["tyre", "tire", "wheel"]):
+                    topics.append("tyres / wheels status")
+                if "brake" in text_lower:
+                    topics.append("brakes status")
+                if any(w in text_lower for w in ["engine", "coolant", "battery"]):
+                    topics.append("engine bay inspection")
+                if "oil" in text_lower:
+                    topics.append("fluid levels check")
+                if any(w in text_lower for w in ["body", "dent", "scratch", "paint"]):
+                    topics.append("bodywork check")
+                if any(w in text_lower for w in ["washing", "clean", "wash"]):
+                    topics.append("washing/cleaning status")
+                if any(w in text_lower for w in ["ready", "delivery", "completed", "done"]):
+                    topics.append("readiness for delivery")
+                if any(w in text_lower for w in ["service", "repair", "maintenance", "check"]):
+                    topics.append("service overview")
 
-                # Feature detection
-                features = [part for part in ["front", "right", "rear", "left", "interior", "boot"] if part in text_lower]
-
-                summary = f"{vehicle_id} is ready for delivery."
-                if speaker:
-                    summary += f" The delivery video is presented by {speaker}."
-                if features:
-                    summary += f" It shows the {', '.join(features[:-1])} and {features[-1]} of the vehicle."
-                else:
-                    summary += " It shows various parts of the vehicle."
-
-                # Add washing/service info if mentioned
-                if any(word in text_lower for word in ["washing", "cleaning", "service", "maintenance"]):
-                    summary += " Washing and service have been completed."
+                if topics:
+                    if len(topics) > 1:
+                        topic_str = f"The video covers the {', '.join(topics[:-1])} and {topics[-1]}."
+                    else:
+                        topic_str = f"The video covers the {topics[0]}."
+                    summary_parts.append(topic_str)
+                
+                # 5. Fallback: if nothing specific was matched but we have text, quote it safely
+                if not summary_parts and len(text.strip()) > 0:
+                    cleaned_txt = text.strip()
+                    if len(cleaned_txt) > 120:
+                        cleaned_txt = cleaned_txt[:120] + "..."
+                    summary_parts.append(f"Brief update from the advisor: \"{cleaned_txt}\"")
+                
+                summary = " ".join(summary_parts)
 
             # --- Cleanup ---
             summary = summary.strip()
@@ -1845,13 +1879,21 @@ class UnifiedMediaAnalyzer:
                     not native_english_transcription.startswith("Transcription failed:")
                 )
                 
+                # Check for Whisper native translation hallucinations (e.g. much longer than transcription)
+                if is_valid_native and transcription:
+                    native_words = len(native_english_transcription.split())
+                    trans_words = len(transcription.split())
+                    if trans_words > 0 and native_words > (2 * trans_words + 5):
+                        print(f"⚠️ Native translation ratio suspiciously high ({native_words} vs {trans_words} words) — likely hallucinating! Discarding native.")
+                        is_valid_native = False
+                
                 if requested_target_language == 'en':
                     if is_valid_native:
                         translation = native_english_transcription
                         print(f"✅ Used native AI translation to English ({len(translation)} chars)")
                     else:
-                        # Native translation also returned garbage — fall back to Google
-                        print("⚠️ Native translation returned garbage — falling back to Google Translate")
+                        # Native translation returned garbage or hallucinated — fall back to Google
+                        print("⚠️ Native translation hallucinated or failed — falling back to Google Translate")
                         translation = self.translate_text(transcription, target_language=requested_target_language)
                 else:
                     translation = self.translate_text(transcription, target_language=requested_target_language)
