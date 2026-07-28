@@ -816,36 +816,16 @@ const DealerPerformanceHeatmap = ({ data, selectedFilterDealer, allResults, user
   };
 
   if (selectedFilterDealer === 'all') {
-    const dealerMap = {};
-    const validDealers = new Set(data.map(d => normalizeDealerId(d.id)));
-
-    // Initialize all valid active dealers (even if they have 0 results for the current time period)
-    validDealers.forEach(did => {
-      dealerMap[did] = [];
-    });
-
-    // Populate with results, skipping garbage/unregistered dealer names
-    allResults.forEach(r => {
-      const rawDid = r.dealer_id || r.dealer || 'eminent';
-      const did = normalizeDealerId(rawDid);
-      if (validDealers.has(did)) {
-        dealerMap[did].push(r);
-      }
-    });
-
-    rows = Object.entries(dealerMap).map(([did, results]) => {
-      const dealerObj = data.find(d => normalizeDealerId(d.id) === did);
-      const name = dealerObj ? dealerObj.name : did;
-      const metrics = computeMetrics(results);
+    rows = data.map(d => {
       return {
-        id: did,
-        name: name,
+        id: d.id,
+        name: d.name,
         // Give 0-video dealers size=1 so they still appear in the treemap
-        size: Math.max(1, metrics.videos),
-        overall: metrics.overall,
-        video: metrics.video,
-        audio: metrics.audio,
-        videos: metrics.videos
+        size: Math.max(1, d.videos),
+        overall: d.overall,
+        video: d.video,
+        audio: d.audio,
+        videos: d.videos
       };
     }).sort((a, b) => b.overall - a.overall);
   } else {
@@ -2455,6 +2435,20 @@ export default function SuperAdminDashboard() {
       // Map quality distribution
       const qualityDist = Object.entries(data.quality_distribution || {}).map(([name, value]) => ({ name, value }));
 
+      // 3. Fetch Recent Results (minimal fields, up to 1000) for Service Advisors and Top Issues
+      try {
+        let resultsUrl = '/results?limit=1000&minimal=true';
+        if (timeRange && timeRange !== 'all') {
+          resultsUrl += `&timeRange=${timeRange}`;
+        }
+        const resultsRes = await api.get(resultsUrl, { headers });
+        const resData = resultsRes.data;
+        const resultsArray = Array.isArray(resData) ? resData : (resData?.results || []);
+        setAllResults(resultsArray);
+      } catch (err) {
+        console.error('Error fetching recent results for charts:', err);
+      }
+
       setDashboardData({
         overview: {
           totalDealers: ACTIVE_DEALER_IDS.length,
@@ -3083,48 +3077,6 @@ export default function SuperAdminDashboard() {
                     }
                     selectedDealerId={selectedFilterDealer}
                   />
-                </CardContent>
-              </Card>
-            </Grid>
- 
-            {/* Grouped Horizontal Bar Chart - Quality Scores */}
-            <Grid item xs={12}>
-              <Card sx={{
-                background: THEME.surfaceElevated,
-                border: `1px solid ${THEME.border}`,
-                borderRadius: 3,
-                boxShadow: THEME.shadowSm,
-                height: '100%',
-                display: 'flex',
-                flexDirection: 'column'
-              }}>
-                <CardContent sx={{
-                  p: 2,
-                  flex: 1,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  '&:last-child': { pb: 2 }
-                }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                    <BarChart sx={{ color: THEME.success, mr: 1, fontSize: 20 }} />
-                    <Typography variant="h6" sx={{
-                      color: THEME.textPrimary,
-                      fontWeight: 600,
-                      fontSize: { xs: '0.9rem', sm: '0.98rem' }
-                    }}>
-                      {selectedFilterDealer === 'all' ? 'Dealer Quality Scores' : `${getDealerDisplayName(selectedFilterDealer)} Quality Scores`}
-                    </Typography>
-                  </Box>
-                  <Box sx={{ flex: 1, minHeight: 0, width: '100%' }}>
-                    <GroupedHorizontalBarChart
-                      data={
-                        selectedFilterDealer === 'all'
-                          ? dashboardData.dealerRankings.slice(0, rankingsLimit)
-                          : dashboardData.dealerRankings.filter(d => d.id === selectedFilterDealer || normalizeDealerId(d.id || d.name) === normalizeDealerId(selectedFilterDealer))
-                      }
-                      selectedDealerId={selectedFilterDealer}
-                    />
-                  </Box>
                 </CardContent>
               </Card>
             </Grid>

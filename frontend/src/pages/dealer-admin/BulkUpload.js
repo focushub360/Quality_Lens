@@ -44,9 +44,15 @@ const THEME = {
   shadowLg: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
 };
 
-// Persistent storage keys
-const STORAGE_KEY = 'bulkProcessingBatches';
-const STATUS_SNAPSHOT_KEY = 'bulkActiveStatusSnapshot';
+// Persistent storage keys helper
+const getStorageKeys = (user) => {
+  const suffix = user && user.id ? `:${user.id}` : '_guest';
+  return {
+    batches: `bulkProcessingBatches${suffix}`,
+    status: `bulkActiveStatusSnapshot${suffix}`,
+    trackedId: `trackedBulkBatchId${suffix}`,
+  };
+};
 
 // Language options
 const LANGS = [
@@ -196,34 +202,32 @@ export default function BulkUpload() {
   useEffect(() => {
     isMounted.current = true;
 
-    // ── INSTANT RESTORE ──────────────────────────────────────────
-    // Before the async server fetch even starts, restore the last
-    // known status from localStorage so the processing card shows
-    // up immediately when the user navigates back to this page.
-    try {
-      const snapshot = localStorage.getItem(STATUS_SNAPSHOT_KEY);
-      if (snapshot) {
-        const saved = JSON.parse(snapshot);
-        if (saved && saved.batchId) {
-          setBatchId(saved.batchId);
-          setStatus(saved);
-          // Restart polling immediately if the batch was still running
-          if (['processing', 'pending', 'stopping'].includes(saved.status)) {
-            startPolling(saved.batchId);
-          }
-        }
-      }
-    } catch (e) {
-      console.warn('Could not restore status snapshot', e);
-    }
-    // ─────────────────────────────────────────────────────────────
-
     const init = async () => {
       try {
         // 1) Get current user (includes dealer_id and role)
         const meRes = await api.get('/users/me');
         const me = meRes.data;
         setCurrentUser(me);
+
+        // ── INSTANT RESTORE (Per-User Scoped) ─────────────────────────
+        try {
+          const keys = getStorageKeys(me);
+          const snapshot = localStorage.getItem(keys.status);
+          if (snapshot) {
+            const saved = JSON.parse(snapshot);
+            if (saved && saved.batchId) {
+              setBatchId(saved.batchId);
+              setStatus(saved);
+              // Restart polling immediately if the batch was still running
+              if (['processing', 'pending', 'stopping'].includes(saved.status)) {
+                startPolling(saved.batchId, me);
+              }
+            }
+          }
+        } catch (e) {
+          console.warn('Could not restore status snapshot', e);
+        }
+        // ─────────────────────────────────────────────────────────────
 
         // 2) Get server-side batches (server will filter by dealer for dealer_admin)
         await fetchServerBatches(me);
@@ -248,24 +252,27 @@ export default function BulkUpload() {
 
   // If activeBatches changes, persist to localStorage
   useEffect(() => {
+    if (!currentUser) return;
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(activeBatches));
+      const keys = getStorageKeys(currentUser);
+      localStorage.setItem(keys.batches, JSON.stringify(activeBatches));
     } catch (err) {
       console.error('Error persisting batches to localStorage:', err);
     }
-  }, [activeBatches]);
+  }, [activeBatches, currentUser]);
 
   // Persist full status object to localStorage whenever it changes
   // so we can restore the processing card instantly on page re-visit
   useEffect(() => {
-    if (status) {
+    if (status && currentUser) {
       try {
-        localStorage.setItem(STATUS_SNAPSHOT_KEY, JSON.stringify(status));
+        const keys = getStorageKeys(currentUser);
+        localStorage.setItem(keys.status, JSON.stringify(status));
       } catch (err) {
         console.error('Error persisting status snapshot:', err);
       }
     }
-  }, [status]);
+  }, [status, currentUser]);
 
   const showSnackbarMessage = (message, severity = 'success') => {
     setSnackbar({ open: true, message, severity });
@@ -298,16 +305,20 @@ export default function BulkUpload() {
 
   const fetchServerBatches = async (me = null) => {
     try {
+      const activeUser = me || currentUser;
+      const keys = getStorageKeys(activeUser);
       const res = await api.get('/bulk-batches');
       const serverBatches = Array.isArray(res.data) ? res.data.map(normalizeBatch) : [];
       // If we have current user and they are dealer_admin, server already filtered; but be safe and filter again client-side
-      const filtered = me && me.role === 'dealer_admin' && me.dealer_id
-        ? serverBatches.filter(b => String(b.dealer_id) === String(me.dealer_id))
+      const filtered = activeUser && activeUser.role === 'dealer_admin' && activeUser.dealer_id
+        ? serverBatches.filter(b => String(b.dealer_id) === String(activeUser.dealer_id))
         : serverBatches;
       setActiveBatches(filtered);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
+      if (keys) {
+        localStorage.setItem(keys.batches, JSON.stringify(filtered));
+      }
       // Look for previously tracked batch ID in localStorage
-      const savedTrackedId = localStorage.getItem('trackedBulkBatchId');
+      const savedTrackedId = keys ? localStorage.getItem(keys.trackedId) : null;
       let targetBatch = null;
       if (savedTrackedId) {
         targetBatch = filtered.find(b => String(b.batchId) === String(savedTrackedId));
@@ -318,12 +329,22 @@ export default function BulkUpload() {
         targetBatch = filtered.find(b => ['processing', 'pending', 'stopping'].includes(b.status));
       }
 
+      // If still no target batch, fallback to the most recent batch so they see their latest results card
+      if (!targetBatch && filtered.length > 0) {
+        targetBatch = filtered[0];
+      }
+
       if (targetBatch) {
         setBatchId(targetBatch.batchId);
         setStatus(targetBatch);
-        localStorage.setItem('trackedBulkBatchId', targetBatch.batchId);
+        if (keys) {
+          localStorage.setItem(keys.trackedId, targetBatch.batchId);
+        }
         if (['processing', 'pending', 'stopping'].includes(targetBatch.status)) {
-          startPolling(targetBatch.batchId);
+          startPolling(targetBatch.batchId, activeUser);
+        } else {
+          // Fetch results immediately for completed/failed batch
+          fetchBatchResults(targetBatch.batchId, targetBatch);
         }
       }
     } catch (err) {
@@ -338,7 +359,11 @@ export default function BulkUpload() {
   // ---------------------------
   const loadActiveBatchesFromStorage = (me = null) => {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY);
+      const activeUser = me || currentUser;
+      const keys = getStorageKeys(activeUser);
+      if (!keys) return;
+
+      const stored = localStorage.getItem(keys.batches);
       if (!stored) return;
       const raw = JSON.parse(stored);
 
@@ -348,8 +373,8 @@ export default function BulkUpload() {
       const filtered = normalized.filter(b => {
         // require dealer info (drop legacy entries lacking dealer_id)
         if (!b.dealer_id) return false;
-        if (me && me.role === 'dealer_admin') {
-          return String(b.dealer_id) === String(me.dealer_id);
+        if (activeUser && activeUser.role === 'dealer_admin') {
+          return String(b.dealer_id) === String(activeUser.dealer_id);
         }
         return true;
       });
@@ -357,7 +382,7 @@ export default function BulkUpload() {
       setActiveBatches(filtered);
 
       // Look for previously tracked batch ID in localStorage
-      const savedTrackedId = localStorage.getItem('trackedBulkBatchId');
+      const savedTrackedId = localStorage.getItem(keys.trackedId);
       let targetBatch = null;
       if (savedTrackedId) {
         targetBatch = filtered.find(b => String(b.batchId) === String(savedTrackedId));
@@ -367,12 +392,19 @@ export default function BulkUpload() {
         targetBatch = filtered.find(b => ['processing', 'pending', 'stopping'].includes(b.status));
       }
 
+      // Fallback to most recent batch if none are active
+      if (!targetBatch && filtered.length > 0) {
+        targetBatch = filtered[0];
+      }
+
       if (targetBatch) {
         setBatchId(targetBatch.batchId);
         setStatus(targetBatch);
-        localStorage.setItem('trackedBulkBatchId', targetBatch.batchId);
+        localStorage.setItem(keys.trackedId, targetBatch.batchId);
         if (['processing', 'pending', 'stopping'].includes(targetBatch.status)) {
-          startPolling(targetBatch.batchId);
+          startPolling(targetBatch.batchId, activeUser);
+        } else {
+          fetchBatchResults(targetBatch.batchId, targetBatch);
         }
       }
     } catch (err) {
@@ -382,16 +414,20 @@ export default function BulkUpload() {
 
   const pruneLocalStorage = (me) => {
     try {
-      const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+      const activeUser = me || currentUser;
+      const keys = getStorageKeys(activeUser);
+      if (!keys) return;
+
+      const stored = JSON.parse(localStorage.getItem(keys.batches) || '[]');
       const kept = (stored || []).filter(b => {
         const dealerId = b.dealer_id || b.dealerId || null;
         if (!dealerId) return false;
-        if (me && me.role === 'dealer_admin') {
-          return String(dealerId) === String(me.dealer_id);
+        if (activeUser && activeUser.role === 'dealer_admin') {
+          return String(dealerId) === String(activeUser.dealer_id);
         }
         return true;
       }).map(normalizeBatch);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(kept));
+      localStorage.setItem(keys.batches, JSON.stringify(kept));
       setActiveBatches(kept);
     } catch (err) {
       console.error('Error pruning localStorage:', err);
@@ -440,7 +476,10 @@ export default function BulkUpload() {
       const data = response.data;
       const newBatchId = data.batch_id;
       setBatchId(newBatchId);
-      localStorage.setItem('trackedBulkBatchId', newBatchId);
+      const keys = getStorageKeys(currentUser);
+      if (keys) {
+        localStorage.setItem(keys.trackedId, newBatchId);
+      }
 
       const initialStatus = {
         batchId: newBatchId,
@@ -461,7 +500,7 @@ export default function BulkUpload() {
       // Refresh server list to get canonical saved batch (and enforce RBAC)
       await fetchServerBatches(currentUser);
 
-      startPolling(newBatchId);
+      startPolling(newBatchId, currentUser);
       showSnackbarMessage('Bulk processing started successfully!', 'success');
 
     } catch (err) {
@@ -478,7 +517,7 @@ export default function BulkUpload() {
   // ---------------------------
   // Polling / status / results - unchanged except normalization
   // ---------------------------
-  const startPolling = (batchIdToPoll) => {
+  const startPolling = (batchIdToPoll, activeUser = null) => {
     if (pollingIntervalRef.current) {
       clearInterval(pollingIntervalRef.current);
     }
@@ -499,7 +538,7 @@ export default function BulkUpload() {
           setLoading(false);
           fetchBatchResults(batchIdToPoll);
           // refresh server list for final status
-          await fetchServerBatches(currentUser);
+          await fetchServerBatches(activeUser || currentUser);
         }
       } catch (err) {
         if (err?.response?.status === 404) {
@@ -517,12 +556,13 @@ export default function BulkUpload() {
     }, 5000);
   };
 
-  const fetchBatchResults = async (batchIdToFetch) => {
+  const fetchBatchResults = async (batchIdToFetch, currentStatusObj = null) => {
     try {
       const response = await api.get(`/bulk-results/${batchIdToFetch}`);
       const results = response.data;
-      if (status && status.batchId === batchIdToFetch) {
-        const finalStatus = { ...status, ...results };
+      const activeStatus = currentStatusObj || status;
+      if (activeStatus && activeStatus.batchId === batchIdToFetch) {
+        const finalStatus = { ...activeStatus, ...results };
         saveBatchToStorage(finalStatus);
         setStatus(finalStatus);
       }
@@ -719,9 +759,14 @@ export default function BulkUpload() {
   const resumeBatchTracking = (batch) => {
     setBatchId(batch.batchId);
     setStatus(batch);
-    localStorage.setItem('trackedBulkBatchId', batch.batchId);
+    const keys = getStorageKeys(currentUser);
+    if (keys) {
+      localStorage.setItem(keys.trackedId, batch.batchId);
+    }
     if (['processing', 'pending', 'stopping'].includes(batch.status)) {
-      startPolling(batch.batchId);
+      startPolling(batch.batchId, currentUser);
+    } else {
+      fetchBatchResults(batch.batchId, batch);
     }
   };
 
@@ -731,8 +776,11 @@ export default function BulkUpload() {
     setFile(null);
     setExcelPreview(null);
     setList([]);
-    localStorage.removeItem('trackedBulkBatchId');
-    localStorage.removeItem(STATUS_SNAPSHOT_KEY);
+    const keys = getStorageKeys(currentUser);
+    if (keys) {
+      localStorage.removeItem(keys.trackedId);
+      localStorage.removeItem(keys.status);
+    }
     if (pollingIntervalRef.current) {
       clearInterval(pollingIntervalRef.current);
       pollingIntervalRef.current = null;

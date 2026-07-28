@@ -3097,7 +3097,7 @@ async def get_dealer_dashboard_overview(
 
     dealer_id_str = current_user.dealer_id
 
-    user_id_suffix = f":{current_user.id}" if current_user.role == "dealer_user" else ""
+    user_id_suffix = f":{current_user.id}"
     cache_key = f"dashboard:dealer:{dealer_id_str}:{current_user.role}{user_id_suffix}:{timeRange or 'week'}"
     
     cached_data = await cache_manager.get(cache_key)
@@ -3110,12 +3110,9 @@ async def get_dealer_dashboard_overview(
     # Base match
     dealer_status_match = {"dealer_id": dealer_id_str}
     
-    # 🔐 Hierarchy Filter: Dealer User sees only their own uploads.
-    # A Branch Admin or Dealer Admin sees everything for their scope.
-    if current_user.role == "dealer_user":
-        dealer_status_match["submitted_by_user_id"] = str(current_user.id)
-    elif current_user.role == "branch_admin" and current_user.branch_id:
-        dealer_status_match["branch_id"] = current_user.branch_id
+    # 🔐 Hierarchy Filter: Each account is individual.
+    # Dealer Admin, Branch Admin, and Dealer User all see only their own uploads.
+    dealer_status_match["submitted_by_user_id"] = str(current_user.id)
 
     if timeRange and timeRange.lower() != "all":
         now = dt.utcnow()
