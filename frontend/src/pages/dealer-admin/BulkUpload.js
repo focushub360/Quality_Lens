@@ -322,6 +322,10 @@ export default function BulkUpload() {
       let targetBatch = null;
       if (savedTrackedId) {
         targetBatch = filtered.find(b => String(b.batchId) === String(savedTrackedId));
+        // If the saved tracked batch is already completed or failed, we don't display it on active view anymore!
+        if (targetBatch && ['completed', 'failed', 'cancelled'].includes(targetBatch.status)) {
+          targetBatch = null;
+        }
       }
       
       // Fallback to first active batch if no saved tracked batch, or if it wasn't found
@@ -329,11 +333,7 @@ export default function BulkUpload() {
         targetBatch = filtered.find(b => ['processing', 'pending', 'stopping'].includes(b.status));
       }
 
-      // If still no target batch, fallback to the most recent batch so they see their latest results card
-      if (!targetBatch && filtered.length > 0) {
-        targetBatch = filtered[0];
-      }
-
+      // If we have an active batch, track and display it. Otherwise clear status (so form is shown)
       if (targetBatch) {
         setBatchId(targetBatch.batchId);
         setStatus(targetBatch);
@@ -345,6 +345,12 @@ export default function BulkUpload() {
         } else {
           // Fetch results immediately for completed/failed batch
           fetchBatchResults(targetBatch.batchId, targetBatch);
+        }
+      } else {
+        setBatchId(null);
+        setStatus(null);
+        if (keys) {
+          localStorage.removeItem(keys.trackedId);
         }
       }
     } catch (err) {

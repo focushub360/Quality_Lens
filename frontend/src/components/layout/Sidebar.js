@@ -34,6 +34,7 @@ import {
 } from '@mui/icons-material';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../../contexts/AuthContext';
+import api from '../../services/api';
 
 const THEME = {
   primary: '#0DA1B8',
@@ -297,7 +298,18 @@ export default function Sidebar() {
       flexDirection: 'column', 
       background: THEME.sidebarBg,
       color: THEME.textPrimary,
-      borderRight: `1px solid ${THEME.divider}`
+      borderRight: `1px solid ${THEME.divider}`,
+      overflowY: 'auto',
+      '&::-webkit-scrollbar': {
+        width: '6px'
+      },
+      '&::-webkit-scrollbar-thumb': {
+        background: 'rgba(13, 161, 184, 0.2)',
+        borderRadius: '3px'
+      },
+      '&::-webkit-scrollbar-thumb:hover': {
+        background: 'rgba(13, 161, 184, 0.4)'
+      }
     }}>
       <Box sx={{ px: 1, py: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100px', overflow: 'hidden' }}>
         <img src="/qualitylens-logo.png" alt="QualityLens" style={{ width: '100%', maxWidth: '260px', maxHeight: '84px', objectFit: 'contain' }} />
@@ -315,7 +327,8 @@ export default function Sidebar() {
         ))}
       </List>
 
-
+      {/* Global Analysis Monitor */}
+      <GlobalAnalysisMonitor />
     </Box>
   );
 
@@ -337,6 +350,145 @@ export default function Sidebar() {
       >
         {drawerContent}
       </Drawer>
+    </Box>
+  );
+}
+
+// src/components/layout/Sidebar.js - Helper component for global Analysis Monitor
+function GlobalAnalysisMonitor() {
+  const [batches, setBatches] = useState([]);
+  const [open, setOpen] = useState(false);
+  const { role } = useContext(AuthContext);
+
+  useEffect(() => {
+    if (!role) return;
+
+    const fetchBatches = async () => {
+      try {
+        const res = await api.get('/bulk-batches');
+        if (Array.isArray(res.data)) {
+          setBatches(res.data);
+        }
+      } catch (err) {
+        console.warn('Failed to fetch global batches for sidebar', err);
+      }
+    };
+
+    fetchBatches();
+    const interval = setInterval(fetchBatches, 10000); // Poll every 10 seconds
+    return () => clearInterval(interval);
+  }, [role]);
+
+  if (!role) return null;
+
+  const activeBatches = batches.filter(b => ['processing', 'pending', 'stopping'].includes(b.status));
+  const completedBatches = batches.filter(b => ['completed', 'failed'].includes(b.status)).slice(0, 3);
+
+  return (
+    <Box sx={{ px: 2, pb: 2, mt: 'auto' }}>
+      <Divider sx={{ mb: 1.5, borderColor: THEME.divider }} />
+      <ListItemButton 
+        onClick={() => setOpen(!open)}
+        sx={{
+          borderRadius: 1.5,
+          py: 0.6,
+          px: 1.5,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          background: activeBatches.length > 0 ? 'rgba(13, 161, 184, 0.08)' : 'transparent',
+          '&:hover': { background: THEME.sidebarHover }
+        }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Timeline sx={{ fontSize: 16, color: activeBatches.length > 0 ? THEME.primary : THEME.textSecondary }} />
+          <Typography variant="caption" sx={{ fontWeight: 700, color: activeBatches.length > 0 ? THEME.primary : THEME.textPrimary }}>
+            Analysis Monitor {activeBatches.length > 0 && `(${activeBatches.length} Active)`}
+          </Typography>
+        </Box>
+        {activeBatches.length > 0 ? (
+          <Box sx={{
+            width: 8, height: 8, borderRadius: '50%',
+            backgroundColor: '#00C9A7',
+            animation: 'pulse 1.2s infinite alternate',
+            '@keyframes pulse': {
+              'from': { opacity: 0.4, transform: 'scale(0.8)' },
+              'to': { opacity: 1, transform: 'scale(1.2)' }
+            }
+          }} />
+        ) : (
+          open ? <ExpandLess sx={{ fontSize: 16 }} /> : <ExpandMore sx={{ fontSize: 16 }} />
+        )}
+      </ListItemButton>
+
+      <Collapse in={open} timeout="auto" unmountOnExit sx={{ mt: 1 }}>
+        <Box sx={{ 
+          background: 'rgba(255, 255, 255, 0.4)', 
+          borderRadius: 2, 
+          p: 1, 
+          maxHeight: 180, 
+          overflowY: 'auto',
+          border: `1px solid ${THEME.divider}`
+        }}>
+          {/* Active Queue */}
+          {activeBatches.length > 0 && (
+            <Box sx={{ mb: 1.5 }}>
+              <Typography variant="caption" sx={{ fontWeight: 700, color: THEME.primary, display: 'block', mb: 0.5, fontSize: '9px' }}>
+                ANALYSING NOW
+              </Typography>
+              {activeBatches.map(b => {
+                const total = b.total_urls || 0;
+                const processed = (b.processed_urls || 0) + (b.failed_urls || 0);
+                const pct = total > 0 ? Math.round((processed / total) * 100) : 0;
+                return (
+                  <Box key={b.batch_id || b.batchId} sx={{ mb: 1, p: 0.5, borderRadius: 1 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.25 }}>
+                      <Typography variant="caption" sx={{ fontWeight: 600, color: THEME.textPrimary, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: 140, fontSize: '10px' }}>
+                        {b.filename || 'Excel Upload'}
+                      </Typography>
+                      <Typography variant="caption" sx={{ fontWeight: 700, color: THEME.primary, fontSize: '10px' }}>
+                        {pct}% ({processed}/{total})
+                      </Typography>
+                    </Box>
+                    <Box sx={{ width: '100%', height: 4, borderRadius: 2, background: 'rgba(0,0,0,0.06)', overflow: 'hidden' }}>
+                      <Box sx={{ height: '100%', width: `${pct}%`, background: THEME.primary, borderRadius: 2 }} />
+                    </Box>
+                  </Box>
+                );
+              })}
+            </Box>
+          )}
+
+          {/* History */}
+          <Box>
+            <Typography variant="caption" sx={{ fontWeight: 700, color: THEME.textSecondary, display: 'block', mb: 0.5, fontSize: '9px' }}>
+              ANALYSED BEFORE
+            </Typography>
+            {completedBatches.length === 0 ? (
+              <Typography variant="caption" sx={{ color: THEME.textSecondary, fontStyle: 'italic', display: 'block', fontSize: '9px' }}>
+                No completed uploads
+              </Typography>
+            ) : completedBatches.map(b => (
+              <Box key={b.batch_id || b.batchId} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5, p: 0.5 }}>
+                <Typography variant="caption" sx={{ color: THEME.textPrimary, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: 130, fontSize: '9.5px' }}>
+                  {b.filename || 'Excel Upload'}
+                </Typography>
+                <Typography 
+                  variant="caption" 
+                  sx={{ 
+                    fontWeight: 700, 
+                    color: b.status === 'completed' ? '#00C9A7' : '#D91B82', 
+                    fontSize: '9.5px',
+                    textTransform: 'uppercase'
+                  }}
+                >
+                  {b.status}
+                </Typography>
+              </Box>
+            ))}
+          </Box>
+        </Box>
+      </Collapse>
     </Box>
   );
 }
