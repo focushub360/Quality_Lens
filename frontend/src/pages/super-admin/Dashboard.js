@@ -668,6 +668,7 @@ const TopDetectedIssues = ({ allResults = [] }) => {
 
 // ─── Enhanced Service Advisor Section ──────────────────────────────────────
 const EnhancedServiceAdvisorSection = ({ allResults = [], selectedFilterDealer = 'all' }) => {
+  const [minUploadsFilter, setMinUploadsFilter] = React.useState(0);
   const advisorMap = new Map();
 
   const filtered = selectedFilterDealer === 'all'
@@ -692,9 +693,11 @@ const EnhancedServiceAdvisorSection = ({ allResults = [], selectedFilterDealer =
     const avgAudio = a.audioScores.length > 0 ? a.audioScores.reduce((s, v) => s + v, 0) / a.audioScores.length : 0;
     const avgOverall = a.overallScores.length > 0 ? a.overallScores.reduce((s, v) => s + v, 0) / a.overallScores.length : 0;
     return { ...a, avgVideo, avgAudio, avgOverall, totalVideos: a.results.length, flags: computeAdvisorFlags(a.results) };
-  }).sort((a, b) => b.avgOverall - a.avgOverall).slice(0, 8);
+  }).filter(a => a.totalVideos >= minUploadsFilter)
+    .sort((a, b) => b.avgOverall - a.avgOverall)
+    .slice(0, 8);
 
-  if (advisors.length === 0) return null;
+  if (advisors.length === 0 && minUploadsFilter === 0) return null;
 
   const getScoreColor = (score) => score >= 7 ? '#16a34a' : score >= 5 ? '#f59e0b' : '#ef4444';
   const getScoreBg = (score) => score >= 7 ? '#f0fdf4' : score >= 5 ? '#fffbeb' : '#fef2f2';
@@ -703,80 +706,114 @@ const EnhancedServiceAdvisorSection = ({ allResults = [], selectedFilterDealer =
   return (
     <Card sx={{ background: THEME.surfaceElevated, border: `1px solid ${THEME.border}`, borderRadius: 3, boxShadow: THEME.shadowSm, mb: 3 }}>
       <CardContent sx={{ p: 3 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-          <EmojiEvents sx={{ color: '#f59e0b', mr: 1.5, fontSize: 24 }} />
-          <Typography variant="h6" sx={{ color: THEME.textPrimary, fontWeight: 700 }}>
-            Top Service Advisors
-          </Typography>
-          <Chip label={`${advisors.length} advisors`} size="small" sx={{ ml: 'auto', fontWeight: 600, background: THEME.surface, color: THEME.textSecondary }} />
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center', mb: 3 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <EmojiEvents sx={{ color: '#f59e0b', mr: 1.5, fontSize: 24 }} />
+            <Typography variant="h6" sx={{ color: THEME.textPrimary, fontWeight: 700 }}>
+              Top Service Advisors
+            </Typography>
+          </Box>
+          <Box sx={{ ml: 'auto', display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <TextField
+              select
+              size="small"
+              value={minUploadsFilter}
+              onChange={(e) => setMinUploadsFilter(Number(e.target.value))}
+              sx={{
+                minWidth: 140,
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: 2,
+                  height: 32,
+                  fontSize: '0.8rem',
+                  background: THEME.surface,
+                }
+              }}
+              label=""
+            >
+              <MenuItem value={0}>All Uploads</MenuItem>
+              <MenuItem value={5}>Min 5 uploads</MenuItem>
+              <MenuItem value={10}>Min 10 uploads</MenuItem>
+              <MenuItem value={20}>Min 20 uploads</MenuItem>
+            </TextField>
+            <Chip label={`${advisors.length} advisors`} size="small" sx={{ fontWeight: 600, background: THEME.surface, color: THEME.textSecondary }} />
+          </Box>
         </Box>
-        <Grid container spacing={2}>
-          {advisors.map((advisor, idx) => (
-            <Grid item xs={12} sm={6} lg={3} key={advisor.name}>
-              <Box sx={{
-                background: THEME.surface, borderRadius: 2.5, p: 2,
-                border: `1px solid ${idx < 3 ? '#f59e0b40' : THEME.border}`,
-                transition: 'all 0.2s', height: '100%',
-                '&:hover': { boxShadow: '0 4px 20px rgba(0,0,0,0.10)', transform: 'translateY(-2px)' }
-              }}>
-                {/* Header */}
-                <Box sx={{ display: 'flex', alignItems: 'flex-start', mb: 1.5 }}>
-                  <Box sx={{
-                    width: 32, height: 32, borderRadius: '50%', mr: 1.5, flexShrink: 0,
-                    background: idx < 3 ? 'linear-gradient(135deg, #f59e0b, #fbbf24)' : THEME.border,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: idx < 3 ? '16px' : '12px', fontWeight: 700, color: idx < 3 ? '#fff' : THEME.textSecondary
-                  }}>
-                    {idx < 3 ? medals[idx] : idx + 1}
-                  </Box>
-                  <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: THEME.textPrimary, lineHeight: 1.2, mb: 0.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {advisor.name}
-                    </Typography>
-                    <Typography variant="caption" sx={{ color: THEME.textTertiary, fontWeight: 500 }}>
-                      {advisor.totalVideos} video{advisor.totalVideos !== 1 ? 's' : ''}
-                    </Typography>
-                  </Box>
-                  <Box sx={{ background: getScoreBg(advisor.avgOverall), borderRadius: 1.5, px: 1, py: 0.5, textAlign: 'center', flexShrink: 0, ml: 1 }}>
-                    <Typography variant="caption" sx={{ fontWeight: 800, color: getScoreColor(advisor.avgOverall), display: 'block', lineHeight: 1, fontSize: '14px' }}>
-                      {advisor.avgOverall.toFixed(1)}
-                    </Typography>
-                    <Typography variant="caption" sx={{ color: THEME.textTertiary, fontSize: '9px', fontWeight: 600 }}>OVERALL</Typography>
-                  </Box>
-                </Box>
-
-                {/* Score bars */}
-                <Box sx={{ mb: 1.5 }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.75 }}>
-                    <Typography variant="caption" sx={{ color: THEME.textSecondary, minWidth: 42, fontWeight: 500, fontSize: '11px' }}>Video</Typography>
-                    <Box sx={{ flex: 1, height: 6, borderRadius: 3, background: THEME.borderLight, mx: 1, overflow: 'hidden' }}>
-                      <Box sx={{ height: '100%', width: `${(advisor.avgVideo / 10) * 100}%`, background: '#0ea5e9', borderRadius: 3, transition: 'width 0.8s ease' }} />
+        {advisors.length === 0 ? (
+          <Typography variant="body2" sx={{ color: THEME.textTertiary, textAlign: 'center', py: 4 }}>
+            No service advisors found with at least {minUploadsFilter} uploads.
+          </Typography>
+        ) : (
+          <Grid container spacing={2}>
+            {advisors.map((advisor, idx) => (
+              <Grid item xs={12} sm={6} lg={3} key={advisor.name} sx={{ display: 'flex' }}>
+                <Box sx={{
+                  background: THEME.surface, borderRadius: 2.5, p: 2,
+                  border: `1px solid ${idx < 3 ? '#f59e0b40' : THEME.border}`,
+                  transition: 'all 0.2s', width: '100%',
+                  display: 'flex', flexDirection: 'column',
+                  justifyContent: 'space-between',
+                  '&:hover': { boxShadow: '0 4px 20px rgba(0,0,0,0.10)', transform: 'translateY(-2px)' }
+                }}>
+                  {/* Top content wrapper */}
+                  <Box>
+                    {/* Header */}
+                    <Box sx={{ display: 'flex', alignItems: 'flex-start', mb: 1.5 }}>
+                      <Box sx={{
+                        width: 32, height: 32, borderRadius: '50%', mr: 1.5, flexShrink: 0,
+                        background: idx < 3 ? 'linear-gradient(135deg, #f59e0b, #fbbf24)' : THEME.border,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: idx < 3 ? '16px' : '12px', fontWeight: 700, color: idx < 3 ? '#fff' : THEME.textSecondary
+                      }}>
+                        {idx < 3 ? medals[idx] : idx + 1}
+                      </Box>
+                      <Box sx={{ flex: 1, minWidth: 0 }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: THEME.textPrimary, lineHeight: 1.2, mb: 0.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {advisor.name}
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: THEME.textTertiary, fontWeight: 500 }}>
+                          {advisor.totalVideos} video{advisor.totalVideos !== 1 ? 's' : ''}
+                        </Typography>
+                      </Box>
+                      <Box sx={{ background: getScoreBg(advisor.avgOverall), borderRadius: 1.5, px: 1, py: 0.5, textAlign: 'center', flexShrink: 0, ml: 1 }}>
+                        <Typography variant="caption" sx={{ fontWeight: 800, color: getScoreColor(advisor.avgOverall), display: 'block', lineHeight: 1, fontSize: '14px' }}>
+                          {advisor.avgOverall.toFixed(1)}
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: THEME.textTertiary, fontSize: '9px', fontWeight: 600 }}>OVERALL</Typography>
+                      </Box>
                     </Box>
-                    <Typography variant="caption" sx={{ fontWeight: 700, color: '#0ea5e9', minWidth: 28, textAlign: 'right', fontSize: '11px' }}>{advisor.avgVideo.toFixed(1)}</Typography>
-                  </Box>
-                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                    <Typography variant="caption" sx={{ color: THEME.textSecondary, minWidth: 42, fontWeight: 500, fontSize: '11px' }}>Audio</Typography>
-                    <Box sx={{ flex: 1, height: 6, borderRadius: 3, background: THEME.borderLight, mx: 1, overflow: 'hidden' }}>
-                      <Box sx={{ height: '100%', width: `${(advisor.avgAudio / 10) * 100}%`, background: '#10b981', borderRadius: 3, transition: 'width 0.8s ease' }} />
-                    </Box>
-                    <Typography variant="caption" sx={{ fontWeight: 700, color: '#10b981', minWidth: 28, textAlign: 'right', fontSize: '11px' }}>{advisor.avgAudio.toFixed(1)}</Typography>
-                  </Box>
-                </Box>
 
-                {/* Feedback flags */}
-                {advisor.flags.length > 0 && (
-                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                    {/* Score bars */}
+                    <Box sx={{ mb: 2 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.75 }}>
+                        <Typography variant="caption" sx={{ color: THEME.textSecondary, minWidth: 42, fontWeight: 500, fontSize: '11px' }}>Video</Typography>
+                        <Box sx={{ flex: 1, height: 6, borderRadius: 3, background: THEME.borderLight, mx: 1, overflow: 'hidden' }}>
+                          <Box sx={{ height: '100%', width: `${(advisor.avgVideo / 10) * 100}%`, background: '#0ea5e9', borderRadius: 3, transition: 'width 0.8s ease' }} />
+                        </Box>
+                        <Typography variant="caption" sx={{ fontWeight: 700, color: '#0ea5e9', minWidth: 28, textAlign: 'right', fontSize: '11px' }}>{advisor.avgVideo.toFixed(1)}</Typography>
+                      </Box>
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        <Typography variant="caption" sx={{ color: THEME.textSecondary, minWidth: 42, fontWeight: 500, fontSize: '11px' }}>Audio</Typography>
+                        <Box sx={{ flex: 1, height: 6, borderRadius: 3, background: THEME.borderLight, mx: 1, overflow: 'hidden' }}>
+                          <Box sx={{ height: '100%', width: `${(advisor.avgAudio / 10) * 100}%`, background: '#10b981', borderRadius: 3, transition: 'width 0.8s ease' }} />
+                        </Box>
+                        <Typography variant="caption" sx={{ fontWeight: 700, color: '#10b981', minWidth: 28, textAlign: 'right', fontSize: '11px' }}>{advisor.avgAudio.toFixed(1)}</Typography>
+                      </Box>
+                    </Box>
+                  </Box>
+
+                  {/* Feedback flags container (Always at bottom with fixed placeholder height) */}
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, minHeight: 24, mt: 1, alignItems: 'center' }}>
                     {advisor.flags.map(f => (
                       <Box key={f.label} sx={{ background: f.bg, border: `1px solid ${f.color}30`, borderRadius: 1, px: 0.75, py: 0.25 }}>
                         <Typography variant="caption" sx={{ color: f.color, fontWeight: 600, fontSize: '10px', whiteSpace: 'nowrap' }}>{f.label}</Typography>
                       </Box>
                     ))}
                   </Box>
-                )}
-              </Box>
-            </Grid>
-          ))}
-        </Grid>
+                </Box>
+              </Grid>
+            ))}
+          </Grid>
+        )}
       </CardContent>
     </Card>
   );
