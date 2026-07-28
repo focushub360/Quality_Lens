@@ -3116,6 +3116,7 @@ async def get_dealer_dashboard_overview(
     # Dealer Admin, Branch Admin, and Dealer User all see only their own uploads.
     dealer_status_match["submitted_by_user_id"] = str(current_user.id)
 
+    start_date = None
     if timeRange and timeRange.lower() != "all":
         now = dt.utcnow()
         if timeRange.lower() == "today":
@@ -3130,8 +3131,6 @@ async def get_dealer_dashboard_overview(
             start_date = now - timedelta(days=365)
         else:
             start_date = now - timedelta(days=7)
-        if start_date:
-            dealer_status_match["created_at"] = {"$gte": start_date}
 
     projection = {
         "overall_quality_score": 1,
@@ -3140,26 +3139,87 @@ async def get_dealer_dashboard_overview(
         "overall_quality_label": 1,
         "video_quality_label": 1,
         "audio_clarity_level": 1,
-        "citnow_metadata.service_advisor": 1,
+        "citnow_metadata": 1,
+        "citnow_vehicle": 1,
+        "citnow_service_advisor": 1,
+        "vehicle_make": 1,
+        "vp_display_name": 1,
+        "submitted_by_user_id": 1,
+        "status": 1,
         "created_at": 1,
         "input_source": 1
     }
 
+    # Fetch ALL results to show "All-over" data in Analytics & Insights charts / lists
     results = await results_collection.find(dealer_status_match, projection).to_list(None)
 
-    total_videos = len(results)
+    # Fetch all user emails to map advisor names if missing in metadata
+    users_cursor = get_collection("users").find({}, {"email": 1})
+    user_emails = {}
+    async for u in users_cursor:
+        user_emails[str(u["_id"])] = u.get("email", "")
+
+    # Calculate Overview cards (Only these change based on timeRange selection)
+    overview_results = results
+    if start_date:
+        overview_results = []
+        for r in results:
+            created_at = r.get("created_at")
+            if isinstance(created_at, str):
+                try:
+                    created_at = dt.fromisoformat(created_at.replace("Z", "+00:00"))
+                except ValueError:
+                    created_at = dt.min
+            if isinstance(created_at, dt):
+                created_at = created_at.replace(tzinfo=None)
+            
+            if created_at and created_at >= start_date:
+                overview_results.append(r)
+
+    total_videos = len(overview_results)
     
-    valid_scores = [r["overall_quality_score"] for r in results if r.get("overall_quality_score") is not None]
+    valid_scores = [r["overall_quality_score"] for r in overview_results if r.get("overall_quality_score") is not None]
     avg_overall_quality = sum(valid_scores) / len(valid_scores) if valid_scores else 0.0
 
-    quality_distribution = {}
     low_quality_videos = 0
     low_quality_audio = 0
+    for r in overview_results:
+        v_label = r.get("video_quality_label")
+        if v_label in ["Poor", "Very Poor", "Analysis Failed", "Error"]:
+            low_quality_videos += 1
+            
+        a_label = r.get("audio_clarity_level")
+        if a_label in ["Poor", "Very Poor", "Unusable", "Analysis Failed", "No Audio"]:
+            low_quality_audio += 1
 
+    # Calculate Analytics & Insights (Charts, breakdown, advisor, list) - ALL OVER data
+    quality_distribution = {}
     advisor_map = {}
     daily_map = {}
 
     for r in results:
+        # Resolve vehicle name fallback
+        vehicle = r.get("citnow_vehicle") or r.get("citnow_metadata", {}).get("vehicle")
+        if not vehicle or vehicle == "NA" or vehicle == "Unknown Vehicle":
+            make = r.get("vehicle_make")
+            vp = r.get("vp_display_name")
+            if make and make != "NA":
+                vehicle = f"{make} ({vp})" if vp and vp != "NA" else make
+            else:
+                vehicle = "BMW"
+        r["citnow_vehicle"] = vehicle
+
+        # Resolve advisor name fallback
+        advisor = r.get("citnow_service_advisor") or r.get("citnow_metadata", {}).get("service_advisor")
+        if not advisor or advisor == "NA" or advisor == "Unknown Advisor":
+            sub_id = str(r.get("submitted_by_user_id", ""))
+            user_email = user_emails.get(sub_id)
+            if user_email:
+                advisor = user_email.split("@")[0].replace(".", " ").replace("_", " ").title()
+            else:
+                advisor = "Unknown Advisor"
+        r["citnow_service_advisor"] = advisor
+
         # Normalize created_at
         created_at = r.get("created_at")
         if isinstance(created_at, str):
@@ -3175,25 +3235,8 @@ async def get_dealer_dashboard_overview(
         label = r.get("overall_quality_label")
         if label:
             quality_distribution[label] = quality_distribution.get(label, 0) + 1
-        
-        # Low quality
-        v_label = r.get("video_quality_label")
-        if v_label in ["Poor", "Very Poor", "Analysis Failed", "Error"]:
-            low_quality_videos += 1
-            
-        a_label = r.get("audio_clarity_level")
-        if a_label in ["Poor", "Very Poor", "Unusable", "Analysis Failed", "No Audio"]:
-            low_quality_audio += 1
 
         # Service Advisors
-        meta = r.get("citnow_metadata", {})
-        if isinstance(meta, dict):
-            advisor = meta.get("service_advisor")
-            if not advisor:
-                advisor = "Unknown Advisor"
-        else:
-            advisor = "Unknown Advisor"
-            
         if advisor not in advisor_map:
             advisor_map[advisor] = {"videos": 0, "scores": [], "v_scores": [], "a_scores": []}
             
