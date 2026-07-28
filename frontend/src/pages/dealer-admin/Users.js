@@ -191,7 +191,6 @@ export default function DealerUsers() {
 
   const validateForm = () => {
     if (!form.username.trim()) return 'Name is required';
-    if (!form.email.trim()) return 'Email is required';
     if (viewState === 'create' && (!form.password || form.password.length < 6)) return 'Password must be at least 6 characters';
     return null;
   };
