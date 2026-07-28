@@ -3168,6 +3168,8 @@ async def get_dealer_dashboard_overview(
                 created_at = dt.fromisoformat(created_at.replace("Z", "+00:00"))
             except ValueError:
                 created_at = dt.min
+        if isinstance(created_at, dt):
+            created_at = created_at.replace(tzinfo=None)
         r["_parsed_date"] = created_at if isinstance(created_at, dt) else dt.min
 
         # Quality distribution
