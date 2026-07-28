@@ -315,6 +315,8 @@ class RecentAnalysis(BaseModel):
     created_at: dt
     status: Optional[str] = "completed"
     error_message: Optional[str] = None
+    citnow_vehicle: Optional[str] = "Unknown Vehicle"
+    citnow_service_advisor: Optional[str] = "Unknown Advisor"
 
 class ServiceAdvisorPerformance(BaseModel):
     name: str

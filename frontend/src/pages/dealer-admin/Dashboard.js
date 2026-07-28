@@ -620,7 +620,16 @@ export default function DealerAdminDashboard() {
         dailyPerformance: data.dailyPerformance || [],
         serviceAdvisors: data.serviceAdvisors || [],
         qualityBreakdown: qualityBreakdown,
-        recentVideos: data.recent_analyses || [],
+        recentVideos: (data.recent_analyses || []).map((video, index) => ({
+          id: video._id || video.id || `video-${index}`,
+          vehicle: video.citnow_vehicle || video.vehicle || 'Unknown Vehicle',
+          advisor: video.citnow_service_advisor || video.advisor || 'Unknown Advisor',
+          score: typeof video.overall_quality_score === 'number'
+            ? video.overall_quality_score.toFixed(1)
+            : (typeof video.score === 'number' ? video.score.toFixed(1) : (video.score || '0.0')),
+          date: video.created_at ? new Date(video.created_at).toLocaleDateString() : (video.date || 'N/A'),
+          status: video.status === 'completed' ? 'Completed' : (video.status || 'In Progress')
+        })),
         performanceTrend: data.serviceAdvisors || []
       });
 
