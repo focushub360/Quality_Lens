@@ -3942,53 +3942,8 @@ export default function DealerManagement() {
                     </Typography>
 
                     <Grid container spacing={3}>
-                      {/* Transcription */}
-                      <Grid item xs={12} md={4}>
-                        <Card sx={{
-                          background: THEME.surfaceElevated,
-                          border: `1px solid ${THEME.border}`,
-                          borderRadius: 3,
-                          boxShadow: THEME.shadowSm,
-                          height: '100%'
-                        }}>
-                          <CardContent sx={{ p: 3, height: '100%', display: 'flex', flexDirection: 'column' }}>
-                            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                              <Description sx={{
-                                color: THEME.primary,
-                                mr: 2,
-                                fontSize: 20
-                              }} />
-                              <Typography variant="h6" sx={{
-                                color: THEME.textPrimary,
-                                fontWeight: 600
-                              }}>
-                                Transcription
-                              </Typography>
-                            </Box>
-                            <Paper sx={{
-                              p: 2,
-                              background: THEME.surface,
-                              border: `1px solid ${THEME.borderLight}`,
-                              borderRadius: 2,
-                              flex: 1,
-                              overflow: 'auto',
-                              maxHeight: 300
-                            }}>
-                              <Typography variant="body2" sx={{
-                                color: THEME.textPrimary,
-                                whiteSpace: 'pre-wrap',
-                                lineHeight: 1.6,
-                                fontSize: '0.875rem'
-                              }}>
-                                {selectedResult.transcription?.text || 'No transcription available'}
-                              </Typography>
-                            </Paper>
-                          </CardContent>
-                        </Card>
-                      </Grid>
-
                       {/* Summary */}
-                      <Grid item xs={12} md={4}>
+                      <Grid item xs={12} md={6}>
                         <Card sx={{
                           background: THEME.surfaceElevated,
                           border: `1px solid ${THEME.border}`,
@@ -4033,7 +3988,7 @@ export default function DealerManagement() {
                       </Grid>
 
                       {/* Translation */}
-                      <Grid item xs={12} md={4}>
+                      <Grid item xs={12} md={6}>
                         <Card sx={{
                           background: THEME.surfaceElevated,
                           border: `1px solid ${THEME.border}`,

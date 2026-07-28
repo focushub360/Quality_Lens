@@ -688,30 +688,7 @@ export default function NewAnalysis() {
                     );
                   })()}
 
-                  {/* Transcription */}
-                  {(() => {
-                    const GARBAGE = ['the', 'a', ',', '.', '!', '?', '...', ',.']
-                    const GARBAGE_PHRASES = ['no clear speech detected', 'transcription failed', 'translation failed', 'summarization failed', 'no meaningful summary']
-                    const txt = resultData.transcription?.text
-                    const isValid = txt &&
-                      txt.trim().length >= 10 &&
-                      !GARBAGE.includes(txt.trim().toLowerCase()) &&
-                      !GARBAGE_PHRASES.some(p => txt.trim().toLowerCase().includes(p))
-                    return isValid ? (
-                      <Paper elevation={0} sx={{
-                        p: 2.5, mb: 2, borderRadius: 2,
-                        border: `1px solid ${THEME.border}`,
-                        background: THEME.surface
-                      }}>
-                        <Typography variant="subtitle2" fontWeight="700" sx={{ color: THEME.textPrimary, mb: 1 }}>
-                          📝 Transcription
-                        </Typography>
-                        <Typography variant="body2" sx={{ color: THEME.textSecondary, lineHeight: 1.7 }}>
-                          {txt}
-                        </Typography>
-                      </Paper>
-                    ) : null
-                  })()}
+
 
                   {/* Summary */}
                   {(() => {
