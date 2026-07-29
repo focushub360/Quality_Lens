@@ -1,5 +1,6 @@
 // src/components/layout/Sidebar.js
 import React, { useContext, useState, useEffect } from 'react';
+// Trigger AWS Amplify build for newly connected quality_lens repository
 import {
   Box,
   Drawer,
