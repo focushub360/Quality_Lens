@@ -1,10 +1,7 @@
-import axios from 'axios';
-
 // Primary domain: https://qualitylens.focusengineeringapp.com
-// Backend API hosted on EC2 (qualitylensfocustech.duckdns.org / EC2 proxy)
-const PRIMARY_DOMAIN = 'https://qualitylens.focusengineeringapp.com';
-const BACKEND_URL = 'https://qualitylensfocustech.duckdns.org';
-const API_BASE = process.env.REACT_APP_API_URL || BACKEND_URL;
+// Backend API hosted on EC2 (i-0f103a6f32f8d191c / 3.110.138.205)
+const EC2_BACKEND_URL = 'http://ec2-3-110-138-205.ap-south-1.compute.amazonaws.com:8000';
+const API_BASE = process.env.REACT_APP_API_URL || '';
 
 const api = axios.create({ baseURL: API_BASE });
 

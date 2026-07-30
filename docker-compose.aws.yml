@@ -8,8 +8,7 @@ services:
     image: citnow-backend:latest
     container_name: citnow_backend
     ports:
-      # Removed public exposure on port 8000 to keep the backend secure behind Caddy proxy
-      - "127.0.0.1:8000:8000"
+      - "8000:8000"
     environment:
       - PORT=8000
       - LOG_LEVEL=INFO
@@ -30,7 +29,7 @@ services:
       - SUPER_ADMIN_USERNAME=admin
       - SUPER_ADMIN_PASSWORD=admin123
       - SUPER_ADMIN_EMAIL=admin@gmail.com
-      - FRONTEND_URLS=http://localhost:3000,https://videoproject-frontend.pages.dev,http://3.110.138.205:8000,http://3.110.138.205,http://qualitylensfocustech.duckdns.org:8000,http://qualitylensfocustech.duckdns.org,https://qualitylensfocustech.duckdns.org,https://main.d26c7jks4sa4os.amplifyapp.com,https://qualitylens.focusengineering.in,https://qualitylens.focusengineeringapp.com
+      - FRONTEND_URLS=https://qualitylens.focusengineeringapp.com,http://3.110.138.205:8000,http://3.110.138.205,http://ec2-3-110-138-205.ap-south-1.compute.amazonaws.com:8000,http://ec2-3-110-138-205.ap-south-1.compute.amazonaws.com,http://localhost:3000,https://main.d26c7jks4sa4os.amplifyapp.com,https://qualitylens.focusengineering.in
       # ML settings
       - WHISPER_MODEL=base
       # CPU Resource Optimization (T3a.large: 2 vCPU, 8GB RAM)
