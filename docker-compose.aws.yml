@@ -34,9 +34,10 @@ services:
       # ML settings
       - WHISPER_MODEL=base
       # CPU Resource Optimization (T3a.large: 2 vCPU, 8GB RAM)
-      - MAX_WORKERS=2
-      - CONCURRENCY_LIMIT=1
-      - PROCESS_TIMEOUT_SECONDS=900
+      - MAX_WORKERS=4
+      - CONCURRENCY_LIMIT=2
+      - PROCESS_TIMEOUT_SECONDS=240
+      - VIDEO_HARD_DEADLINE_SECONDS=240
     depends_on:
       - redis
     restart: always

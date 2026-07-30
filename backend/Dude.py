@@ -1777,11 +1777,21 @@ class UnifiedMediaAnalyzer:
             return text
 
     def process_video(self, video_input, transcription_language=None, target_language_short=None):
+        import time as _time
+        _HARD_DEADLINE_SECONDS = int(os.getenv("VIDEO_HARD_DEADLINE_SECONDS", "240"))  # 4 min hard deadline
+        _deadline = _time.monotonic() + _HARD_DEADLINE_SECONDS
+
+        def _check_deadline(stage=""):
+            elapsed = _time.monotonic() - (_deadline - _HARD_DEADLINE_SECONDS)
+            if _time.monotonic() > _deadline:
+                raise TimeoutError(f"Video processing exceeded {_HARD_DEADLINE_SECONDS}s hard deadline at stage: {stage} (elapsed: {elapsed:.0f}s)")
+
         requested_target_language = target_language_short if target_language_short else self.target_language
 
         print(f"\n🌍 TARGET LANGUAGE FOR THIS JOB: {requested_target_language.upper()}")
         print("\n" + "=" * 60)
         print("🚀 ENHANCED UNIFIED VIDEO ANALYSIS PIPELINE")
+        print(f"⏱️ Hard deadline: {_HARD_DEADLINE_SECONDS}s")
         print("=" * 60)
         results = {
             "input_source": video_input,
@@ -1792,6 +1802,7 @@ class UnifiedMediaAnalyzer:
         }
         temp_files_to_clean = []
         try:
+            _check_deadline("init")
             if isinstance(video_input, str) and "citnow.com" in video_input:
                 print("\n📊 EXTRACTING CITNOW METADATA")
                 print("-" * 40)
@@ -1804,6 +1815,7 @@ class UnifiedMediaAnalyzer:
                 print(f"📧 Email: {metadata.get('email', 'Not found')}")
                 print(f"📞 Phone: {metadata.get('phone', 'Not found')}")
 
+                _check_deadline("metadata_extraction")
                 print("\n📥 DOWNLOADING VIDEO")
                 print("-" * 40)
                 video_path = self.download_citnow_video(video_input)
@@ -1816,6 +1828,7 @@ class UnifiedMediaAnalyzer:
             if not os.path.exists(video_path):
                 raise ValueError(f"Video file not found: {video_path}")
 
+            _check_deadline("download_complete")
             print("\n🔊 EXTRACTING AUDIO")
             print("-" * 40)
 
@@ -1828,8 +1841,13 @@ class UnifiedMediaAnalyzer:
 
             results["processing_steps"].append("audio_extraction")
 
+            _check_deadline("audio_extraction")
             # --- START PARALLEL AUDIO/VIDEO ANALYSIS ---
             import concurrent.futures
+            
+            # Calculate remaining time for inner futures
+            _remaining = max(30, _deadline - _time.monotonic())
+            _inner_timeout = min(180, _remaining - 10)  # leave 10s headroom
             
             def run_video_analysis():
                 return self.analyze_video_quality(video_path)
@@ -1854,14 +1872,32 @@ class UnifiedMediaAnalyzer:
                 
                 return audio_res, transcription_res, english_res
 
-            print("\n⚡ STARTING PARALLEL AUDIO AND VIDEO ANALYSIS PIPELINE...")
+            print(f"\n⚡ STARTING PARALLEL AUDIO AND VIDEO ANALYSIS (timeout: {_inner_timeout:.0f}s)...")
             with concurrent.futures.ThreadPoolExecutor(max_workers=2) as parallel_executor:
                 video_future = parallel_executor.submit(run_video_analysis)
                 audio_future = parallel_executor.submit(run_audio_pipeline)
                 
-                video_analysis = video_future.result()
-                audio_analysis, transcription, native_english_transcription = audio_future.result()
+                try:
+                    video_analysis = video_future.result(timeout=_inner_timeout)
+                except concurrent.futures.TimeoutError:
+                    print("⏱️ Video analysis timed out — using OpenCV fallback")
+                    video_future.cancel()
+                    video_analysis = self._analyze_video_with_opencv(video_path) if os.path.exists(video_path) else {
+                        "quality_score": 5.0, "quality_label": "Fair", "issues": ["Analysis timed out"],
+                        "shake_level": "Unknown", "resolution_quality": "Unknown",
+                        "detailed_analysis": {}, "component_scores": {}
+                    }
+                
+                try:
+                    audio_analysis, transcription, native_english_transcription = audio_future.result(timeout=_inner_timeout)
+                except concurrent.futures.TimeoutError:
+                    print("⏱️ Audio pipeline timed out — using defaults")
+                    audio_future.cancel()
+                    audio_analysis = {"prediction": "Unknown", "score": 5.0, "clarity_level": "Unknown"}
+                    transcription = ""
+                    native_english_transcription = ""
             
+            _check_deadline("parallel_analysis")
             # --- PROCESS VIDEO ANALYSIS RESULTS ---
             star_rating = results.get("citnow_metadata", {}).get("star_rating")
             if star_rating is not None:
@@ -1908,6 +1944,7 @@ class UnifiedMediaAnalyzer:
             results["processing_steps"].append("overall_quality_assessment")
             print(f"Overall Quality Score: {overall_quality['overall_label']} ({overall_quality['overall_score']:.1f}/10)")
 
+            _check_deadline("before_translation")
             if not is_valid_transcription:
                 # No usable speech — generate visual fallback summary, and use video quality report as English translation
                 summary_text = self.generate_visual_only_summary(results)
