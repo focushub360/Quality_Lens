@@ -3113,6 +3113,8 @@ async def get_dealer_dashboard_overview(
     if not target_dealer_id and current_user.role not in ["super_admin"]:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Dealer Admin is not assigned to a dealer.")
 
+    dealer_id_str = target_dealer_id or ""
+
     user_id_suffix = f":{current_user.id}"
     cache_key = f"dashboard:dealer:{target_dealer_id or 'all'}:{current_user.role}{user_id_suffix}:{timeRange or 'week'}"
     
