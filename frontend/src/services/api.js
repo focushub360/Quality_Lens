@@ -1,5 +1,7 @@
+import axios from 'axios';
+
 // Primary domain: https://qualitylens.focusengineeringapp.com
-// Backend API hosted on EC2 (i-0f103a6f32f8d191c / 3.110.138.205)
+// Backend API proxied by AWS Amplify rewrite rules
 const EC2_BACKEND_URL = 'http://ec2-3-110-138-205.ap-south-1.compute.amazonaws.com:8000';
 const API_BASE = process.env.REACT_APP_API_URL || '';
 
