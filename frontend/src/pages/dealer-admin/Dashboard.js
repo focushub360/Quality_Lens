@@ -67,7 +67,7 @@ export default function DealerAdminDashboard() {
   });
   const [allResults, setAllResults] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [timeRange, setTimeRange] = useState('week');
+  const [timeRange, setTimeRange] = useState('all');
   const [refreshCounter, setRefreshCounter] = useState(0);
   const [error, setError] = useState(null);
   const { user: authUser } = useContext(AuthContext);
@@ -1096,7 +1096,7 @@ export default function DealerAdminDashboard() {
               boxShadow: '0 8px 32px rgba(0,0,0,0.04)',
               gap: 0.5
             }}>
-              {['today', 'week', 'month', 'quarter'].map((range) => {
+              {['today', 'week', 'month', 'quarter', 'all'].map((range) => {
                 const isActive = timeRange === range;
                 return (
                   <Button
