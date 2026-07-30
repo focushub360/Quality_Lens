@@ -2550,10 +2550,18 @@ async def list_all_batches(limit: int = 50, status_filter: Optional[str] = None,
         if status_filter not in [s.value for s in BatchStatus]:
             raise HTTPException(status_code=400, detail=f"Invalid status_filter. Must be one of: {[s.value for s in BatchStatus]}.")
         query["status"] = status_filter
-    
-    # Authorization: Filter batches by dealer_id for Dealer Admins & Users. Super Admins see all.
-    if current_user.role != "super_admin":
-        query["submitted_by_user_id"] = str(current_user.id)
+
+    # Authorization: Super Admin sees all; Dealer Admin sees all batches in their dealership;
+    # all other roles (branch_admin, dealer_user) see only their own submitted batches.
+    if current_user.role == "super_admin":
+        pass  # No additional filter — see everything
+    elif current_user.role == "dealer_admin":
+        if current_user.dealer_id:
+            query["dealer_id"] = current_user.dealer_id  # All batches for the dealership
+        else:
+            query["submitted_by_user_id"] = str(current_user.id)  # Fallback if no dealer_id
+    else:
+        query["submitted_by_user_id"] = str(current_user.id)  # dealer_user / branch_admin see own
     
     batches_cursor = batch_collection.find(query).sort("created_at", -1)
     batches = await batches_cursor.to_list(min(limit, 100))
@@ -2984,23 +2992,8 @@ async def get_result(result_id: str, current_user: UserInDB = Depends(get_curren
 
     return clean_results(result)
 
-@app.delete("/results/{result_id}")
-async def delete_result(result_id: str, current_user: UserInDB = Depends(get_current_user)):
-    if not ObjectId.is_valid(result_id):
-        raise HTTPException(status_code=400, detail="Invalid Result ID format.")
-
-    result = await results_collection.find_one({"_id": ObjectId(result_id)})
-    if not result:
-        raise HTTPException(status_code=404, detail="Result not found.")
-
-    if current_user.role in ("dealer_admin", "dealer_user") and current_user.dealer_id != result.get("dealer_id"):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to delete this result.")
-
-    delete_operation = await results_collection.delete_one({"_id": ObjectId(result_id)})
-    if delete_operation.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Result not found for deletion (may have been already deleted).")
-
-    return JSONResponse(status_code=200, content={"success": True, "message": "Result deleted successfully."})
+# NOTE: The DELETE /results/{result_id} handler lives at L909 above with full RBAC.
+# The duplicate definition that was here has been removed to avoid confusion.
 
 # -----------------------------
 # Dashboard Endpoints (UPDATED for simplified dealer_id)
@@ -3177,9 +3170,9 @@ async def get_dealer_dashboard_overview(
     results = await results_collection.find(dealer_status_match, projection).to_list(None)
 
     # Fetch all user emails to map advisor names if missing in metadata
-    users_cursor = get_collection("users").find({}, {"email": 1})
+    # Use the async Motor collection (users_collection) — NOT the sync get_collection() from auth.py
     user_emails = {}
-    async for u in users_cursor:
+    async for u in users_collection.find({}, {"email": 1}):
         user_emails[str(u["_id"])] = u.get("email", "")
 
     # Calculate Overview cards (Only these change based on timeRange selection)
@@ -3415,14 +3408,19 @@ async def get_users_by_dealer(
     current_user: UserInDB = Depends(get_current_user)
 ):
     """
-    Get users for a specific dealer_id
-    Super Admin → can view users for any dealer
-    Dealer Admin → can only view users for their own dealer
+    Get users for a specific dealer_id.
+    Super Admin → can view users for any dealer.
+    Dealer Admin → can only view users for their own dealer.
+    All other roles (dealer_user, branch_admin) → forbidden.
     """
-    # Authorization check
+    # Only admins may list users by dealer
+    if current_user.role not in ["super_admin", "dealer_admin"]:
+        raise HTTPException(status_code=403, detail="Not authorized to view dealer users.")
+
+    # Dealer admin is scoped to their own dealership only
     if current_user.role == "dealer_admin" and current_user.dealer_id != dealer_id:
-        raise HTTPException(status_code=403, detail="Not authorized to view users for this dealer")
-    
+        raise HTTPException(status_code=403, detail="Not authorized to view users for this dealer.")
+
     users_cursor = users_collection.find({"dealer_id": dealer_id})
     users_list = await users_cursor.to_list(None)
 
