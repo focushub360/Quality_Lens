@@ -10,6 +10,10 @@ qualitylensfocustech.duckdns.org {
         path /my-analysis-tasks
         path /bulk-analyze
         path /users*
+        path /dealer*
+        path /dealers*
+        path /admin*
+        path /log-deploy*
         path /analyze*
         path /bulk-status*
         path /bulk-cancel*

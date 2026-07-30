@@ -668,6 +668,7 @@ app = FastAPI(title=APP_TITLE, version=APP_VERSION, lifespan=lifespan, default_r
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,  # dynamically loaded from env
+    allow_origin_regex=r"https?://.*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
