@@ -610,6 +610,10 @@ export default function DealerAdminDashboard() {
 
       const qualityBreakdown = Object.entries(data.quality_distribution || {}).map(([name, value]) => ({ name, value }));
 
+      // Populate allResults from recent_analyses so calculateTrends() has data to work with
+      const recentRaw = data.recent_analyses || [];
+      setAllResults(recentRaw);
+
       setDashboardData({
         overview: {
           totalVideos: data.total_videos_analyzed || 0,
@@ -620,7 +624,7 @@ export default function DealerAdminDashboard() {
         dailyPerformance: data.dailyPerformance || [],
         serviceAdvisors: data.serviceAdvisors || [],
         qualityBreakdown: qualityBreakdown,
-        recentVideos: (data.recent_analyses || []).map((video, index) => ({
+        recentVideos: recentRaw.map((video, index) => ({
           id: video._id || video.id || `video-${index}`,
           vehicle: video.citnow_vehicle || video.vehicle || 'Unknown Vehicle',
           advisor: video.citnow_service_advisor || video.advisor || 'Unknown Advisor',
@@ -886,9 +890,19 @@ export default function DealerAdminDashboard() {
   const calculateTrends = () => {
     if (!allResults || allResults.length === 0) {
       return {
-        totalVideosChange: 'No data yet',
+        totalVideosChange: 'Loading...',
         totalVideosChangeType: 'neutral',
-        averageScoreChange: 'No data yet',
+        averageScoreChange: 'Loading...',
+        averageScoreChangeType: 'neutral'
+      };
+    }
+
+    // When 'all' is selected, show a simple summary instead of period comparison
+    if (timeRange === 'all') {
+      return {
+        totalVideosChange: 'All time total',
+        totalVideosChangeType: 'neutral',
+        averageScoreChange: 'All time average',
         averageScoreChangeType: 'neutral'
       };
     }
