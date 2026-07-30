@@ -1,6 +1,12 @@
 import axios from 'axios';
 
-const API_BASE = process.env.REACT_APP_API_URL || 'https://qualitylensfocustech.duckdns.org';
+// Determine backend URL:
+// 1. Use env var if explicitly set (dev / docker)
+// 2. If running on focusengineeringapp.com (Amplify), always point to duckdns backend
+// 3. Otherwise fall back to duckdns
+const BACKEND_URL = 'https://qualitylensfocustech.duckdns.org';
+const API_BASE = process.env.REACT_APP_API_URL || BACKEND_URL;
+
 const api = axios.create({ baseURL: API_BASE });
 
 // Synchronously initialize the default Authorization header if token exists in localStorage
