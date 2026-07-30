@@ -308,15 +308,19 @@ class SuperAdminDashboardOverview(BaseModel):
     last_updated: dt
 
 class RecentAnalysis(BaseModel):
-    id: str = Field(alias="_id")
-    original_url: str = Field(alias="input_source")
+    id: Optional[str] = Field(None, alias="_id")
+    original_url: Optional[str] = Field(None, alias="input_source")
     overall_quality_label: Optional[str] = None
     overall_quality_score: Optional[float] = None
-    created_at: dt
+    created_at: Optional[Any] = None
     status: Optional[str] = "completed"
     error_message: Optional[str] = None
     citnow_vehicle: Optional[str] = "Unknown Vehicle"
     citnow_service_advisor: Optional[str] = "Unknown Advisor"
+
+    class Config:
+        extra = "ignore"
+        populate_by_name = True
 
 class ServiceAdvisorPerformance(BaseModel):
     name: str
@@ -3316,7 +3320,17 @@ async def get_dealer_dashboard_overview(
 
     # Recent videos
     results.sort(key=lambda x: x["_parsed_date"], reverse=True)
-    recent_analyses = [RecentAnalysis(**clean_results(r)) for r in results[:5]]
+    recent_analyses = []
+    for r in results[:5]:
+        try:
+            cleaned = clean_results(r)
+            if "_id" in cleaned:
+                cleaned["id"] = str(cleaned["_id"])
+            if "input_source" in cleaned and "original_url" not in cleaned:
+                cleaned["original_url"] = str(cleaned["input_source"])
+            recent_analyses.append(RecentAnalysis(**cleaned))
+        except Exception as ex:
+            logger.warning(f"Skipping malformed recent analysis item: {ex}")
 
     response = DealerAdminDashboardOverview(
         dealer_id=dealer_id_str,
