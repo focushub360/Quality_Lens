@@ -2796,7 +2796,10 @@ async def get_summary_stats(
     if current_user.role == "super_admin":
         if dealer_id:
             query["dealer_id"] = dealer_id
-    elif current_user.role in ("dealer_admin", "branch_admin", "dealer_user"):
+    elif current_user.role == "dealer_admin":
+        if current_user.dealer_id:
+            query["dealer_id"] = current_user.dealer_id
+    elif current_user.role in ("branch_admin", "dealer_user"):
         if current_user.dealer_id:
             query["dealer_id"] = current_user.dealer_id
         query["submitted_by_user_id"] = str(current_user.id)
@@ -2915,12 +2918,15 @@ async def get_all_results(
         if dealer_id:
             query["dealer_id"] = dealer_id
         # Removed active_dealers restriction: super admin should see ALL data even without users
-    elif current_user.role in ("dealer_admin", "branch_admin", "dealer_user"):
-        # All roles see ONLY their own results (hierarchy: each user owns their uploads)
+    elif current_user.role == "dealer_admin":
         if not current_user.dealer_id:
             raise HTTPException(status_code=403, detail="User has no assigned dealer_id.")
         query["dealer_id"] = current_user.dealer_id
-        query["submitted_by_user_id"] = str(current_user.id)  # Only own results
+    elif current_user.role in ("branch_admin", "dealer_user"):
+        if not current_user.dealer_id:
+            raise HTTPException(status_code=403, detail="User has no assigned dealer_id.")
+        query["dealer_id"] = current_user.dealer_id
+        query["submitted_by_user_id"] = str(current_user.id)
     else:
         raise HTTPException(status_code=403, detail="Not authorized to view results")
 
@@ -3113,9 +3119,10 @@ async def get_dealer_dashboard_overview(
     # Base match
     dealer_status_match = {"dealer_id": dealer_id_str}
     
-    # 🔐 Hierarchy Filter: Each account is individual.
-    # Dealer Admin, Branch Admin, and Dealer User all see only their own uploads.
-    dealer_status_match["submitted_by_user_id"] = str(current_user.id)
+    # Dealer Admin sees all dealership uploads to monitor team performance across advisors.
+    # Only branch_admin / dealer_user are scoped to their individual uploads.
+    if current_user.role not in ["dealer_admin", "super_admin"]:
+        dealer_status_match["submitted_by_user_id"] = str(current_user.id)
 
     start_date = None
     if timeRange and timeRange.lower() != "all":
