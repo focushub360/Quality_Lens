@@ -3011,9 +3011,8 @@ async def get_super_admin_dashboard_overview(
     Retrieves aggregated data for the Super Admin dashboard.
     Includes ALL results (completed or without status field for backward compatibility).
     """
-    # Match only records for active dealers
-    active_dealers = await users_collection.distinct("dealer_id")
-    status_match = {"dealer_id": {"$in": [d for d in active_dealers if d]}}
+    # Super admin sees all video analysis records in the system
+    status_match = {}
 
     if timeRange and timeRange.lower() != "all":
         now = dt.utcnow()
@@ -3101,20 +3100,21 @@ async def scan_all_dbs():
 @app.get("/dashboard/dealer/overview", response_model=DealerAdminDashboardOverview)
 async def get_dealer_dashboard_overview(
     timeRange: Optional[str] = Query(None),
+    dealer_id: Optional[str] = Query(None),
     current_user: UserInDB = Depends(get_current_user)
 ):
     """
-    Retrieves aggregated data for a specific Dealer Admin or Branch Admin dashboard.
+    Retrieves aggregated data for a specific Dealer Admin, Branch Admin, or Super Admin dashboard.
     """
-    if current_user.role not in ["dealer_admin", "branch_admin", "dealer_user"]:
+    if current_user.role not in ["dealer_admin", "branch_admin", "dealer_user", "super_admin"]:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to access dealer dashboard.")
-    if not current_user.dealer_id:
+
+    target_dealer_id = dealer_id if (current_user.role == "super_admin" and dealer_id) else current_user.dealer_id
+    if not target_dealer_id and current_user.role not in ["super_admin"]:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Dealer Admin is not assigned to a dealer.")
 
-    dealer_id_str = current_user.dealer_id
-
     user_id_suffix = f":{current_user.id}"
-    cache_key = f"dashboard:dealer:{dealer_id_str}:{current_user.role}{user_id_suffix}:{timeRange or 'week'}"
+    cache_key = f"dashboard:dealer:{target_dealer_id or 'all'}:{current_user.role}{user_id_suffix}:{timeRange or 'week'}"
     
     cached_data = await cache_manager.get(cache_key)
     if cached_data:
@@ -3124,7 +3124,9 @@ async def get_dealer_dashboard_overview(
             logger.warning(f"Failed to parse cached dealer overview: {e}")
 
     # Base match
-    dealer_status_match = {"dealer_id": dealer_id_str}
+    dealer_status_match = {}
+    if target_dealer_id:
+        dealer_status_match["dealer_id"] = target_dealer_id
     
     # Dealer Admin sees all dealership uploads to monitor team performance across advisors.
     # Only branch_admin / dealer_user are scoped to their individual uploads.
