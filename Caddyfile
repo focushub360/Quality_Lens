@@ -1,4 +1,4 @@
-qualitylensfocustech.duckdns.org {
+qualitylens.focusengineeringapp.com, qualitylensfocustech.duckdns.org, :80, :443 {
     # Serve static frontend files
     root * /srv/build
 

@@ -1,9 +1,8 @@
 import axios from 'axios';
 
-// Determine backend URL:
-// 1. Use env var if explicitly set (dev / docker)
-// 2. If running on focusengineeringapp.com (Amplify), always point to duckdns backend
-// 3. Otherwise fall back to duckdns
+// Primary domain: https://qualitylens.focusengineeringapp.com
+// Backend API hosted on EC2 (qualitylensfocustech.duckdns.org / EC2 proxy)
+const PRIMARY_DOMAIN = 'https://qualitylens.focusengineeringapp.com';
 const BACKEND_URL = 'https://qualitylensfocustech.duckdns.org';
 const API_BASE = process.env.REACT_APP_API_URL || BACKEND_URL;
 
