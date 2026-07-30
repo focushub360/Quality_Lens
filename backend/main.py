@@ -487,26 +487,33 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> UserInDB:
     )
     try:
         payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
-        username: str = payload.get("sub")
-        user_id: str = payload.get("user_id")
-        role: str = payload.get("role")
+        username: Optional[str] = payload.get("sub")
+        user_id: Optional[str] = payload.get("user_id")
+        role: Optional[str] = payload.get("role")
         dealer_id_str: Optional[str] = payload.get("dealer_id")
-        if username is None or user_id is None or role is None:
-            logger.warning("Token payload missing essential fields: sub, user_id, or role.")
+        if not username and not user_id:
+            logger.warning("Token payload missing both sub and user_id.")
             raise credentials_exception
-        token_data = TokenData(username=username, user_id=user_id, role=role, dealer_id=dealer_id_str)
-    except JWTError:
-        logger.warning("JWT decoding failed or token is invalid.")
+    except Exception as e:
+        logger.warning(f"JWT decoding failed: {e}")
         raise credentials_exception
 
-    user_doc = await users_collection.find_one({"_id": ObjectId(token_data.user_id)})
+    user_doc = None
+    if user_id:
+        try:
+            user_doc = await users_collection.find_one({"_id": ObjectId(user_id)})
+        except Exception:
+            user_doc = None
+
+    if user_doc is None and username:
+        user_doc = await users_collection.find_one({"$or": [{"email": username}, {"username": username}]})
+
     if user_doc is None:
-        logger.warning(f"User with ID {token_data.user_id} from token not found in DB.")
+        logger.warning(f"User from token (user_id={user_id}, username={username}) not found in DB.")
         raise credentials_exception
 
     # Convert ObjectId fields to strings
     user_doc["_id"] = str(user_doc["_id"])
-    # dealer_id is now stored as string, no conversion needed
     
     return UserInDB(**user_doc)
 
