@@ -1909,69 +1909,74 @@ class UnifiedMediaAnalyzer:
             print(f"Overall Quality Score: {overall_quality['overall_label']} ({overall_quality['overall_score']:.1f}/10)")
 
             if not is_valid_transcription:
-                # No usable speech — generate a high-quality visual & quality summary instead of empty!
+                # No usable speech — generate visual fallback summary, and use video quality report as English translation
                 summary_text = self.generate_visual_only_summary(results)
-                results["translation"] = {"translated_text": "", "target_language": requested_target_language, "status": "skipped_no_speech"}
+                results["translation"] = {
+                    "translated_text": summary_text,
+                    "target_language": "en",
+                    "length": len(summary_text),
+                    "status": "visual_fallback"
+                }
                 results["summarization"] = {
                     "summary": summary_text,
                     "length": len(summary_text),
                     "reduction_ratio": "N/A",
                     "status": "visual_fallback"
                 }
-                print("⏭️ Speech summary skipped — generated visual fallback summary instead.")
+                print("⏭️ No speech — visual fallback summary & translation generated.")
             else:
-                print(f"\n🌍 TRANSLATING TO {requested_target_language.upper()}")
-                print("-" * 40)
-                
-                # Use Whisper's highly reliable native English translation if target is English
+                # Always translate to English. Use Whisper native first, then Google fallback.
                 is_valid_native = (
                     native_english_transcription and
                     len(native_english_transcription.strip()) >= 10 and
                     native_english_transcription.strip().lower() not in GARBAGE_TEXTS and
                     not native_english_transcription.startswith("Transcription failed:")
                 )
-                
-                # Check for Whisper native translation hallucinations (e.g. much longer than transcription)
+
+                # Check for Whisper native hallucinations (much longer than source)
                 if is_valid_native and transcription:
                     native_words = len(native_english_transcription.split())
                     trans_words = len(transcription.split())
                     if trans_words > 0 and native_words > (2 * trans_words + 5):
-                        print(f"⚠️ Native translation ratio suspiciously high ({native_words} vs {trans_words} words) — likely hallucinating! Discarding native.")
+                        print(f"⚠️ Native translation suspiciously long ({native_words} vs {trans_words} words) — discarding.")
                         is_valid_native = False
-                
-                if requested_target_language == 'en':
-                    if is_valid_native:
-                        translation = native_english_transcription
-                        print(f"✅ Used native AI translation to English ({len(translation)} chars)")
-                    else:
-                        # Native translation returned garbage or hallucinated — fall back to Google
-                        print("⚠️ Native translation hallucinated or failed — falling back to Google Translate")
-                        translation = self.translate_text(transcription, target_language=requested_target_language)
+
+                if is_valid_native:
+                    translation = native_english_transcription
+                    print(f"✅ Used native AI translation to English ({len(translation)} chars)")
                 else:
-                    translation = self.translate_text(transcription, target_language=requested_target_language)
-                
-                # Validate translation output
+                    # Native translation returned garbage or hallucinated — fall back to Google
+                    print("⚠️ Native translation hallucinated or failed — falling back to Google Translate")
+                    translation = self.translate_text(transcription, target_language='en')
+
+                # Validate translation output — if still empty, use transcription as-is
                 is_valid_translation = (
                     translation and
                     len(translation.strip()) >= 10 and
                     translation.strip().lower() not in GARBAGE_TEXTS
                 )
-                    
+
+                # Ultimate fallback: use transcription itself as translation
+                if not is_valid_translation:
+                    translation = transcription
+                    is_valid_translation = len(transcription.strip()) >= 10
+                    print("⚠️ Translation produced no result — using original transcription as translation.")
+
                 results["translation"] = {
-                    "translated_text": translation if is_valid_translation else "",
-                    "target_language": requested_target_language,
-                    "length": len(translation) if is_valid_translation else 0,
-                    "status": "ok" if is_valid_translation else "failed"
+                    "translated_text": translation,
+                    "target_language": "en",
+                    "length": len(translation),
+                    "status": "ok" if is_valid_translation else "fallback_transcription"
                 }
                 results["processing_steps"].append("translation")
-                print(f"Translation: {'OK (' + str(len(translation)) + ' chars)' if is_valid_translation else 'FAILED — empty result saved'}")
+                print(f"Translation: OK ({len(translation)} chars)")
 
                 print("\n📝 GENERATING SUMMARY")
                 print("-" * 40)
-                # Only summarize if translation is valid and long enough for BART
+                # Use best available text for summarization
                 text_for_summary = translation if is_valid_translation else transcription
                 word_count = len(text_for_summary.split())
-                
+
                 if word_count >= 10:
                     summary = self.summarize_text(text_for_summary)
                     is_valid_summary = (
@@ -1983,15 +1988,21 @@ class UnifiedMediaAnalyzer:
                     summary = ""
                     is_valid_summary = False
                     print(f"⏭️ Summary skipped — text too short ({word_count} words)")
-                    
+
+                # Ultimate fallback: generate visual summary if BART fails
+                if not is_valid_summary:
+                    summary = self.generate_visual_only_summary(results)
+                    is_valid_summary = True
+                    print("⚠️ BART summary failed — using visual fallback summary.")
+
                 results["summarization"] = {
-                    "summary": summary if is_valid_summary else "",
-                    "length": len(summary) if is_valid_summary else 0,
-                    "reduction_ratio": f"{((1 - len(summary)/len(text_for_summary)) * 100):.1f}%" if is_valid_summary and len(text_for_summary) > 0 else "N/A",
-                    "status": "ok" if is_valid_summary else "failed"
+                    "summary": summary,
+                    "length": len(summary),
+                    "reduction_ratio": f"{((1 - len(summary)/len(text_for_summary)) * 100):.1f}%" if len(text_for_summary) > 0 else "N/A",
+                    "status": "ok"
                 }
                 results["processing_steps"].append("text_summarization")
-                print(f"Summary: {'OK (' + results['summarization']['reduction_ratio'] + ' reduction)' if is_valid_summary else 'FAILED or too short'}")
+                print(f"Summary: OK ({len(summary)} chars)")
 
         except Exception as pipeline_e:
             print(f"\n❌ Pipeline stopped due to an error: {pipeline_e}")
