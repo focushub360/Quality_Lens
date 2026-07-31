@@ -98,7 +98,8 @@ docker compose -f docker-compose.yml up --build
 
 ## ☁️ Ecosystem URLs
 
-- **Live Application**: [https://videoproject-frontend.pages.dev](https://videoproject-frontend.pages.dev)
+- **Primary Live Frontend**: [https://qualitylens.focusengineeringapp.com](https://qualitylens.focusengineeringapp.com)
+- **API Backend**: `https://qualitylensfocustech.duckdns.org`
 - **API Documentation**: [FastAPI Docs](https://qualitylensfocustech.duckdns.org/docs)
 
 ---
