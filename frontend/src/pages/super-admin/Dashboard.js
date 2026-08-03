@@ -431,8 +431,6 @@ const DealerPerformanceChart = ({ data }) => {
   );
 };
 
-};
-
 // ─── Single Dealer Detailed View ────────────────────────────────────────────
 const SingleDealerDetailView = ({ dealerId, allResults, dealerRankings }) => {
   const dealerData = dealerRankings.find(d => d.id === dealerId || d.name === dealerId);
