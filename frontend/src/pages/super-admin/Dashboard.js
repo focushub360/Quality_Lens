@@ -1514,8 +1514,8 @@ const QualityDistributionChart = ({ data }) => {
             data={filteredData}
             cx="50%"
             cy="42%"
-            outerRadius={82}
-            innerRadius={42}
+            outerRadius={105}
+            innerRadius={55}
             dataKey="value"
             paddingAngle={3}
             stroke="#ffffff"
@@ -3339,7 +3339,7 @@ export default function SuperAdminDashboard() {
           {/* Charts Section */}
           <Grid container spacing={3} sx={{ mb: 6 }} alignItems="stretch">
             {/* 1. Quality Distribution */}
-            <Grid item xs={12} md={6}>
+            <Grid item xs={12} sm={6} md={6} lg={6} xl={6}>
               <Card sx={{
                 background: THEME.surfaceElevated,
                 border: `1px solid ${THEME.border}`,
@@ -3374,7 +3374,7 @@ export default function SuperAdminDashboard() {
             </Grid>
 
             {/* 2. Top 5 Performers */}
-            <Grid item xs={12} md={6}>
+            <Grid item xs={12} sm={6} md={6} lg={6} xl={6}>
               <Card sx={{
                 background: THEME.surfaceElevated,
                 border: `1px solid ${THEME.border}`,
