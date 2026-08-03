@@ -7,7 +7,7 @@ applications:
             - npm install --legacy-peer-deps
         build:
           commands:
-            - CI=false REACT_APP_API_URL=http://3.110.138.205:8000 npm run build
+            - CI=false REACT_APP_API_URL=https://api.focusengineeringapp.com npm run build
       artifacts:
         baseDirectory: build
         files:

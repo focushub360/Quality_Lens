@@ -1,4 +1,8 @@
-qualitylens.focusengineeringapp.com, qualitylensfocustech.duckdns.org, :80, :443 {
+api.focusengineeringapp.com {
+    reverse_proxy backend:8000
+}
+
+qualitylens.focusengineeringapp.com, :80, :443 {
     # Serve static frontend files
     root * /srv/build
 
