@@ -72,7 +72,9 @@ import {
   Dashboard as DashboardIcon,
   FilterList,
   MoreVert,
-  Badge
+  Badge,
+  CompareArrows,
+  SwapHoriz
 } from '@mui/icons-material';
 import {
   LineChart,
@@ -99,7 +101,9 @@ import {
   Treemap,
   ComposedChart,
   LabelList,
-  ReferenceLine
+  ReferenceLine,
+  Area,
+  AreaChart
 } from 'recharts';
 import api from '../../services/api';
 import { listUsers, createUser, updateUser, deleteUser } from '../../services/users.js';
@@ -427,6 +431,315 @@ const DealerPerformanceChart = ({ data }) => {
   );
 };
 
+// ─── Dealer Performance Comparison Chart ────────────────────────────────────
+const DealerComparisonChart = ({ dealerA, dealerB, allResults, dealerRankings }) => {
+  const COMPARISON_COLORS = {
+    dealerA: { primary: '#1E88E5', light: '#BBDEFB', gradient: 'rgba(30, 136, 229, 0.15)' },
+    dealerB: { primary: '#E53935', light: '#FFCDD2', gradient: 'rgba(229, 57, 53, 0.15)' }
+  };
+
+  // Get dealer data from rankings
+  const dealerAData = dealerRankings.find(d => d.id === dealerA || d.name === dealerA);
+  const dealerBData = dealerRankings.find(d => d.id === dealerB || d.name === dealerB);
+
+  if (!dealerAData || !dealerBData) return null;
+
+  // Build comparison metrics
+  const metrics = [
+    { name: 'Overall', a: dealerAData.overall, b: dealerBData.overall },
+    { name: 'Video', a: dealerAData.video, b: dealerBData.video },
+    { name: 'Audio', a: dealerAData.audio, b: dealerBData.audio },
+    { name: 'Stability', a: dealerAData.stability || dealerAData.overall * 0.92, b: dealerBData.stability || dealerBData.overall * 0.92 },
+    { name: 'Lighting', a: dealerAData.lighting || dealerAData.video * 0.95, b: dealerBData.lighting || dealerBData.video * 0.95 },
+    { name: 'Speech', a: dealerAData.speech || dealerAData.audio * 0.97, b: dealerBData.speech || dealerBData.audio * 0.97 }
+  ].map(m => ({ ...m, a: Number((m.a || 0).toFixed(1)), b: Number((m.b || 0).toFixed(1)) }));
+
+  // Weekly trend from allResults
+  const buildWeeklyTrend = (dealerId) => {
+    const dealerResults = (allResults || []).filter(r => {
+      const rid = normalizeDealerId(r.dealer_id || r.dealer || '');
+      return rid === dealerId;
+    });
+    
+    // Group by week
+    const weekMap = {};
+    dealerResults.forEach(r => {
+      const rawDate = r.created_at || r.date || r.createdAt || r.timestamp || r.analysis_date;
+      if (!rawDate) return;
+      const d = new Date(rawDate);
+      if (isNaN(d.getTime())) return;
+      const weekStart = new Date(d);
+      weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+      const weekKey = `${weekStart.getFullYear()}-W${String(Math.ceil((weekStart.getDate()) / 7)).padStart(2, '0')}-${String(weekStart.getMonth()+1).padStart(2,'0')}`;
+      if (!weekMap[weekKey]) weekMap[weekKey] = { scores: [], dates: [] };
+      if (r.overall_quality_score != null) weekMap[weekKey].scores.push(r.overall_quality_score);
+      weekMap[weekKey].dates.push(d);
+    });
+
+    return Object.entries(weekMap)
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .slice(-8) // last 8 weeks
+      .map(([key, data]) => {
+        const avg = data.scores.length > 0 
+          ? Number((data.scores.reduce((s, v) => s + v, 0) / data.scores.length).toFixed(1)) 
+          : 0;
+        const earliest = new Date(Math.min(...data.dates.map(d => d.getTime())));
+        const label = `${earliest.getDate()}/${earliest.getMonth()+1}`;
+        return { week: label, score: avg, count: data.scores.length };
+      });
+  };
+
+  const weeklyA = buildWeeklyTrend(dealerA);
+  const weeklyB = buildWeeklyTrend(dealerB);
+
+  // Merge weekly data
+  const allWeeks = new Set([...weeklyA.map(w => w.week), ...weeklyB.map(w => w.week)]);
+  const weeklyComparison = [...allWeeks].sort().map(week => {
+    const a = weeklyA.find(w => w.week === week);
+    const b = weeklyB.find(w => w.week === week);
+    return {
+      week,
+      [dealerAData.name]: a?.score || 0,
+      [dealerBData.name]: b?.score || 0
+    };
+  });
+
+  // Calculate summary stats
+  const diffOverall = (dealerAData.overall - dealerBData.overall).toFixed(1);
+  const totalVideosA = dealerAData.videos || 0;
+  const totalVideosB = dealerBData.videos || 0;
+
+  const CustomComparisonTooltip = ({ active, payload, label }) => {
+    if (active && payload && payload.length) {
+      return (
+        <Box sx={{
+          background: 'rgba(255,255,255,0.98)',
+          borderRadius: 2,
+          p: 1.5,
+          boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+          border: `1px solid ${THEME.border}`,
+          minWidth: 160,
+          backdropFilter: 'blur(8px)'
+        }}>
+          <Typography variant="caption" sx={{ fontWeight: 700, color: THEME.textPrimary, display: 'block', mb: 0.75, fontSize: '11px' }}>
+            {label}
+          </Typography>
+          {payload.map((entry, i) => (
+            <Box key={i} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, mb: 0.25 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: entry.color, flexShrink: 0 }} />
+                <Typography variant="caption" sx={{ color: THEME.textSecondary, fontSize: '10px' }}>
+                  {entry.name}
+                </Typography>
+              </Box>
+              <Typography variant="caption" sx={{ fontWeight: 700, color: entry.color, fontSize: '11px' }}>
+                {typeof entry.value === 'number' ? entry.value.toFixed(1) : entry.value}
+              </Typography>
+            </Box>
+          ))}
+        </Box>
+      );
+    }
+    return null;
+  };
+
+  return (
+    <Box>
+      {/* Summary Cards */}
+      <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
+        {/* Dealer A Summary */}
+        <Box sx={{
+          flex: 1,
+          background: `linear-gradient(135deg, ${COMPARISON_COLORS.dealerA.primary}08, ${COMPARISON_COLORS.dealerA.primary}15)`,
+          borderRadius: 3,
+          p: 2,
+          border: `1px solid ${COMPARISON_COLORS.dealerA.primary}25`,
+          position: 'relative',
+          overflow: 'hidden'
+        }}>
+          <Box sx={{ position: 'absolute', top: -20, right: -20, width: 80, height: 80, borderRadius: '50%', background: `${COMPARISON_COLORS.dealerA.primary}08` }} />
+          <Typography variant="caption" sx={{ color: COMPARISON_COLORS.dealerA.primary, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '9px' }}>DEALER A</Typography>
+          <Typography variant="h6" sx={{ fontWeight: 800, color: THEME.textPrimary, mt: 0.25, fontSize: '1rem' }}>{dealerAData.name}</Typography>
+          <Box sx={{ display: 'flex', gap: 2, mt: 1 }}>
+            <Box>
+              <Typography variant="h5" sx={{ fontWeight: 800, color: COMPARISON_COLORS.dealerA.primary }}>{dealerAData.overall.toFixed(1)}</Typography>
+              <Typography variant="caption" sx={{ color: THEME.textTertiary, fontSize: '9px' }}>Overall</Typography>
+            </Box>
+            <Divider orientation="vertical" flexItem />
+            <Box>
+              <Typography variant="body1" sx={{ fontWeight: 700, color: THEME.textSecondary }}>{totalVideosA}</Typography>
+              <Typography variant="caption" sx={{ color: THEME.textTertiary, fontSize: '9px' }}>Videos</Typography>
+            </Box>
+          </Box>
+        </Box>
+
+        {/* VS Badge */}
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <Box sx={{
+            width: 48,
+            height: 48,
+            borderRadius: '50%',
+            background: THEME.gradientPrimary,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: '0 4px 14px rgba(13, 161, 184, 0.3)'
+          }}>
+            <Typography sx={{ color: '#fff', fontWeight: 900, fontSize: '14px' }}>VS</Typography>
+          </Box>
+        </Box>
+
+        {/* Dealer B Summary */}
+        <Box sx={{
+          flex: 1,
+          background: `linear-gradient(135deg, ${COMPARISON_COLORS.dealerB.primary}08, ${COMPARISON_COLORS.dealerB.primary}15)`,
+          borderRadius: 3,
+          p: 2,
+          border: `1px solid ${COMPARISON_COLORS.dealerB.primary}25`,
+          position: 'relative',
+          overflow: 'hidden'
+        }}>
+          <Box sx={{ position: 'absolute', top: -20, right: -20, width: 80, height: 80, borderRadius: '50%', background: `${COMPARISON_COLORS.dealerB.primary}08` }} />
+          <Typography variant="caption" sx={{ color: COMPARISON_COLORS.dealerB.primary, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '9px' }}>DEALER B</Typography>
+          <Typography variant="h6" sx={{ fontWeight: 800, color: THEME.textPrimary, mt: 0.25, fontSize: '1rem' }}>{dealerBData.name}</Typography>
+          <Box sx={{ display: 'flex', gap: 2, mt: 1 }}>
+            <Box>
+              <Typography variant="h5" sx={{ fontWeight: 800, color: COMPARISON_COLORS.dealerB.primary }}>{dealerBData.overall.toFixed(1)}</Typography>
+              <Typography variant="caption" sx={{ color: THEME.textTertiary, fontSize: '9px' }}>Overall</Typography>
+            </Box>
+            <Divider orientation="vertical" flexItem />
+            <Box>
+              <Typography variant="body1" sx={{ fontWeight: 700, color: THEME.textSecondary }}>{totalVideosB}</Typography>
+              <Typography variant="caption" sx={{ color: THEME.textTertiary, fontSize: '9px' }}>Videos</Typography>
+            </Box>
+          </Box>
+        </Box>
+      </Box>
+
+      {/* Difference Indicator */}
+      <Box sx={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        mb: 3 
+      }}>
+        <Chip 
+          icon={Number(diffOverall) >= 0 ? <TrendingUp sx={{ fontSize: 16 }} /> : <TrendingDown sx={{ fontSize: 16 }} />}
+          label={`${dealerAData.name} is ${Math.abs(Number(diffOverall))} pts ${Number(diffOverall) >= 0 ? 'ahead' : 'behind'}`}
+          size="small"
+          sx={{
+            fontWeight: 600,
+            fontSize: '11px',
+            background: Number(diffOverall) >= 0 ? THEME.successLight : THEME.errorLight,
+            color: Number(diffOverall) >= 0 ? '#059669' : '#DC2626',
+            border: 'none',
+            px: 1
+          }}
+        />
+      </Box>
+
+      {/* Grouped Bar Chart - Metrics Comparison */}
+      <Box sx={{ mb: 3 }}>
+        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: THEME.textPrimary, mb: 1.5, fontSize: '0.8rem' }}>
+          📊 Quality Metrics Comparison
+        </Typography>
+        <ResponsiveContainer width="100%" height={260}>
+          <RechartsBarChart data={metrics} margin={{ top: 10, right: 20, left: 0, bottom: 5 }} barGap={4}>
+            <CartesianGrid strokeDasharray="3 3" stroke={THEME.borderLight} vertical={false} />
+            <XAxis 
+              dataKey="name" 
+              stroke={THEME.textTertiary} 
+              fontSize={11} 
+              fontWeight={600}
+              tick={{ fill: THEME.textSecondary }}
+            />
+            <YAxis 
+              domain={[0, 10]} 
+              stroke={THEME.textTertiary} 
+              fontSize={10}
+              tick={{ fill: THEME.textTertiary }}
+            />
+            <RechartsTooltip content={<CustomComparisonTooltip />} />
+            <Bar 
+              dataKey="a" 
+              name={dealerAData.name} 
+              fill={COMPARISON_COLORS.dealerA.primary} 
+              radius={[6, 6, 0, 0]} 
+              barSize={28}
+              fillOpacity={0.85}
+            >
+              <LabelList dataKey="a" position="top" fontSize={9} fontWeight={700} fill={COMPARISON_COLORS.dealerA.primary} />
+            </Bar>
+            <Bar 
+              dataKey="b" 
+              name={dealerBData.name} 
+              fill={COMPARISON_COLORS.dealerB.primary} 
+              radius={[6, 6, 0, 0]} 
+              barSize={28}
+              fillOpacity={0.85}
+            >
+              <LabelList dataKey="b" position="top" fontSize={9} fontWeight={700} fill={COMPARISON_COLORS.dealerB.primary} />
+            </Bar>
+            <Legend 
+              wrapperStyle={{ fontSize: '11px', fontWeight: 600, paddingTop: '8px' }}
+              iconType="circle"
+              iconSize={8}
+            />
+          </RechartsBarChart>
+        </ResponsiveContainer>
+      </Box>
+
+      {/* Weekly Trend Line Chart */}
+      {weeklyComparison.length > 1 && (
+        <Box>
+          <Typography variant="subtitle2" sx={{ fontWeight: 700, color: THEME.textPrimary, mb: 1.5, fontSize: '0.8rem' }}>
+            📈 Weekly Performance Trend
+          </Typography>
+          <ResponsiveContainer width="100%" height={220}>
+            <AreaChart data={weeklyComparison} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
+              <defs>
+                <linearGradient id="gradientA" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor={COMPARISON_COLORS.dealerA.primary} stopOpacity={0.3} />
+                  <stop offset="95%" stopColor={COMPARISON_COLORS.dealerA.primary} stopOpacity={0.02} />
+                </linearGradient>
+                <linearGradient id="gradientB" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor={COMPARISON_COLORS.dealerB.primary} stopOpacity={0.3} />
+                  <stop offset="95%" stopColor={COMPARISON_COLORS.dealerB.primary} stopOpacity={0.02} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke={THEME.borderLight} vertical={false} />
+              <XAxis dataKey="week" stroke={THEME.textTertiary} fontSize={10} tick={{ fill: THEME.textSecondary }} />
+              <YAxis domain={[0, 10]} stroke={THEME.textTertiary} fontSize={10} tick={{ fill: THEME.textTertiary }} />
+              <RechartsTooltip content={<CustomComparisonTooltip />} />
+              <Area
+                type="monotone"
+                dataKey={dealerAData.name}
+                stroke={COMPARISON_COLORS.dealerA.primary}
+                strokeWidth={2.5}
+                fill="url(#gradientA)"
+                dot={{ fill: COMPARISON_COLORS.dealerA.primary, r: 4, strokeWidth: 2, stroke: '#fff' }}
+                activeDot={{ r: 6 }}
+              />
+              <Area
+                type="monotone"
+                dataKey={dealerBData.name}
+                stroke={COMPARISON_COLORS.dealerB.primary}
+                strokeWidth={2.5}
+                fill="url(#gradientB)"
+                dot={{ fill: COMPARISON_COLORS.dealerB.primary, r: 4, strokeWidth: 2, stroke: '#fff' }}
+                activeDot={{ r: 6 }}
+              />
+              <Legend 
+                wrapperStyle={{ fontSize: '11px', fontWeight: 600, paddingTop: '8px' }}
+                iconType="circle"
+                iconSize={8}
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        </Box>
+      )}
+    </Box>
+  );
+};
 
 
 // Score → color bands matching Tableau-style heatmap (dark red → light red → light green → dark green)
@@ -2324,6 +2637,8 @@ export default function SuperAdminDashboard() {
   const [dealerDetailOpen, setDealerDetailOpen] = useState(false);
   const [selectedFilterDealer, setSelectedFilterDealer] = useState('all');
   const [rankingsLimit, setRankingsLimit] = useState(10); // Default to Top 10
+  const [compareDealerA, setCompareDealerA] = useState('');
+  const [compareDealerB, setCompareDealerB] = useState('');
 
   /* 
    * Helper: Calculate Performance Trend
@@ -2894,6 +3209,165 @@ export default function SuperAdminDashboard() {
                   <Box sx={{ flex: 1, minHeight: 0, width: '100%' }}>
                     <PerformanceTrendChart data={dashboardData.performanceTrend} />
                   </Box>
+                </CardContent>
+              </Card>
+            </Grid>
+
+            {/* Dealer Performance Comparison */}
+            <Grid item xs={12}>
+              <Card sx={{
+                background: THEME.surfaceElevated,
+                border: `1px solid ${THEME.border}`,
+                borderRadius: 3,
+                boxShadow: THEME.shadowSm,
+                overflow: 'visible'
+              }}>
+                <CardContent sx={{ p: 3 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2, mb: 3 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                      <CompareArrows sx={{ color: THEME.primary, mr: 1.5, fontSize: 24 }} />
+                      <Box>
+                        <Typography variant="h6" sx={{ color: THEME.textPrimary, fontWeight: 700, fontSize: '1rem', lineHeight: 1.2 }}>
+                          Dealer Performance Comparison
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: THEME.textSecondary, fontSize: '11px' }}>
+                          Compare quality metrics between two dealerships
+                        </Typography>
+                      </Box>
+                    </Box>
+                    <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', flexWrap: 'wrap' }}>
+                      <TextField
+                        select
+                        size="small"
+                        label="Dealer A"
+                        value={compareDealerA}
+                        onChange={(e) => setCompareDealerA(e.target.value)}
+                        sx={{ 
+                          minWidth: 160,
+                          '& .MuiOutlinedInput-root': {
+                            borderRadius: 2,
+                            fontSize: '13px',
+                            '& fieldset': { borderColor: '#1E88E5' + '40' },
+                            '&:hover fieldset': { borderColor: '#1E88E5' },
+                            '&.Mui-focused fieldset': { borderColor: '#1E88E5' }
+                          },
+                          '& .MuiInputLabel-root': { fontSize: '12px', color: '#1E88E5' }
+                        }}
+                      >
+                        <MenuItem value="" disabled><em>Select Dealer</em></MenuItem>
+                        {dashboardData.dealerRankings
+                          .filter(d => d.id !== compareDealerB)
+                          .map(d => (
+                            <MenuItem key={d.id} value={d.id}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#1E88E5' }} />
+                                {d.name}
+                              </Box>
+                            </MenuItem>
+                          ))}
+                      </TextField>
+
+                      <SwapHoriz sx={{ color: THEME.textTertiary, fontSize: 20 }} />
+
+                      <TextField
+                        select
+                        size="small"
+                        label="Dealer B"
+                        value={compareDealerB}
+                        onChange={(e) => setCompareDealerB(e.target.value)}
+                        sx={{ 
+                          minWidth: 160,
+                          '& .MuiOutlinedInput-root': {
+                            borderRadius: 2,
+                            fontSize: '13px',
+                            '& fieldset': { borderColor: '#E53935' + '40' },
+                            '&:hover fieldset': { borderColor: '#E53935' },
+                            '&.Mui-focused fieldset': { borderColor: '#E53935' }
+                          },
+                          '& .MuiInputLabel-root': { fontSize: '12px', color: '#E53935' }
+                        }}
+                      >
+                        <MenuItem value="" disabled><em>Select Dealer</em></MenuItem>
+                        {dashboardData.dealerRankings
+                          .filter(d => d.id !== compareDealerA)
+                          .map(d => (
+                            <MenuItem key={d.id} value={d.id}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#E53935' }} />
+                                {d.name}
+                              </Box>
+                            </MenuItem>
+                          ))}
+                      </TextField>
+                    </Box>
+                  </Box>
+
+                  {/* Comparison Content */}
+                  {compareDealerA && compareDealerB ? (
+                    <DealerComparisonChart
+                      dealerA={compareDealerA}
+                      dealerB={compareDealerB}
+                      allResults={allResults}
+                      dealerRankings={dashboardData.dealerRankings}
+                    />
+                  ) : (
+                    /* Default Placeholder */
+                    <Box sx={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      py: 8,
+                      px: 4,
+                      background: `linear-gradient(135deg, ${THEME.primaryUltraLight}, ${THEME.accentUltraLight})`,
+                      borderRadius: 3,
+                      border: `2px dashed ${THEME.border}`,
+                      position: 'relative',
+                      overflow: 'hidden'
+                    }}>
+                      {/* Decorative background elements */}
+                      <Box sx={{ position: 'absolute', top: 20, left: 30, width: 60, height: 60, borderRadius: '50%', background: `${THEME.primary}06` }} />
+                      <Box sx={{ position: 'absolute', bottom: 20, right: 40, width: 80, height: 80, borderRadius: '50%', background: `${THEME.accent}06` }} />
+                      <Box sx={{ position: 'absolute', top: 40, right: 80, width: 40, height: 40, borderRadius: '50%', background: `${THEME.warning}06` }} />
+
+                      <Box sx={{
+                        width: 72,
+                        height: 72,
+                        borderRadius: '50%',
+                        background: THEME.gradientPrimary,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        mb: 2.5,
+                        boxShadow: '0 8px 24px rgba(13, 161, 184, 0.25)',
+                        animation: 'pulse 2s ease-in-out infinite'
+                      }}>
+                        <CompareArrows sx={{ color: '#fff', fontSize: 32 }} />
+                      </Box>
+                      <Typography variant="h6" sx={{ fontWeight: 700, color: THEME.textPrimary, mb: 1, textAlign: 'center' }}>
+                        Select Two Dealers to Compare
+                      </Typography>
+                      <Typography variant="body2" sx={{ color: THEME.textSecondary, textAlign: 'center', maxWidth: 420, lineHeight: 1.6 }}>
+                        Choose dealers from the dropdowns above to see a detailed side-by-side comparison of quality metrics, weekly performance trends, and scoring analysis.
+                      </Typography>
+                      <Box sx={{ display: 'flex', gap: 3, mt: 3 }}>
+                        {['📊 Metrics', '📈 Trends', '🏆 Rankings'].map(label => (
+                          <Chip
+                            key={label}
+                            label={label}
+                            size="small"
+                            sx={{
+                              background: 'rgba(255,255,255,0.8)',
+                              border: `1px solid ${THEME.border}`,
+                              fontWeight: 600,
+                              fontSize: '11px',
+                              color: THEME.textSecondary
+                            }}
+                          />
+                        ))}
+                      </Box>
+                    </Box>
+                  )}
                 </CardContent>
               </Card>
             </Grid>
