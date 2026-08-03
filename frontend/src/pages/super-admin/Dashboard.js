@@ -2807,6 +2807,7 @@ export default function SuperAdminDashboard() {
   const [rankingsLimit, setRankingsLimit] = useState(10); // Default to Top 10
   const [compareDealerA, setCompareDealerA] = useState('');
   const [compareDealerB, setCompareDealerB] = useState('');
+  const [subTab, setSubTab] = useState(0); // 0: Performance Trend, 1: Dealer Performance Comparison
 
   /* 
    * Helper: Calculate Performance Trend
@@ -3336,220 +3337,9 @@ export default function SuperAdminDashboard() {
           </Typography>
 
           {/* Charts Section */}
-          <Grid container spacing={2} sx={{ mb: 6 }} alignItems="stretch">
-            {/* Performance Trend */}
-            <Grid item xs={12} md={4}>
-              <Card sx={{
-                background: THEME.surfaceElevated,
-                border: `1px solid ${THEME.border}`,
-                borderRadius: 3,
-                boxShadow: THEME.shadowSm,
-                height: '100%',
-                display: 'flex',
-                flexDirection: 'column'
-              }}>
-                <CardContent sx={{ p: 2, flex: 1, display: 'flex', flexDirection: 'column', '&:last-child': { pb: 2 } }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1, mb: 2 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', flexShrink: 1, minWidth: 0 }}>
-                      <Timeline sx={{ color: THEME.primary, mr: 1, fontSize: 20, flexShrink: 0 }} />
-                      <Typography variant="h6" sx={{
-                        color: THEME.textPrimary,
-                        fontWeight: 600,
-                        fontSize: { xs: '0.9rem', sm: '0.98rem' }
-                      }}>
-                        Performance Trend
-                      </Typography>
-                    </Box>
-                    <Chip
-                      label={`This ${timeRange}`}
-                      size="small"
-                      variant="outlined"
-                      sx={{
-                        borderColor: THEME.primary,
-                        color: THEME.primary,
-                        fontWeight: 500,
-                        fontSize: '0.7rem',
-                        height: 22,
-                        flexShrink: 0
-                      }}
-                    />
-                  </Box>
-                  <Box sx={{ flex: 1, minHeight: 0, width: '100%' }}>
-                    <PerformanceTrendChart data={dashboardData.performanceTrend} />
-                  </Box>
-                </CardContent>
-              </Card>
-            </Grid>
-
-            {/* Dealer Performance Comparison (Collapsible Accordion Dropdown Card) */}
-            <Grid item xs={12}>
-              <Accordion 
-                sx={{
-                  background: THEME.surfaceElevated,
-                  border: `1px solid ${THEME.border}`,
-                  borderRadius: '12px !important',
-                  boxShadow: THEME.shadowSm,
-                  '&:before': { display: 'none' },
-                  overflow: 'visible'
-                }}
-              >
-                <AccordionSummary
-                  expandIcon={<ExpandMore sx={{ color: THEME.primary }} />}
-                  sx={{
-                    px: 3,
-                    py: 1,
-                    '& .MuiAccordionSummary-content': {
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      flexWrap: 'wrap',
-                      gap: 2
-                    }
-                  }}
-                >
-                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                    <CompareArrows sx={{ color: THEME.primary, mr: 1.5, fontSize: 24 }} />
-                    <Box sx={{ textAlign: 'left' }}>
-                      <Typography variant="h6" sx={{ color: THEME.textPrimary, fontWeight: 700, fontSize: '1rem', lineHeight: 1.2 }}>
-                        Dealer Performance Comparison
-                      </Typography>
-                      <Typography variant="caption" sx={{ color: THEME.textSecondary, fontSize: '11px' }}>
-                        Click to expand and compare or view single dealership stats
-                      </Typography>
-                    </Box>
-                  </Box>
-                </AccordionSummary>
-
-                <AccordionDetails sx={{ px: 3, pb: 3, pt: 0 }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap', gap: 2, mb: 3, pb: 2, borderBottom: `1px solid ${THEME.borderLight}` }}>
-                    <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', flexWrap: 'wrap' }}>
-                      <TextField
-                        select
-                        size="small"
-                        label="Dealer A"
-                        value={compareDealerA}
-                        onChange={(e) => setCompareDealerA(e.target.value)}
-                        onClick={(e) => e.stopPropagation()}
-                        sx={{ 
-                          minWidth: 160,
-                          '& .MuiOutlinedInput-root': {
-                            borderRadius: 2,
-                            fontSize: '13px',
-                            '& fieldset': { borderColor: '#1E88E5' + '40' },
-                            '&:hover fieldset': { borderColor: '#1E88E5' },
-                            '&.Mui-focused fieldset': { borderColor: '#1E88E5' }
-                          },
-                          '& .MuiInputLabel-root': { fontSize: '12px', color: '#1E88E5' }
-                        }}
-                      >
-                        <MenuItem value=""><em>None / Clear</em></MenuItem>
-                        {dashboardData.dealerRankings
-                          .filter(d => d.id !== compareDealerB)
-                          .map(d => (
-                            <MenuItem key={d.id} value={d.id}>
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#1E88E5' }} />
-                                {d.name}
-                              </Box>
-                            </MenuItem>
-                          ))}
-                      </TextField>
-
-                      <SwapHoriz sx={{ color: THEME.textTertiary, fontSize: 20 }} />
-
-                      <TextField
-                        select
-                        size="small"
-                        label="Dealer B"
-                        value={compareDealerB}
-                        onChange={(e) => setCompareDealerB(e.target.value)}
-                        onClick={(e) => e.stopPropagation()}
-                        sx={{ 
-                          minWidth: 160,
-                          '& .MuiOutlinedInput-root': {
-                            borderRadius: 2,
-                            fontSize: '13px',
-                            '& fieldset': { borderColor: '#E53935' + '40' },
-                            '&:hover fieldset': { borderColor: '#E53935' },
-                            '&.Mui-focused fieldset': { borderColor: '#E53935' }
-                          },
-                          '& .MuiInputLabel-root': { fontSize: '12px', color: '#E53935' }
-                        }}
-                      >
-                        <MenuItem value=""><em>None / Clear</em></MenuItem>
-                        {dashboardData.dealerRankings
-                          .filter(d => d.id !== compareDealerA)
-                          .map(d => (
-                            <MenuItem key={d.id} value={d.id}>
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#E53935' }} />
-                                {d.name}
-                              </Box>
-                            </MenuItem>
-                          ))}
-                      </TextField>
-                    </Box>
-                  </Box>
-
-                  {/* Comparison Content */}
-                  {compareDealerA && compareDealerB ? (
-                    <DealerComparisonChart
-                      dealerA={compareDealerA}
-                      dealerB={compareDealerB}
-                      allResults={allResults}
-                      dealerRankings={dashboardData.dealerRankings}
-                    />
-                  ) : (compareDealerA || compareDealerB) ? (
-                    <SingleDealerDetailView
-                      dealerId={compareDealerA || compareDealerB}
-                      allResults={allResults}
-                      dealerRankings={dashboardData.dealerRankings}
-                    />
-                  ) : (
-                    /* Default Placeholder */
-                    <Box sx={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      py: 6,
-                      px: 4,
-                      background: `linear-gradient(135deg, ${THEME.primaryUltraLight}, ${THEME.accentUltraLight})`,
-                      borderRadius: 3,
-                      border: `2px dashed ${THEME.border}`,
-                      position: 'relative',
-                      overflow: 'hidden'
-                    }}>
-                      <Box sx={{ position: 'absolute', top: 20, left: 30, width: 60, height: 60, borderRadius: '50%', background: `${THEME.primary}06` }} />
-                      <Box sx={{ position: 'absolute', bottom: 20, right: 40, width: 80, height: 80, borderRadius: '50%', background: `${THEME.accent}06` }} />
-
-                      <Box sx={{
-                        width: 64,
-                        height: 64,
-                        borderRadius: '50%',
-                        background: THEME.gradientPrimary,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        mb: 2,
-                        boxShadow: '0 6px 20px rgba(13, 161, 184, 0.2)'
-                      }}>
-                        <CompareArrows sx={{ color: '#fff', fontSize: 28 }} />
-                      </Box>
-                      <Typography variant="subtitle1" sx={{ fontWeight: 700, color: THEME.textPrimary, mb: 0.5, textAlign: 'center' }}>
-                        Select Dealerships to View Stats
-                      </Typography>
-                      <Typography variant="body2" sx={{ color: THEME.textSecondary, textAlign: 'center', maxWidth: 420, fontSize: '12.5px', lineHeight: 1.5 }}>
-                        Choose one dealer from the dropdowns above to view their breakdown, or select two dealers to compare their weekly performance trends.
-                      </Typography>
-                    </Box>
-                  )}
-                </AccordionDetails>
-              </Accordion>
-            </Grid>
-
-            {/* Quality Distribution */}
-            <Grid item xs={12} md={4}>
+          <Grid container spacing={3} sx={{ mb: 6 }} alignItems="stretch">
+            {/* 1. Quality Distribution */}
+            <Grid item xs={12} md={6}>
               <Card sx={{
                 background: THEME.surfaceElevated,
                 border: `1px solid ${THEME.border}`,
@@ -3560,31 +3350,31 @@ export default function SuperAdminDashboard() {
                 flexDirection: 'column'
               }}>
                 <CardContent sx={{
-                  p: 2,
+                  p: 3,
                   flex: 1,
                   display: 'flex',
                   flexDirection: 'column',
-                  '&:last-child': { pb: 2 }
+                  '&:last-child': { pb: 3 }
                 }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                    <PieChart sx={{ color: THEME.accent, mr: 1, fontSize: 20 }} />
+                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
+                    <PieChart sx={{ color: THEME.accent, mr: 1.5, fontSize: 24 }} />
                     <Typography variant="h6" sx={{
                       color: THEME.textPrimary,
-                      fontWeight: 600,
-                      fontSize: { xs: '0.9rem', sm: '0.98rem' }
+                      fontWeight: 700,
+                      fontSize: '1.05rem'
                     }}>
                       Quality Distribution
                     </Typography>
                   </Box>
-                  <Box sx={{ flex: 1, minHeight: 0, width: '100%' }}>
+                  <Box sx={{ flex: 1, minHeight: 300, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <QualityDistributionChart data={dashboardData.qualityDistribution} />
                   </Box>
                 </CardContent>
               </Card>
             </Grid>
 
-            {/* Top 5 Performers */}
-            <Grid item xs={12} md={4}>
+            {/* 2. Top 5 Performers */}
+            <Grid item xs={12} md={6}>
               <Card sx={{
                 background: THEME.surfaceElevated,
                 border: `1px solid ${THEME.border}`,
@@ -3594,13 +3384,13 @@ export default function SuperAdminDashboard() {
                 display: 'flex',
                 flexDirection: 'column'
               }}>
-                <CardContent sx={{ p: 2, flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                    <EmojiEvents sx={{ color: THEME.warning, mr: 1, fontSize: 20 }} />
+                <CardContent sx={{ p: 3, flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 2.5 }}>
+                    <EmojiEvents sx={{ color: THEME.warning, mr: 1.5, fontSize: 24 }} />
                     <Typography variant="h6" sx={{
                       color: THEME.textPrimary,
-                      fontWeight: 600,
-                      fontSize: { xs: '0.9rem', sm: '0.98rem' }
+                      fontWeight: 700,
+                      fontSize: '1.05rem'
                     }}>
                       {selectedFilterDealer === 'all' ? 'Top 5 Performers' : 'Top 5 Users'}
                     </Typography>
@@ -3610,15 +3400,15 @@ export default function SuperAdminDashboard() {
                     value={activeTab}
                     onChange={(event, newValue) => setActiveTab(newValue)}
                     sx={{
-                      mb: 2,
-                      minHeight: 32,
+                      mb: 2.5,
+                      minHeight: 36,
                       '& .MuiTab-root': {
                         minWidth: 'auto',
-                        fontSize: '0.75rem',
-                        fontWeight: 500,
+                        fontSize: '0.8rem',
+                        fontWeight: 600,
                         textTransform: 'none',
                         py: 0.5,
-                        px: 1.5
+                        px: 2
                       }
                     }}
                   >
@@ -3627,7 +3417,7 @@ export default function SuperAdminDashboard() {
                     <Tab label="Audio" />
                   </Tabs>
 
-                  <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', gap: 1, minHeight: 0 }}>
+                  <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', gap: 1.5, minHeight: 300 }}>
                     {getTopPerformersByType().slice(0, 5).map((dealer) => (
                       <CardActionArea
                         key={dealer.id}
@@ -3656,12 +3446,203 @@ export default function SuperAdminDashboard() {
                       <Typography variant="body2" sx={{
                         color: THEME.textTertiary,
                         textAlign: 'center',
-                        py: 4
+                        py: 8
                       }}>
                         No performance data available
                       </Typography>
                     )}
                   </Box>
+                </CardContent>
+              </Card>
+            </Grid>
+
+            {/* 3. Performance Trend & Dealer Comparison Tabs */}
+            <Grid item xs={12}>
+              <Card sx={{
+                background: THEME.surfaceElevated,
+                border: `1px solid ${THEME.border}`,
+                borderRadius: 3,
+                boxShadow: THEME.shadowSm,
+                overflow: 'visible'
+              }}>
+                <CardContent sx={{ p: 3 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2, mb: 3, borderBottom: `1px solid ${THEME.borderLight}`, pb: 1 }}>
+                    <Tabs
+                      value={subTab}
+                      onChange={(event, newValue) => setSubTab(newValue)}
+                      sx={{
+                        minHeight: 40,
+                        '& .MuiTab-root': {
+                          minWidth: 'auto',
+                          fontSize: '0.9rem',
+                          fontWeight: 700,
+                          textTransform: 'none',
+                          py: 1,
+                          px: 3,
+                          mr: 1,
+                          color: THEME.textSecondary,
+                          '&.Mui-selected': {
+                            color: THEME.primary
+                          }
+                        },
+                        '& .MuiTabs-indicator': {
+                          backgroundColor: THEME.primary,
+                          height: 3,
+                          borderRadius: '3px 3px 0 0'
+                        }
+                      }}
+                    >
+                      <Tab icon={<Timeline sx={{ fontSize: 18 }} />} iconPosition="start" label="Performance Trend" />
+                      <Tab icon={<CompareArrows sx={{ fontSize: 18 }} />} iconPosition="start" label="Dealer Performance Comparison" />
+                    </Tabs>
+
+                    {/* Right side content dependent on active tab */}
+                    {subTab === 0 ? (
+                      <Chip
+                        label={`This ${timeRange}`}
+                        size="small"
+                        variant="outlined"
+                        sx={{
+                          borderColor: THEME.primary,
+                          color: THEME.primary,
+                          fontWeight: 600,
+                          fontSize: '0.75rem',
+                          height: 26,
+                          px: 1
+                        }}
+                      />
+                    ) : (
+                      <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
+                        <TextField
+                          select
+                          size="small"
+                          label="Dealer A"
+                          value={compareDealerA}
+                          onChange={(e) => setCompareDealerA(e.target.value)}
+                          sx={{ 
+                            minWidth: 150,
+                            '& .MuiOutlinedInput-root': {
+                              borderRadius: 2,
+                              fontSize: '13px',
+                              height: 36,
+                              '& fieldset': { borderColor: '#1E88E5' + '40' },
+                              '&:hover fieldset': { borderColor: '#1E88E5' },
+                              '&.Mui-focused fieldset': { borderColor: '#1E88E5' }
+                            },
+                            '& .MuiInputLabel-root': { fontSize: '11px', color: '#1E88E5', transform: 'translate(14px, 8px) scale(1)', '&.MuiInputLabel-shrink': { transform: 'translate(14px, -6px) scale(0.75)' } }
+                          }}
+                        >
+                          <MenuItem value=""><em>None / Clear</em></MenuItem>
+                          {dashboardData.dealerRankings
+                            .filter(d => d.id !== compareDealerB)
+                            .map(d => (
+                              <MenuItem key={d.id} value={d.id}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                  <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#1E88E5' }} />
+                                  {d.name}
+                                </Box>
+                              </MenuItem>
+                            ))}
+                        </TextField>
+
+                        <SwapHoriz sx={{ color: THEME.textTertiary, fontSize: 18 }} />
+
+                        <TextField
+                          select
+                          size="small"
+                          label="Dealer B"
+                          value={compareDealerB}
+                          onChange={(e) => setCompareDealerB(e.target.value)}
+                          sx={{ 
+                            minWidth: 150,
+                            '& .MuiOutlinedInput-root': {
+                              borderRadius: 2,
+                              fontSize: '13px',
+                              height: 36,
+                              '& fieldset': { borderColor: '#E53935' + '40' },
+                              '&:hover fieldset': { borderColor: '#E53935' },
+                              '&.Mui-focused fieldset': { borderColor: '#E53935' }
+                            },
+                            '& .MuiInputLabel-root': { fontSize: '11px', color: '#E53935', transform: 'translate(14px, 8px) scale(1)', '&.MuiInputLabel-shrink': { transform: 'translate(14px, -6px) scale(0.75)' } }
+                          }}
+                        >
+                          <MenuItem value=""><em>None / Clear</em></MenuItem>
+                          {dashboardData.dealerRankings
+                            .filter(d => d.id !== compareDealerA)
+                            .map(d => (
+                              <MenuItem key={d.id} value={d.id}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                  <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#E53935' }} />
+                                  {d.name}
+                                </Box>
+                              </MenuItem>
+                            ))}
+                        </TextField>
+                      </Box>
+                    )}
+                  </Box>
+
+                  {/* Tab Panels */}
+                  {subTab === 0 ? (
+                    <Box sx={{ width: '100%', minHeight: 320 }}>
+                      <PerformanceTrendChart data={dashboardData.performanceTrend} />
+                    </Box>
+                  ) : (
+                    <Box sx={{ width: '100%' }}>
+                      {compareDealerA && compareDealerB ? (
+                        <DealerComparisonChart
+                          dealerA={compareDealerA}
+                          dealerB={compareDealerB}
+                          allResults={allResults}
+                          dealerRankings={dashboardData.dealerRankings}
+                        />
+                      ) : (compareDealerA || compareDealerB) ? (
+                        <SingleDealerDetailView
+                          dealerId={compareDealerA || compareDealerB}
+                          allResults={allResults}
+                          dealerRankings={dashboardData.dealerRankings}
+                        />
+                      ) : (
+                        /* Default Placeholder */
+                        <Box sx={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          py: 8,
+                          px: 4,
+                          background: `linear-gradient(135deg, ${THEME.primaryUltraLight}, ${THEME.accentUltraLight})`,
+                          borderRadius: 3,
+                          border: `2px dashed ${THEME.border}`,
+                          position: 'relative',
+                          overflow: 'hidden'
+                        }}>
+                          <Box sx={{ position: 'absolute', top: 20, left: 30, width: 60, height: 60, borderRadius: '50%', background: `${THEME.primary}06` }} />
+                          <Box sx={{ position: 'absolute', bottom: 20, right: 40, width: 80, height: 80, borderRadius: '50%', background: `${THEME.accent}06` }} />
+
+                          <Box sx={{
+                            width: 64,
+                            height: 64,
+                            borderRadius: '50%',
+                            background: THEME.gradientPrimary,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            mb: 2,
+                            boxShadow: '0 6px 20px rgba(13, 161, 184, 0.2)'
+                          }}>
+                            <CompareArrows sx={{ color: '#fff', fontSize: 28 }} />
+                          </Box>
+                          <Typography variant="subtitle1" sx={{ fontWeight: 700, color: THEME.textPrimary, mb: 0.5, textAlign: 'center' }}>
+                            Select Dealerships to View Stats
+                          </Typography>
+                          <Typography variant="body2" sx={{ color: THEME.textSecondary, textAlign: 'center', maxWidth: 420, fontSize: '12.5px', lineHeight: 1.5 }}>
+                            Choose one dealer from the dropdowns above to view their breakdown, or select two dealers to compare their weekly performance trends.
+                          </Typography>
+                        </Box>
+                      )}
+                    </Box>
+                  )}
                 </CardContent>
               </Card>
             </Grid>
