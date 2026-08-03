@@ -73,7 +73,7 @@ npm start
 The backend is optimized for deployment on AWS EC2 or any Docker-ready high-spec cloud provider.
 
 - **Cloud Instance**: AWS EC2 Instance (served via Caddy proxy)
-- **Production API URL**: `https://qualitylensfocustech.duckdns.org`
+- **Production API URL**: `http://3.110.138.205:8000`
 
 To deploy the backend to your live server using Docker Compose:
 ```bash
@@ -99,8 +99,8 @@ docker compose -f docker-compose.yml up --build
 ## ☁️ Ecosystem URLs
 
 - **Primary Live Frontend**: [https://qualitylens.focusengineeringapp.com](https://qualitylens.focusengineeringapp.com)
-- **API Backend (AWS EC2)**: `https://qualitylensfocustech.duckdns.org`
-- **API Documentation**: [FastAPI Docs](https://qualitylensfocustech.duckdns.org/docs)
+- **API Backend (AWS EC2)**: `http://3.110.138.205:8000`
+- **API Documentation**: [FastAPI Docs](http://3.110.138.205:8000/docs)
 
 ---
 
