@@ -517,8 +517,8 @@ function GlobalAnalysisMonitor() {
                           🏢 {dName}
                         </Typography>
                         {/* User Name & Role Display */}
-                        <Typography variant="caption" sx={{ color: '#64748B', fontWeight: 500, display: 'block', fontSize: '8px', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                          👤 {subUser} ({subRole})
+                        <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600, display: 'block', fontSize: '8.5px', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                          👤 {subRole}: <strong>{subUser}</strong>
                         </Typography>
                       </Box>
                       
@@ -573,8 +573,8 @@ function GlobalAnalysisMonitor() {
                       🏢 {dName}
                     </Typography>
                     {/* User Name & Role Display */}
-                    <Typography variant="caption" sx={{ color: '#64748B', display: 'block', fontSize: '7.5px', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                      👤 {subUser} ({subRole})
+                    <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600, display: 'block', fontSize: '8px', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                      👤 {subRole}: <strong>{subUser}</strong>
                     </Typography>
                   </Box>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>

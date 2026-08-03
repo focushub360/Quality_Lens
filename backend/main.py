@@ -2583,11 +2583,12 @@ async def list_all_batches(limit: int = 50, status_filter: Optional[str] = None,
     batches_cursor = batch_collection.find(query).sort("created_at", -1)
     batches = await batches_cursor.to_list(min(limit, 100))
 
-    # Pre-fetch user/dealer showroom names and user roles to map submitted_by_username & submitted_by_user_role
-    user_dealer_map = {}
+    # Pre-fetch all user profiles to map username, role, and dealership accurately
     user_info_map = {}
-    async for u in users_collection.find({}, {"_id": 1, "showroom_name": 1, "username": 1, "role": 1, "dealer_id": 1}):
-        s_name = u.get("showroom_name") or u.get("username")
+    user_dealer_map = {}
+    async for u in users_collection.find({}):
+        u_id_str = str(u["_id"])
+        u_name = u.get("username") or u.get("email") or "Account"
         u_role = u.get("role", "dealer_user")
         role_label = {
             "super_admin": "Super Admin",
@@ -2596,24 +2597,29 @@ async def list_all_batches(limit: int = 50, status_filter: Optional[str] = None,
             "dealer_user": "Dealer User"
         }.get(u_role, u_role.replace("_", " ").title())
 
-        user_info_map[str(u["_id"])] = {
-            "username": u.get("username", "User"),
-            "role": role_label
-        }
-        if s_name:
-            user_dealer_map[str(u["_id"])] = s_name
-            if u.get("dealer_id"):
-                user_dealer_map[str(u.get("dealer_id"))] = s_name
+        s_name = u.get("showroom_name") or u_name
+
+        info_obj = {"username": u_name, "role": role_label, "showroom_name": s_name}
+
+        user_info_map[u_id_str] = info_obj
+        user_info_map[u_name] = info_obj
+        if u.get("dealer_id"):
+            user_info_map[str(u.get("dealer_id"))] = info_obj
+
+        user_dealer_map[u_id_str] = s_name
+        if u.get("dealer_id"):
+            user_dealer_map[str(u.get("dealer_id"))] = s_name
     
     result = []
     for batch in batches:
         submitted_id = str(batch.get("submitted_by_user_id")) if batch.get("submitted_by_user_id") is not None else None
         d_id = str(batch.get("dealer_id")) if batch.get("dealer_id") is not None else None
-        d_name = batch.get("dealer_name") or (user_dealer_map.get(submitted_id) if submitted_id else None) or (user_dealer_map.get(d_id) if d_id else None) or "Dealership"
         
-        u_info = user_info_map.get(submitted_id) if submitted_id else {}
-        sub_username = batch.get("submitted_by_username") or u_info.get("username") or "User"
-        sub_role = batch.get("submitted_by_user_role") or u_info.get("role") or "Dealer User"
+        u_info = (user_info_map.get(submitted_id) if submitted_id else None) or (user_info_map.get(d_id) if d_id else None) or {}
+        
+        sub_username = batch.get("submitted_by_username") or u_info.get("username") or "Account"
+        sub_role = batch.get("submitted_by_user_role") or u_info.get("role") or "Dealer Admin"
+        d_name = batch.get("dealer_name") or u_info.get("showroom_name") or (user_dealer_map.get(submitted_id) if submitted_id else None) or (user_dealer_map.get(d_id) if d_id else None) or "Dealership"
 
         result.append(BatchCreateResponse(
             success=True,
