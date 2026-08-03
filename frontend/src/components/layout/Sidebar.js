@@ -321,7 +321,7 @@ export default function Sidebar() {
         background: 'rgba(13, 161, 184, 0.4)'
       }
     }}>
-      <Box sx={{ px: 2, py: 2, display: 'flex', alignItems: 'center', gap: 1.5, minHeight: '70px' }}>
+      <Box sx={{ px: 2.5, py: 2, display: 'flex', alignItems: 'center', gap: 1.25, minHeight: '72px' }}>
         <Box 
           component="img" 
           src={`${process.env.PUBLIC_URL || ''}/qualitylens-logo-mark.png`}
@@ -330,13 +330,13 @@ export default function Sidebar() {
             e.target.onerror = null;
             e.target.src = '/qualitylens-logo-mark.png';
           }}
-          sx={{ height: 42, width: 'auto', objectFit: 'contain' }} 
+          sx={{ height: 38, width: 'auto', objectFit: 'contain' }} 
         />
-        <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-          <Typography variant="h6" sx={{ fontWeight: 800, color: THEME.primaryDark, letterSpacing: '-0.5px', lineHeight: 1.1, fontSize: '1.25rem' }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+          <Typography variant="h6" sx={{ fontWeight: 900, color: THEME.primaryDark, letterSpacing: '-0.5px', lineHeight: 1, fontSize: '1.2rem' }}>
             Quality<span style={{ color: THEME.primary }}>Lens</span>
           </Typography>
-          <Typography variant="caption" sx={{ color: THEME.textSecondary, fontSize: '8.5px', fontWeight: 700, letterSpacing: '0.8px', textTransform: 'uppercase' }}>
+          <Typography variant="caption" sx={{ color: THEME.textSecondary, fontSize: '8px', fontWeight: 800, letterSpacing: '1.2px', textTransform: 'uppercase', mt: 0.5, lineHeight: 1 }}>
             Video Analysis
           </Typography>
         </Box>
