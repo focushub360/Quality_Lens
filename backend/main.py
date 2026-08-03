@@ -278,6 +278,8 @@ class BatchCreateResponse(BaseModel):
     updated_at: Optional[dt] = None
     filename: Optional[str] = None
     submitted_by_user_id: Optional[str] = None
+    submitted_by_username: Optional[str] = None
+    submitted_by_user_role: Optional[str] = None
     dealer_id: Optional[str] = None
     dealer_name: Optional[str] = None
     deleted_by_admin: Optional[bool] = False
@@ -2416,6 +2418,14 @@ async def create_bulk_analysis(
         logger.info("Found %d rows, processing %d URLs/IDs", len(df), len(urls))
 
         dealer_name_str = getattr(current_user, "showroom_name", None) or getattr(current_user, "username", None) or "Dealership"
+        submitted_role_str = getattr(current_user, "role", "dealer_user")
+        submitted_role_display = {
+            "super_admin": "Super Admin",
+            "dealer_admin": "Dealer Admin",
+            "branch_admin": "Branch Admin",
+            "dealer_user": "Dealer User"
+        }.get(submitted_role_str, submitted_role_str.replace("_", " ").title())
+
         batch_job = {
             "status": BatchStatus.PENDING,
             "total_urls": len(urls),
@@ -2428,6 +2438,8 @@ async def create_bulk_analysis(
             "created_at": dt.utcnow(),
             "updated_at": dt.utcnow(),
             "submitted_by_user_id": str(current_user.id),
+            "submitted_by_username": current_user.username,
+            "submitted_by_user_role": submitted_role_display,
             "dealer_id": current_user.dealer_id, # Now a simple string
             "dealer_name": dealer_name_str,
         }
@@ -2571,20 +2583,37 @@ async def list_all_batches(limit: int = 50, status_filter: Optional[str] = None,
     batches_cursor = batch_collection.find(query).sort("created_at", -1)
     batches = await batches_cursor.to_list(min(limit, 100))
 
-    # Pre-fetch user/dealer showroom names to map dealer_name for older batches missing it
+    # Pre-fetch user/dealer showroom names and user roles to map submitted_by_username & submitted_by_user_role
     user_dealer_map = {}
-    async for u in users_collection.find({}, {"_id": 1, "showroom_name": 1, "username": 1, "dealer_id": 1}):
+    user_info_map = {}
+    async for u in users_collection.find({}, {"_id": 1, "showroom_name": 1, "username": 1, "role": 1, "dealer_id": 1}):
         s_name = u.get("showroom_name") or u.get("username")
+        u_role = u.get("role", "dealer_user")
+        role_label = {
+            "super_admin": "Super Admin",
+            "dealer_admin": "Dealer Admin",
+            "branch_admin": "Branch Admin",
+            "dealer_user": "Dealer User"
+        }.get(u_role, u_role.replace("_", " ").title())
+
+        user_info_map[str(u["_id"])] = {
+            "username": u.get("username", "User"),
+            "role": role_label
+        }
         if s_name:
             user_dealer_map[str(u["_id"])] = s_name
             if u.get("dealer_id"):
-                user_dealer_map[str(u["dealer_id"])] = s_name
+                user_dealer_map[str(u.get("dealer_id"))] = s_name
     
     result = []
     for batch in batches:
         submitted_id = str(batch.get("submitted_by_user_id")) if batch.get("submitted_by_user_id") is not None else None
         d_id = str(batch.get("dealer_id")) if batch.get("dealer_id") is not None else None
         d_name = batch.get("dealer_name") or (user_dealer_map.get(submitted_id) if submitted_id else None) or (user_dealer_map.get(d_id) if d_id else None) or "Dealership"
+        
+        u_info = user_info_map.get(submitted_id) if submitted_id else {}
+        sub_username = batch.get("submitted_by_username") or u_info.get("username") or "User"
+        sub_role = batch.get("submitted_by_user_role") or u_info.get("role") or "Dealer User"
 
         result.append(BatchCreateResponse(
             success=True,
@@ -2597,6 +2626,8 @@ async def list_all_batches(limit: int = 50, status_filter: Optional[str] = None,
             updated_at=batch.get("updated_at"),
             filename=batch.get("original_filename", "Unknown"),
             submitted_by_user_id=submitted_id,
+            submitted_by_username=sub_username,
+            submitted_by_user_role=sub_role,
             dealer_id=d_id,
             dealer_name=d_name,
             deleted_by_admin=batch.get("deleted_by_admin", False),

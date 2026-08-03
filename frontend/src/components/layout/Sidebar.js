@@ -502,6 +502,8 @@ function GlobalAnalysisMonitor() {
                 const processed = (b.processed_urls || 0) + (b.failed_urls || 0);
                 const pct = total > 0 ? Math.round((processed / total) * 100) : 0;
                 const dName = b.dealer_name || b.dealer_id || 'Unknown Dealer';
+                const subUser = b.submitted_by_username || 'User';
+                const subRole = b.submitted_by_user_role || 'Dealer Admin';
 
                 return (
                   <Box key={b.batch_id || b.batchId} sx={{ mb: 1, p: 0.75, borderRadius: 1.5, background: 'rgba(255,255,255,0.7)', border: '1px solid rgba(13,161,184,0.15)' }}>
@@ -513,6 +515,10 @@ function GlobalAnalysisMonitor() {
                         {/* Dealer Name Display */}
                         <Typography variant="caption" sx={{ color: '#0C587D', fontWeight: 600, display: 'block', fontSize: '8.5px', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
                           🏢 {dName}
+                        </Typography>
+                        {/* User Name & Role Display */}
+                        <Typography variant="caption" sx={{ color: '#64748B', fontWeight: 500, display: 'block', fontSize: '8px', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                          👤 {subUser} ({subRole})
                         </Typography>
                       </Box>
                       
@@ -554,6 +560,8 @@ function GlobalAnalysisMonitor() {
               </Typography>
             ) : completedBatches.map(b => {
               const dName = b.dealer_name || b.dealer_id || 'Unknown Dealer';
+              const subUser = b.submitted_by_username || 'User';
+              const subRole = b.submitted_by_user_role || 'Dealer Admin';
               return (
                 <Box key={b.batch_id || b.batchId} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.75, p: 0.5, borderRadius: 1, background: 'rgba(255,255,255,0.4)' }}>
                   <Box sx={{ minWidth: 0, flex: 1, mr: 0.5 }}>
@@ -563,6 +571,10 @@ function GlobalAnalysisMonitor() {
                     {/* Dealer Name Display */}
                     <Typography variant="caption" sx={{ color: THEME.textSecondary, display: 'block', fontSize: '8px', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
                       🏢 {dName}
+                    </Typography>
+                    {/* User Name & Role Display */}
+                    <Typography variant="caption" sx={{ color: '#64748B', display: 'block', fontSize: '7.5px', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                      👤 {subUser} ({subRole})
                     </Typography>
                   </Box>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
