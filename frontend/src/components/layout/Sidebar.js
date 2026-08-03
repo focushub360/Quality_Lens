@@ -12,7 +12,15 @@ import {
   useTheme,
   Divider,
   useMediaQuery,
-  Collapse
+  Collapse,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
+  Button,
+  IconButton,
+  Snackbar
 } from '@mui/material';
 import {
   ExpandLess,
@@ -31,7 +39,8 @@ import {
   VpnKey,
   ExitToApp,
   Palette,
-  Timeline
+  Timeline,
+  Delete as DeleteIcon
 } from '@mui/icons-material';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../../contexts/AuthContext';
@@ -359,22 +368,27 @@ export default function Sidebar() {
 function GlobalAnalysisMonitor() {
   const [batches, setBatches] = useState([]);
   const [open, setOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [batchToDelete, setBatchToDelete] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [snackMsg, setSnackMsg] = useState('');
   const { role } = useContext(AuthContext);
+
+  const isSuperAdmin = role === 'super_admin';
+
+  const fetchBatches = async () => {
+    try {
+      const res = await api.get('/bulk-batches');
+      if (Array.isArray(res.data)) {
+        setBatches(res.data);
+      }
+    } catch (err) {
+      console.warn('Failed to fetch global batches for sidebar', err);
+    }
+  };
 
   useEffect(() => {
     if (!role) return;
-
-    const fetchBatches = async () => {
-      try {
-        const res = await api.get('/bulk-batches');
-        if (Array.isArray(res.data)) {
-          setBatches(res.data);
-        }
-      } catch (err) {
-        console.warn('Failed to fetch global batches for sidebar', err);
-      }
-    };
-
     fetchBatches();
     const interval = setInterval(fetchBatches, 10000); // Poll every 10 seconds
     return () => clearInterval(interval);
@@ -383,11 +397,57 @@ function GlobalAnalysisMonitor() {
   if (!role) return null;
 
   const activeBatches = batches.filter(b => ['processing', 'pending', 'stopping'].includes(b.status));
-  const completedBatches = batches.filter(b => ['completed', 'failed'].includes(b.status)).slice(0, 3);
+  const completedBatches = batches.filter(b => ['completed', 'failed'].includes(b.status)).slice(0, 5);
+  const deletedAdminBatches = batches.filter(b => b.deleted_by_admin || b.status === 'deleted_by_admin');
+
+  const handleDeleteClick = (e, b) => {
+    e.stopPropagation();
+    setBatchToDelete(b);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!batchToDelete) return;
+    setIsDeleting(true);
+    try {
+      const bId = batchToDelete.batch_id || batchToDelete.batchId;
+      await api.delete(`/bulk-batches/${bId}`);
+      setSnackMsg(`Batch '${batchToDelete.filename || 'Upload'}' has been deleted.`);
+      setDeleteDialogOpen(false);
+      setBatchToDelete(null);
+      await fetchBatches();
+    } catch (err) {
+      console.error('Failed to delete batch:', err);
+      setSnackMsg('Failed to delete batch. Please try again.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   return (
     <Box sx={{ px: 2, pb: 2, mt: 'auto' }}>
       <Divider sx={{ mb: 1.5, borderColor: THEME.divider }} />
+
+      {/* Deleted by Admin notification alert for Dealer users */}
+      {!isSuperAdmin && deletedAdminBatches.length > 0 && (
+        <Box sx={{
+          background: 'rgba(239, 68, 68, 0.1)',
+          border: '1px solid #EF4444',
+          borderRadius: 2,
+          p: 1,
+          mb: 1
+        }}>
+          <Typography variant="caption" sx={{ color: '#EF4444', fontWeight: 700, display: 'block', fontSize: '10px' }}>
+            ⚠️ Notice from Super Admin
+          </Typography>
+          {deletedAdminBatches.slice(0, 2).map(b => (
+            <Typography key={b.batch_id} variant="caption" sx={{ color: '#DC2626', display: 'block', fontSize: '9px', mt: 0.25 }}>
+              • Batch '{b.filename}' was deleted by Super Admin.
+            </Typography>
+          ))}
+        </Box>
+      )}
+
       <ListItemButton 
         onClick={() => setOpen(!open)}
         sx={{
@@ -427,7 +487,7 @@ function GlobalAnalysisMonitor() {
           background: 'rgba(255, 255, 255, 0.4)', 
           borderRadius: 2, 
           p: 1, 
-          maxHeight: 180, 
+          maxHeight: 220, 
           overflowY: 'auto',
           border: `1px solid ${THEME.divider}`
         }}>
@@ -441,17 +501,40 @@ function GlobalAnalysisMonitor() {
                 const total = b.total_urls || 0;
                 const processed = (b.processed_urls || 0) + (b.failed_urls || 0);
                 const pct = total > 0 ? Math.round((processed / total) * 100) : 0;
+                const dName = b.dealer_name || b.dealer_id || 'Unknown Dealer';
+
                 return (
-                  <Box key={b.batch_id || b.batchId} sx={{ mb: 1, p: 0.5, borderRadius: 1 }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.25 }}>
-                      <Typography variant="caption" sx={{ fontWeight: 600, color: THEME.textPrimary, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: 140, fontSize: '10px' }}>
-                        {b.filename || 'Excel Upload'}
-                      </Typography>
-                      <Typography variant="caption" sx={{ fontWeight: 700, color: THEME.primary, fontSize: '10px' }}>
-                        {pct}% ({processed}/{total})
-                      </Typography>
+                  <Box key={b.batch_id || b.batchId} sx={{ mb: 1, p: 0.75, borderRadius: 1.5, background: 'rgba(255,255,255,0.7)', border: '1px solid rgba(13,161,184,0.15)' }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 0.25 }}>
+                      <Box sx={{ minWidth: 0, flex: 1, mr: 0.5 }}>
+                        <Typography variant="caption" sx={{ fontWeight: 700, color: THEME.textPrimary, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', display: 'block', fontSize: '10px' }}>
+                          {b.filename || 'Excel Upload'}
+                        </Typography>
+                        {/* Dealer Name Display */}
+                        <Typography variant="caption" sx={{ color: '#0C587D', fontWeight: 600, display: 'block', fontSize: '8.5px', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                          🏢 {dName}
+                        </Typography>
+                      </Box>
+                      
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                        <Typography variant="caption" sx={{ fontWeight: 700, color: THEME.primary, fontSize: '9.5px' }}>
+                          {pct}% ({processed}/{total})
+                        </Typography>
+                        
+                        {/* Super Admin Only Delete Icon */}
+                        {isSuperAdmin && (
+                          <IconButton 
+                            size="small" 
+                            onClick={(e) => handleDeleteClick(e, b)}
+                            title="Delete batch analysis (Super Admin)"
+                            sx={{ p: 0.25, color: '#EF4444', '&:hover': { background: 'rgba(239,68,68,0.1)' } }}
+                          >
+                            <DeleteIcon sx={{ fontSize: 13 }} />
+                          </IconButton>
+                        )}
+                      </Box>
                     </Box>
-                    <Box sx={{ width: '100%', height: 4, borderRadius: 2, background: 'rgba(0,0,0,0.06)', overflow: 'hidden' }}>
+                    <Box sx={{ width: '100%', height: 4, borderRadius: 2, background: 'rgba(0,0,0,0.06)', overflow: 'hidden', mt: 0.5 }}>
                       <Box sx={{ height: '100%', width: `${pct}%`, background: THEME.primary, borderRadius: 2 }} />
                     </Box>
                   </Box>
@@ -469,27 +552,84 @@ function GlobalAnalysisMonitor() {
               <Typography variant="caption" sx={{ color: THEME.textSecondary, fontStyle: 'italic', display: 'block', fontSize: '9px' }}>
                 No completed uploads
               </Typography>
-            ) : completedBatches.map(b => (
-              <Box key={b.batch_id || b.batchId} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5, p: 0.5 }}>
-                <Typography variant="caption" sx={{ color: THEME.textPrimary, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: 130, fontSize: '9.5px' }}>
-                  {b.filename || 'Excel Upload'}
-                </Typography>
-                <Typography 
-                  variant="caption" 
-                  sx={{ 
-                    fontWeight: 700, 
-                    color: b.status === 'completed' ? '#00C9A7' : '#D91B82', 
-                    fontSize: '9.5px',
-                    textTransform: 'uppercase'
-                  }}
-                >
-                  {b.status}
-                </Typography>
-              </Box>
-            ))}
+            ) : completedBatches.map(b => {
+              const dName = b.dealer_name || b.dealer_id || 'Unknown Dealer';
+              return (
+                <Box key={b.batch_id || b.batchId} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.75, p: 0.5, borderRadius: 1, background: 'rgba(255,255,255,0.4)' }}>
+                  <Box sx={{ minWidth: 0, flex: 1, mr: 0.5 }}>
+                    <Typography variant="caption" sx={{ color: THEME.textPrimary, fontWeight: 600, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', display: 'block', fontSize: '9.5px' }}>
+                      {b.filename || 'Excel Upload'}
+                    </Typography>
+                    {/* Dealer Name Display */}
+                    <Typography variant="caption" sx={{ color: THEME.textSecondary, display: 'block', fontSize: '8px', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                      🏢 {dName}
+                    </Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <Typography 
+                      variant="caption" 
+                      sx={{ 
+                        fontWeight: 700, 
+                        color: b.status === 'completed' ? '#00C9A7' : '#D91B82', 
+                        fontSize: '9px',
+                        textTransform: 'uppercase'
+                      }}
+                    >
+                      {b.status}
+                    </Typography>
+                    {/* Super Admin Only Delete Icon */}
+                    {isSuperAdmin && (
+                      <IconButton 
+                        size="small" 
+                        onClick={(e) => handleDeleteClick(e, b)}
+                        title="Delete batch analysis (Super Admin)"
+                        sx={{ p: 0.25, color: '#EF4444', '&:hover': { background: 'rgba(239,68,68,0.1)' } }}
+                      >
+                        <DeleteIcon sx={{ fontSize: 13 }} />
+                      </IconButton>
+                    )}
+                  </Box>
+                </Box>
+              );
+            })}
           </Box>
         </Box>
       </Collapse>
+
+      {/* Confirmation Dialog for Super Admin Deletion */}
+      <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>
+        <DialogTitle sx={{ fontWeight: 700, color: '#DC2626', pb: 1 }}>
+          ⚠️ Delete Batch Analysis?
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ fontSize: '0.875rem' }}>
+            Are you sure you want to delete batch <strong>"{batchToDelete?.filename}"</strong> uploaded by <strong>"{batchToDelete?.dealer_name || batchToDelete?.dealer_id || 'Dealer'}"</strong>?
+            <br /><br />
+            This will cancel active processing, remove results, and notify the dealer admin that it was deleted by Super Admin.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setDeleteDialogOpen(false)} disabled={isDeleting}>
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleConfirmDelete} 
+            color="error" 
+            variant="contained" 
+            disabled={isDeleting}
+          >
+            {isDeleting ? 'Deleting...' : 'Delete Batch'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Snackbar notification */}
+      <Snackbar 
+        open={Boolean(snackMsg)} 
+        autoHideDuration={4000} 
+        onClose={() => setSnackMsg('')}
+        message={snackMsg}
+      />
     </Box>
   );
 }

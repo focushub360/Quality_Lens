@@ -279,6 +279,9 @@ class BatchCreateResponse(BaseModel):
     filename: Optional[str] = None
     submitted_by_user_id: Optional[str] = None
     dealer_id: Optional[str] = None
+    dealer_name: Optional[str] = None
+    deleted_by_admin: Optional[bool] = False
+    deleted_by_admin_msg: Optional[str] = None
 
 class BatchStatusResponse(BaseModel):
     batch_id: str
@@ -2412,6 +2415,7 @@ async def create_bulk_analysis(
 
         logger.info("Found %d rows, processing %d URLs/IDs", len(df), len(urls))
 
+        dealer_name_str = getattr(current_user, "showroom_name", None) or getattr(current_user, "username", None) or "Dealership"
         batch_job = {
             "status": BatchStatus.PENDING,
             "total_urls": len(urls),
@@ -2425,6 +2429,7 @@ async def create_bulk_analysis(
             "updated_at": dt.utcnow(),
             "submitted_by_user_id": str(current_user.id),
             "dealer_id": current_user.dealer_id, # Now a simple string
+            "dealer_name": dealer_name_str,
         }
         
         inserted = await batch_collection.insert_one(batch_job)
@@ -2565,11 +2570,24 @@ async def list_all_batches(limit: int = 50, status_filter: Optional[str] = None,
     
     batches_cursor = batch_collection.find(query).sort("created_at", -1)
     batches = await batches_cursor.to_list(min(limit, 100))
+
+    # Pre-fetch user/dealer showroom names to map dealer_name for older batches missing it
+    user_dealer_map = {}
+    async for u in users_collection.find({}, {"_id": 1, "showroom_name": 1, "username": 1, "dealer_id": 1}):
+        s_name = u.get("showroom_name") or u.get("username")
+        if s_name:
+            user_dealer_map[str(u["_id"])] = s_name
+            if u.get("dealer_id"):
+                user_dealer_map[str(u["dealer_id"])] = s_name
     
     result = []
     for batch in batches:
+        submitted_id = str(batch.get("submitted_by_user_id")) if batch.get("submitted_by_user_id") is not None else None
+        d_id = str(batch.get("dealer_id")) if batch.get("dealer_id") is not None else None
+        d_name = batch.get("dealer_name") or (user_dealer_map.get(submitted_id) if submitted_id else None) or (user_dealer_map.get(d_id) if d_id else None) or "Dealership"
+
         result.append(BatchCreateResponse(
-            success=True,                   # <-- ADD THIS
+            success=True,
             batch_id=str(batch["_id"]),
             status=batch.get("status"),
             total_urls=batch.get("total_urls", 0),
@@ -2578,13 +2596,59 @@ async def list_all_batches(limit: int = 50, status_filter: Optional[str] = None,
             created_at=batch.get("created_at"),
             updated_at=batch.get("updated_at"),
             filename=batch.get("original_filename", "Unknown"),
-            submitted_by_user_id=str(batch.get("submitted_by_user_id")) if batch.get("submitted_by_user_id") is not None else None,
-            dealer_id=str(batch.get("dealer_id")) if batch.get("dealer_id") is not None else None,
+            submitted_by_user_id=submitted_id,
+            dealer_id=d_id,
+            dealer_name=d_name,
+            deleted_by_admin=batch.get("deleted_by_admin", False),
+            deleted_by_admin_msg=batch.get("deleted_by_admin_msg"),
             message=f"Batch {str(batch['_id'])} status: {batch.get('status')}"
         ))
 
-    
     return result
+
+@app.delete("/bulk-batches/{batch_id}")
+async def delete_bulk_batch(
+    batch_id: str,
+    current_user: UserInDB = Depends(get_current_super_admin)
+):
+    """
+    Delete / cancel a bulk analysis batch. SUPER ADMIN ONLY.
+    Marks batch as deleted_by_admin so dealer admin gets notified.
+    """
+    if not ObjectId.is_valid(batch_id):
+        raise HTTPException(status_code=400, detail="Invalid batch ID format.")
+    
+    object_id = ObjectId(batch_id)
+    batch = await batch_collection.find_one({"_id": object_id})
+    if not batch:
+        raise HTTPException(status_code=404, detail="Batch not found.")
+    
+    # 1. Signal cancellation flag if active
+    batch_cancellation_flags[batch_id] = True
+    
+    filename = batch.get("original_filename", "Batch Upload")
+    dealer_name = batch.get("dealer_name", "Dealership")
+    
+    # 2. Update status in batch_collection so dealers receive notification
+    await batch_collection.update_one(
+        {"_id": object_id},
+        {"$set": {
+            "status": "deleted_by_admin",
+            "deleted_by_admin": True,
+            "deleted_by_admin_msg": f"Batch '{filename}' was deleted by Super Admin.",
+            "deleted_at": dt.utcnow(),
+            "updated_at": dt.utcnow()
+        }}
+    )
+    
+    # 3. Clean up processed results for this batch
+    await results_collection.delete_many({"batch_id": batch_id})
+    
+    logger.info(f"Super Admin {current_user.username} deleted batch {batch_id} for dealer '{dealer_name}'.")
+    return {
+        "success": True, 
+        "message": f"Batch '{filename}' for dealer '{dealer_name}' has been deleted by Super Admin."
+    }
     
 @app.post("/bulk-stop-all")
 async def stop_all_processing(current_user: UserInDB = Depends(get_current_super_admin)):
