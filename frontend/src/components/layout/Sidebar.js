@@ -321,25 +321,17 @@ export default function Sidebar() {
         background: 'rgba(13, 161, 184, 0.4)'
       }
     }}>
-      <Box sx={{ px: 2.5, py: 2, display: 'flex', alignItems: 'center', gap: 1.25, minHeight: '72px' }}>
+      <Box sx={{ px: 2, py: 2.25, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '74px' }}>
         <Box 
           component="img" 
-          src={`${process.env.PUBLIC_URL || ''}/qualitylens-logo-mark.png`}
+          src={`${process.env.PUBLIC_URL || ''}/qualitylens-logo.png`}
           alt="QualityLens" 
           onError={(e) => {
             e.target.onerror = null;
-            e.target.src = '/qualitylens-logo-mark.png';
+            e.target.src = '/qualitylens-logo.png';
           }}
-          sx={{ height: 38, width: 'auto', objectFit: 'contain' }} 
+          sx={{ height: 48, width: 'auto', objectFit: 'contain' }} 
         />
-        <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-          <Typography variant="h6" sx={{ fontWeight: 900, color: THEME.primaryDark, letterSpacing: '-0.5px', lineHeight: 1, fontSize: '1.2rem' }}>
-            Quality<span style={{ color: THEME.primary }}>Lens</span>
-          </Typography>
-          <Typography variant="caption" sx={{ color: THEME.textSecondary, fontSize: '8px', fontWeight: 800, letterSpacing: '1.2px', textTransform: 'uppercase', mt: 0.5, lineHeight: 1 }}>
-            Video Analysis
-          </Typography>
-        </Box>
       </Box>
 
       <Divider sx={{ mx: 2, mb: 2, borderColor: THEME.divider }} />
