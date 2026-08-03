@@ -1,9 +1,9 @@
 import axios from 'axios';
 
-// Primary domain: https://qualitylens.focusengineeringapp.com
-// Backend API proxied by AWS Amplify rewrite rules
-const EC2_BACKEND_URL = 'http://ec2-3-110-138-205.ap-south-1.compute.amazonaws.com:8000';
-const API_BASE = process.env.REACT_APP_API_URL || '';
+// Primary Production Domain: https://qualitylens.focusengineeringapp.com
+// EC2 Backend Instance: http://3.110.138.205:8000
+const EC2_BACKEND_URL = 'http://3.110.138.205:8000';
+const API_BASE = process.env.REACT_APP_API_URL || EC2_BACKEND_URL;
 
 const api = axios.create({ baseURL: API_BASE });
 
