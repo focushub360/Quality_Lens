@@ -34,7 +34,10 @@ import {
   TablePagination,
   MenuItem,
   InputAdornment,
-  CardActionArea
+  CardActionArea,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails
 } from '@mui/material';
 import {
   TrendingUp,
@@ -74,7 +77,8 @@ import {
   MoreVert,
   Badge,
   CompareArrows,
-  SwapHoriz
+  SwapHoriz,
+  ExpandMore
 } from '@mui/icons-material';
 import {
   LineChart,
@@ -3334,7 +3338,7 @@ export default function SuperAdminDashboard() {
           {/* Charts Section */}
           <Grid container spacing={2} sx={{ mb: 6 }} alignItems="stretch">
             {/* Performance Trend */}
-            <Grid item xs={12}>
+            <Grid item xs={12} md={4}>
               <Card sx={{
                 background: THEME.surfaceElevated,
                 border: `1px solid ${THEME.border}`,
@@ -3377,28 +3381,47 @@ export default function SuperAdminDashboard() {
               </Card>
             </Grid>
 
-            {/* Dealer Performance Comparison */}
+            {/* Dealer Performance Comparison (Collapsible Accordion Dropdown Card) */}
             <Grid item xs={12}>
-              <Card sx={{
-                background: THEME.surfaceElevated,
-                border: `1px solid ${THEME.border}`,
-                borderRadius: 3,
-                boxShadow: THEME.shadowSm,
-                overflow: 'visible'
-              }}>
-                <CardContent sx={{ p: 3 }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2, mb: 3 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                      <CompareArrows sx={{ color: THEME.primary, mr: 1.5, fontSize: 24 }} />
-                      <Box>
-                        <Typography variant="h6" sx={{ color: THEME.textPrimary, fontWeight: 700, fontSize: '1rem', lineHeight: 1.2 }}>
-                          Dealer Performance Comparison
-                        </Typography>
-                        <Typography variant="caption" sx={{ color: THEME.textSecondary, fontSize: '11px' }}>
-                          Compare quality metrics between two dealerships
-                        </Typography>
-                      </Box>
+              <Accordion 
+                sx={{
+                  background: THEME.surfaceElevated,
+                  border: `1px solid ${THEME.border}`,
+                  borderRadius: '12px !important',
+                  boxShadow: THEME.shadowSm,
+                  '&:before': { display: 'none' },
+                  overflow: 'visible'
+                }}
+              >
+                <AccordionSummary
+                  expandIcon={<ExpandMore sx={{ color: THEME.primary }} />}
+                  sx={{
+                    px: 3,
+                    py: 1,
+                    '& .MuiAccordionSummary-content': {
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      flexWrap: 'wrap',
+                      gap: 2
+                    }
+                  }}
+                >
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    <CompareArrows sx={{ color: THEME.primary, mr: 1.5, fontSize: 24 }} />
+                    <Box sx={{ textAlign: 'left' }}>
+                      <Typography variant="h6" sx={{ color: THEME.textPrimary, fontWeight: 700, fontSize: '1rem', lineHeight: 1.2 }}>
+                        Dealer Performance Comparison
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: THEME.textSecondary, fontSize: '11px' }}>
+                        Click to expand and compare or view single dealership stats
+                      </Typography>
                     </Box>
+                  </Box>
+                </AccordionSummary>
+
+                <AccordionDetails sx={{ px: 3, pb: 3, pt: 0 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap', gap: 2, mb: 3, pb: 2, borderBottom: `1px solid ${THEME.borderLight}` }}>
                     <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', flexWrap: 'wrap' }}>
                       <TextField
                         select
@@ -3406,6 +3429,7 @@ export default function SuperAdminDashboard() {
                         label="Dealer A"
                         value={compareDealerA}
                         onChange={(e) => setCompareDealerA(e.target.value)}
+                        onClick={(e) => e.stopPropagation()}
                         sx={{ 
                           minWidth: 160,
                           '& .MuiOutlinedInput-root': {
@@ -3439,6 +3463,7 @@ export default function SuperAdminDashboard() {
                         label="Dealer B"
                         value={compareDealerB}
                         onChange={(e) => setCompareDealerB(e.target.value)}
+                        onClick={(e) => e.stopPropagation()}
                         sx={{ 
                           minWidth: 160,
                           '& .MuiOutlinedInput-root': {
@@ -3487,7 +3512,7 @@ export default function SuperAdminDashboard() {
                       flexDirection: 'column',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      py: 8,
+                      py: 6,
                       px: 4,
                       background: `linear-gradient(135deg, ${THEME.primaryUltraLight}, ${THEME.accentUltraLight})`,
                       borderRadius: 3,
@@ -3495,55 +3520,36 @@ export default function SuperAdminDashboard() {
                       position: 'relative',
                       overflow: 'hidden'
                     }}>
-                      {/* Decorative background elements */}
                       <Box sx={{ position: 'absolute', top: 20, left: 30, width: 60, height: 60, borderRadius: '50%', background: `${THEME.primary}06` }} />
                       <Box sx={{ position: 'absolute', bottom: 20, right: 40, width: 80, height: 80, borderRadius: '50%', background: `${THEME.accent}06` }} />
-                      <Box sx={{ position: 'absolute', top: 40, right: 80, width: 40, height: 40, borderRadius: '50%', background: `${THEME.warning}06` }} />
 
                       <Box sx={{
-                        width: 72,
-                        height: 72,
+                        width: 64,
+                        height: 64,
                         borderRadius: '50%',
                         background: THEME.gradientPrimary,
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        mb: 2.5,
-                        boxShadow: '0 8px 24px rgba(13, 161, 184, 0.25)',
-                        animation: 'pulse 2s ease-in-out infinite'
+                        mb: 2,
+                        boxShadow: '0 6px 20px rgba(13, 161, 184, 0.2)'
                       }}>
-                        <CompareArrows sx={{ color: '#fff', fontSize: 32 }} />
+                        <CompareArrows sx={{ color: '#fff', fontSize: 28 }} />
                       </Box>
-                      <Typography variant="h6" sx={{ fontWeight: 700, color: THEME.textPrimary, mb: 1, textAlign: 'center' }}>
-                        Select Two Dealers to Compare
+                      <Typography variant="subtitle1" sx={{ fontWeight: 700, color: THEME.textPrimary, mb: 0.5, textAlign: 'center' }}>
+                        Select Dealerships to View Stats
                       </Typography>
-                      <Typography variant="body2" sx={{ color: THEME.textSecondary, textAlign: 'center', maxWidth: 420, lineHeight: 1.6 }}>
-                        Choose dealers from the dropdowns above to see a detailed side-by-side comparison of quality metrics, weekly performance trends, and scoring analysis.
+                      <Typography variant="body2" sx={{ color: THEME.textSecondary, textAlign: 'center', maxWidth: 420, fontSize: '12.5px', lineHeight: 1.5 }}>
+                        Choose one dealer from the dropdowns above to view their breakdown, or select two dealers to compare their weekly performance trends.
                       </Typography>
-                      <Box sx={{ display: 'flex', gap: 3, mt: 3 }}>
-                        {['📊 Metrics', '📈 Trends', '🏆 Rankings'].map(label => (
-                          <Chip
-                            key={label}
-                            label={label}
-                            size="small"
-                            sx={{
-                              background: 'rgba(255,255,255,0.8)',
-                              border: `1px solid ${THEME.border}`,
-                              fontWeight: 600,
-                              fontSize: '11px',
-                              color: THEME.textSecondary
-                            }}
-                          />
-                        ))}
-                      </Box>
                     </Box>
                   )}
-                </CardContent>
-              </Card>
+                </AccordionDetails>
+              </Accordion>
             </Grid>
 
             {/* Quality Distribution */}
-            <Grid item xs={12}>
+            <Grid item xs={12} md={4}>
               <Card sx={{
                 background: THEME.surfaceElevated,
                 border: `1px solid ${THEME.border}`,
@@ -3578,7 +3584,7 @@ export default function SuperAdminDashboard() {
             </Grid>
 
             {/* Top 5 Performers */}
-            <Grid item xs={12}>
+            <Grid item xs={12} md={4}>
               <Card sx={{
                 background: THEME.surfaceElevated,
                 border: `1px solid ${THEME.border}`,
