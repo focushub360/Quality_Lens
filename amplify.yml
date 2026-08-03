@@ -3,12 +3,10 @@ frontend:
   phases:
     preBuild:
       commands:
-        - if [ -d "frontend" ]; then cd frontend; fi
-        - npm install --legacy-peer-deps
+        - npm --prefix frontend install --legacy-peer-deps
     build:
       commands:
-        - if [ -d "frontend" ]; then cd frontend; fi
-        - CI=false REACT_APP_API_URL=https://qualitylensfocustech.duckdns.org npm run build
+        - CI=false REACT_APP_API_URL=https://qualitylensfocustech.duckdns.org npm --prefix frontend run build
   artifacts:
     baseDirectory: frontend/build
     files:
