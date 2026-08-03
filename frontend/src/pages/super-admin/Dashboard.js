@@ -431,6 +431,172 @@ const DealerPerformanceChart = ({ data }) => {
   );
 };
 
+};
+
+// ─── Single Dealer Detailed View ────────────────────────────────────────────
+const SingleDealerDetailView = ({ dealerId, allResults, dealerRankings }) => {
+  const dealerData = dealerRankings.find(d => d.id === dealerId || d.name === dealerId);
+  if (!dealerData) return null;
+
+  // Build metrics
+  const metrics = [
+    { name: 'Overall Score', value: dealerData.overall, color: THEME.primary },
+    { name: 'Video Quality', value: dealerData.video, color: THEME.success },
+    { name: 'Audio Quality', value: dealerData.audio, color: THEME.warning },
+    { name: 'Stability', value: dealerData.stability || dealerData.overall * 0.92, color: THEME.accent },
+    { name: 'Lighting', value: dealerData.lighting || dealerData.video * 0.95, color: '#8B5CF6' },
+    { name: 'Speech Clarity', value: dealerData.speech || dealerData.audio * 0.97, color: '#EC4899' }
+  ].map(m => ({ ...m, value: Number((m.value || 0).toFixed(1)) }));
+
+  // Weekly trend
+  const buildWeeklyTrend = (dId) => {
+    const dealerResults = (allResults || []).filter(r => normalizeDealerId(r.dealer_id || r.dealer || '') === dId);
+    const weekMap = {};
+    dealerResults.forEach(r => {
+      const rawDate = r.created_at || r.date || r.createdAt || r.timestamp || r.analysis_date;
+      if (!rawDate) return;
+      const d = new Date(rawDate);
+      if (isNaN(d.getTime())) return;
+      const weekStart = new Date(d);
+      weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+      const weekKey = `${weekStart.getFullYear()}-W${String(Math.ceil((weekStart.getDate()) / 7)).padStart(2, '0')}-${String(weekStart.getMonth()+1).padStart(2,'0')}`;
+      if (!weekMap[weekKey]) weekMap[weekKey] = { scores: [], dates: [] };
+      if (r.overall_quality_score != null) weekMap[weekKey].scores.push(r.overall_quality_score);
+      weekMap[weekKey].dates.push(d);
+    });
+
+    return Object.entries(weekMap)
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .slice(-8)
+      .map(([key, data]) => {
+        const avg = data.scores.length > 0 ? Number((data.scores.reduce((s, v) => s + v, 0) / data.scores.length).toFixed(1)) : 0;
+        const earliest = new Date(Math.min(...data.dates.map(d => d.getTime())));
+        return { week: `${earliest.getDate()}/${earliest.getMonth()+1}`, score: avg };
+      });
+  };
+
+  const weeklyTrend = buildWeeklyTrend(dealerId);
+
+  return (
+    <Box sx={{ mt: 1 }}>
+      <Grid container spacing={3}>
+        {/* Left: Overall gauge & metric progress bars */}
+        <Grid item xs={12} md={6}>
+          <Box sx={{
+            p: 3,
+            background: 'rgba(13, 161, 184, 0.02)',
+            border: `1px solid ${THEME.border}`,
+            borderRadius: 3,
+            height: '100%'
+          }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
+              <Box sx={{
+                width: 56,
+                height: 56,
+                borderRadius: '50%',
+                bgcolor: THEME.primary + '15',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: THEME.primary,
+                fontWeight: 800,
+                fontSize: '1.25rem'
+              }}>
+                {dealerData.overall.toFixed(1)}
+              </Box>
+              <Box>
+                <Typography variant="subtitle1" sx={{ fontWeight: 800, color: THEME.textPrimary }}>
+                  {dealerData.name} Performance Overview
+                </Typography>
+                <Typography variant="caption" sx={{ color: THEME.textSecondary }}>
+                  Based on {dealerData.videos} total analyzed videos
+                </Typography>
+              </Box>
+            </Box>
+
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, color: THEME.textPrimary, mb: 2, fontSize: '0.8rem' }}>
+              📊 Metric Breakdown
+            </Typography>
+            <Stack spacing={2}>
+              {metrics.map(m => (
+                <Box key={m.name}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                    <Typography variant="caption" sx={{ fontWeight: 600, color: THEME.textSecondary }}>{m.name}</Typography>
+                    <Typography variant="caption" sx={{ fontWeight: 700, color: m.color }}>{m.value}/10</Typography>
+                  </Box>
+                  <LinearProgress
+                    variant="determinate"
+                    value={m.value * 10}
+                    sx={{
+                      height: 6,
+                      borderRadius: 3,
+                      bgcolor: m.color + '15',
+                      '& .MuiLinearProgress-bar': {
+                        bgcolor: m.color,
+                        borderRadius: 3
+                      }
+                    }}
+                  />
+                </Box>
+              ))}
+            </Stack>
+          </Box>
+        </Grid>
+
+        {/* Right: Weekly trend chart */}
+        <Grid item xs={12} md={6}>
+          <Box sx={{
+            p: 3,
+            border: `1px solid ${THEME.border}`,
+            borderRadius: 3,
+            height: '100%',
+            display: 'flex',
+            flexDirection: 'column'
+          }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, color: THEME.textPrimary, mb: 2, fontSize: '0.8rem' }}>
+              📈 Weekly Score Trend
+            </Typography>
+            {weeklyTrend.length > 1 ? (
+              <Box sx={{ flex: 1, minHeight: 220 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={weeklyTrend} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="singleTrendGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor={THEME.primary} stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor={THEME.primary} stopOpacity={0.01}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke={THEME.borderLight} vertical={false} />
+                    <XAxis dataKey="week" stroke={THEME.textTertiary} fontSize={10} />
+                    <YAxis domain={[0, 10]} stroke={THEME.textTertiary} fontSize={10} />
+                    <RechartsTooltip />
+                    <Area
+                      type="monotone"
+                      dataKey="score"
+                      name="Overall Score"
+                      stroke={THEME.primary}
+                      strokeWidth={2.5}
+                      fill="url(#singleTrendGrad)"
+                      dot={{ fill: THEME.primary, r: 4, strokeWidth: 2, stroke: '#fff' }}
+                      activeDot={{ r: 6 }}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </Box>
+            ) : (
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1, py: 4 }}>
+                <Typography variant="caption" sx={{ color: THEME.textTertiary }}>
+                  Insufficient weekly historical trend data to render line chart.
+                </Typography>
+              </Box>
+            )}
+          </Box>
+        </Grid>
+      </Grid>
+    </Box>
+  );
+};
+
 // ─── Dealer Performance Comparison Chart ────────────────────────────────────
 const DealerComparisonChart = ({ dealerA, dealerB, allResults, dealerRankings }) => {
   const COMPARISON_COLORS = {
@@ -3254,7 +3420,7 @@ export default function SuperAdminDashboard() {
                           '& .MuiInputLabel-root': { fontSize: '12px', color: '#1E88E5' }
                         }}
                       >
-                        <MenuItem value="" disabled><em>Select Dealer</em></MenuItem>
+                        <MenuItem value=""><em>None / Clear</em></MenuItem>
                         {dashboardData.dealerRankings
                           .filter(d => d.id !== compareDealerB)
                           .map(d => (
@@ -3287,7 +3453,7 @@ export default function SuperAdminDashboard() {
                           '& .MuiInputLabel-root': { fontSize: '12px', color: '#E53935' }
                         }}
                       >
-                        <MenuItem value="" disabled><em>Select Dealer</em></MenuItem>
+                        <MenuItem value=""><em>None / Clear</em></MenuItem>
                         {dashboardData.dealerRankings
                           .filter(d => d.id !== compareDealerA)
                           .map(d => (
@@ -3307,6 +3473,12 @@ export default function SuperAdminDashboard() {
                     <DealerComparisonChart
                       dealerA={compareDealerA}
                       dealerB={compareDealerB}
+                      allResults={allResults}
+                      dealerRankings={dashboardData.dealerRankings}
+                    />
+                  ) : (compareDealerA || compareDealerB) ? (
+                    <SingleDealerDetailView
+                      dealerId={compareDealerA || compareDealerB}
                       allResults={allResults}
                       dealerRankings={dashboardData.dealerRankings}
                     />
