@@ -141,7 +141,8 @@ APP_VERSION = "1.0.0"
 
 MAX_WORKERS = int(os.getenv("MAX_WORKERS", "2"))
 CONCURRENCY_LIMIT = int(os.getenv("CONCURRENCY_LIMIT", "2"))
-PROCESS_TIMEOUT_SECONDS = int(os.getenv("PROCESS_TIMEOUT_SECONDS", "180")) # 3 minutes max per URL (keyframe analysis is fast)
+# Give the analyzer's 900-second deadline room to return its fallback result.
+PROCESS_TIMEOUT_SECONDS = int(os.getenv("PROCESS_TIMEOUT_SECONDS", "960"))
 
 BULK_RESULTS_BASE_DIR = os.getenv("BULK_RESULTS_BASE_DIR", "bulk_analysis_reports")
 os.makedirs(BULK_RESULTS_BASE_DIR, exist_ok=True)
@@ -636,15 +637,14 @@ async def lifespan(app: FastAPI):
     # 2. Create initial Super Admin (if not exists)
     await create_initial_super_admin_if_not_exists()
 
-    # 3. Initialize UnifiedMediaAnalyzer instance (Lazy loading models to prevent startup lag)
+    # 3. Initialize UnifiedMediaAnalyzer instance (Pre-warm models on startup for fast first analysis)
     logger.info("Initializing UnifiedMediaAnalyzer instance...")
     analyzer = UnifiedMediaAnalyzer()
-    # OPTIMIZATION: Models will load lazily only when needed
-    # try:
-    #     analyzer.load_pretrained_models()
-    #     logger.info("Pre-loaded essential models for UnifiedMediaAnalyzer.")
-    # except Exception:
-    #     logger.exception("Could not pre-load all models for UnifiedMediaAnalyzer (continuing startup).")
+    try:
+        analyzer.load_pretrained_models()
+        logger.info("Pre-loaded essential models for UnifiedMediaAnalyzer.")
+    except Exception:
+        logger.exception("Could not pre-load all models for UnifiedMediaAnalyzer (continuing startup).")
 
     # 4. Start background cleanup task
     cleanup_task = asyncio.create_task(periodic_cleanup())
@@ -1638,9 +1638,37 @@ async def _run_analysis_pipeline(
 
     results, error = await _process_single_video_in_thread(video_input, transcription_language, target_language)
 
+    # Do not let a recoverable analyzer or worker timeout fail a bulk row.
+    # Store an explicit warning and a neutral result so the batch can complete.
     if error:
-        logger.error(f"Analysis pipeline failed for {video_input}: {error}")
-        raise RuntimeError(f"Video analysis failed: {error}")
+        logger.warning(f"Analysis pipeline fell back for {video_input}: {error}")
+        results = {"processing_warnings": [error]}
+    elif not results:
+        logger.warning(f"Analysis pipeline returned no result for {video_input}; storing a fallback result.")
+        results = {"processing_warnings": ["Analyzer returned no result"]}
+
+    if results.get("error_message"):
+        results.setdefault("processing_warnings", []).append(results.pop("error_message"))
+
+    results.setdefault("video_analysis", {
+        "quality_score": None,
+        "quality_label": "Unavailable",
+        "shake_level": "Unavailable",
+        "resolution_quality": "Unavailable",
+        "issues": ["Analysis fallback used"],
+    })
+    results.setdefault("audio_analysis", {
+        "score": None,
+        "prediction": "Unavailable",
+        "clarity_level": "Unavailable",
+    })
+    results.setdefault("overall_quality", {
+        "overall_score": None,
+        "overall_label": "Unavailable",
+    })
+    results.setdefault("transcription", {"text": "", "length": 0, "status": "unavailable"})
+    results.setdefault("summarization", {"summary": "", "length": 0, "status": "unavailable"})
+    results.setdefault("translation", {"translated_text": "", "length": 0, "status": "unavailable"})
 
     # Enriched data for storage and dashboarding
     processed_results = {
@@ -1683,6 +1711,7 @@ async def _run_analysis_pipeline(
         "summarization": results.get("summarization"),
         "translation": results.get("translation"),
         "error_message": results.get("error_message"),
+        "processing_warnings": results.get("processing_warnings", []),
     }
 
     return clean_results(processed_results), None

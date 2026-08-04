@@ -199,13 +199,11 @@ export default function LoginPage() {
             <Box sx={{ textAlign: 'center', mb: 5 }}>
               <Box
                 component="img"
-                src="/qualitylens-logo-mark.png"
+                src="/qualitylens-logo.png"
                 alt="QualityLens Logo"
                 sx={{
                   width: 'auto',
-                  height: 'auto',
-                  maxHeight: 110,
-                  maxWidth: '85%',
+                  height: 76,
                   objectFit: 'contain',
                   filter: 'drop-shadow(0 4px 10px rgba(0,0,0,0.05))',
                   transition: 'all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)', // Smooth elastic bounce

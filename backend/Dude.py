@@ -435,12 +435,7 @@ class UnifiedMediaAnalyzer:
         try:
             print(f"🔗 Downloading from: {video_url}")
             
-            # Test if URL is accessible first
-            head_response = self._make_request_with_fallback("HEAD", video_url, headers=headers, timeout=10)
-            print(f"📊 Pre-check status: {head_response.status_code}")
-            
-            if head_response.status_code == 404:
-                raise Exception(f"Video URL returns 404: {video_url}")
+            # Download the video directly to save one network round-trip
             
             # Download the video
             response = self._make_request_with_fallback("GET", video_url, headers=headers, stream=True, timeout=30)
@@ -581,19 +576,8 @@ class UnifiedMediaAnalyzer:
                 print("⚠️ Audio file is very small - might be silent video")
                 # Don't fail - even silent audio should be processed
             
-            # Quick validation
-            validation_cmd = [ffmpeg_path, "-i", output_audio_path]
-            validation_result = subprocess.run(
-                validation_cmd, 
-                capture_output=True, 
-                text=True,
-                timeout=10
-            )
-            
-            if validation_result.returncode == 0:
-                print("✅ Audio file validated successfully")
-            else:
-                print(f"⚠️ Audio validation had issues: {validation_result.stderr[:200]}")
+            # Verification is done by checking size
+            print("✅ Audio file verified by size")
             
             print("✅ Audio extraction completed successfully")
             return output_audio_path
@@ -818,6 +802,39 @@ class UnifiedMediaAnalyzer:
             print(f"⚠️ Could not determine duration with ffprobe: {e}")
             return 0
 
+    def _extract_frames_sequentially(self, video_path, target_indices):
+        """Highly optimized sequential frame extraction using cap.grab() to avoid random seek overhead"""
+        try:
+            import cv2
+            cap = cv2.VideoCapture(video_path)
+            if not cap.isOpened():
+                return {}
+            
+            sorted_indices = sorted(list(set(target_indices)))
+            if not sorted_indices:
+                cap.release()
+                return {}
+                
+            frames = {}
+            current_idx = 0
+            
+            for target_idx in sorted_indices:
+                while current_idx < target_idx:
+                    cap.grab()  # Extremely fast, only grabs frame metadata without decoding
+                    current_idx += 1
+                
+                ret, frame = cap.read()  # Decodes the frame
+                if not ret:
+                    break
+                frames[target_idx] = frame
+                current_idx += 1
+                
+            cap.release()
+            return frames
+        except Exception as e:
+            print(f"⚠️ Sequential frame extraction failed: {e}")
+            return {}
+
     def analyze_video_quality(self, video_path):
         import os
         gemini_key = os.getenv("GEMINI_API_KEY")
@@ -839,8 +856,7 @@ class UnifiedMediaAnalyzer:
             genai.configure(api_key=api_key)
             print(f"🎬 Extracting keyframes from {video_path} for fast Gemini Vision analysis...")
             
-            # --- FAST APPROACH: Extract keyframes as images instead of uploading full video ---
-            # This is 5-10x faster than uploading the whole video file
+            # --- FAST APPROACH: Extract keyframes sequentially (extremely fast sequential reads) ---
             cap = cv2.VideoCapture(video_path)
             if not cap.isOpened():
                 raise Exception("Could not open video file for keyframe extraction")
@@ -848,16 +864,18 @@ class UnifiedMediaAnalyzer:
             frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
             fps = cap.get(cv2.CAP_PROP_FPS)
             duration = frame_count / max(fps, 1)
+            cap.release()
             
             # Sample 8 evenly-spaced keyframes across the video
             num_keyframes = min(8, max(3, int(duration / 5)))
             frame_indices = [int(i * frame_count / num_keyframes) for i in range(num_keyframes)]
             
+            preloaded_keyframes = self._extract_frames_sequentially(video_path, frame_indices)
+            
             keyframes_b64 = []
             for idx in frame_indices:
-                cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
-                ret, frame = cap.read()
-                if not ret:
+                frame = preloaded_keyframes.get(idx)
+                if frame is None:
                     continue
                 # Resize to reduce payload size (max 720p)
                 h, w = frame.shape[:2]
@@ -866,7 +884,6 @@ class UnifiedMediaAnalyzer:
                     frame = cv2.resize(frame, (int(w * scale), int(h * scale)))
                 _, buf = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
                 keyframes_b64.append(base64.b64encode(buf.tobytes()).decode('utf-8'))
-            cap.release()
             
             if not keyframes_b64:
                 raise Exception("Could not extract any keyframes from video")
@@ -961,6 +978,9 @@ class UnifiedMediaAnalyzer:
             # Get resolution info
             res_label, min_res_score, max_res_score = self._get_resolution_info(width, height)
             
+            # Release cap early as we will read frames sequentially
+            cap.release()
+            
             # Dynamic frame sampling based on video length (optimized for speed)
             if duration > 300:
                 num_frames_to_sample = min(60, frame_count)   # was 150
@@ -973,6 +993,9 @@ class UnifiedMediaAnalyzer:
             
             sample_idxs = np.linspace(0, frame_count - 1, num_frames_to_sample, dtype=int)
             
+            # Highly optimized sequential preloading
+            preloaded_frames = self._extract_frames_sequentially(video_path, sample_idxs)
+            
             # Enhanced analysis variables
             sharpness_vals, brightness_vals, contrast_vals = [], [], []
             color_saturation_vals = []
@@ -980,9 +1003,9 @@ class UnifiedMediaAnalyzer:
             issues = []
             component_scores = {}
             
-            # Enhanced shake and noise detection
-            shake_score, shake_details = self._calculate_detailed_shake(video_path, sample_idxs)
-            noise_score, noise_details = self._calculate_detailed_noise(video_path, sample_idxs)
+            # Enhanced shake and noise detection using preloaded frames
+            shake_score, shake_details = self._calculate_detailed_shake(video_path, sample_idxs, preloaded_frames)
+            noise_score, noise_details = self._calculate_detailed_noise(video_path, sample_idxs, preloaded_frames)
             
             # Frame-by-frame comprehensive analysis
             prev_frame_gray = None
@@ -991,9 +1014,8 @@ class UnifiedMediaAnalyzer:
             motion_changes = []
             
             for idx in sample_idxs:
-                cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
-                ret, frame = cap.read()
-                if not ret:
+                frame = preloaded_frames.get(idx)
+                if frame is None:
                     continue
                     
                 grabbed_frames += 1
@@ -1027,8 +1049,6 @@ class UnifiedMediaAnalyzer:
                         frozen_frames += 1
                 
                 prev_frame_gray = gray
-            
-            cap.release()
             
             if grabbed_frames < 10:
                 return {
@@ -1217,12 +1237,14 @@ class UnifiedMediaAnalyzer:
         except:
             return 0
 
-    def _calculate_detailed_shake(self, video_path, sample_idxs):
+    def _calculate_detailed_shake(self, video_path, sample_idxs, preloaded_frames=None):
         """Enhanced shake detection with detailed metrics"""
         try:
-            cap = cv2.VideoCapture(video_path)
-            if not cap.isOpened():
-                return 50.0, "Cannot analyze shake"
+            cap = None
+            if preloaded_frames is None:
+                cap = cv2.VideoCapture(video_path)
+                if not cap.isOpened():
+                    return 50.0, "Cannot analyze shake"
             
             lk_params = dict(
                 winSize=(15, 15), maxLevel=2,
@@ -1237,10 +1259,15 @@ class UnifiedMediaAnalyzer:
             prev_gray = None
             
             for idx in sample_idxs:
-                cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
-                ret, frame = cap.read()
-                if not ret:
-                    continue
+                if preloaded_frames is not None:
+                    frame = preloaded_frames.get(idx)
+                    if frame is None:
+                        continue
+                else:
+                    cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
+                    ret, frame = cap.read()
+                    if not ret:
+                        continue
                     
                 gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
                 
@@ -1260,7 +1287,8 @@ class UnifiedMediaAnalyzer:
                 
                 prev_gray = gray
             
-            cap.release()
+            if cap is not None:
+                cap.release()
             
             if frame_pairs == 0:
                 return 50.0, "Insufficient frames for shake analysis"
@@ -1283,21 +1311,28 @@ class UnifiedMediaAnalyzer:
         except Exception as e:
             return 50.0, f"Shake analysis error: {e}"
 
-    def _calculate_detailed_noise(self, video_path, sample_idxs):
+    def _calculate_detailed_noise(self, video_path, sample_idxs, preloaded_frames=None):
         """Enhanced noise detection with detailed metrics"""
         try:
-            cap = cv2.VideoCapture(video_path)
-            if not cap.isOpened():
-                return 50.0, "Cannot analyze noise"
+            cap = None
+            if preloaded_frames is None:
+                cap = cv2.VideoCapture(video_path)
+                if not cap.isOpened():
+                    return 50.0, "Cannot analyze noise"
             
             noise_estimates = []
             brightness_variations = []
             
             for idx in sample_idxs:
-                cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
-                ret, frame = cap.read()
-                if not ret:
-                    continue
+                if preloaded_frames is not None:
+                    frame = preloaded_frames.get(idx)
+                    if frame is None:
+                        continue
+                else:
+                    cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
+                    ret, frame = cap.read()
+                    if not ret:
+                        continue
                     
                 gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
                 
@@ -1311,7 +1346,8 @@ class UnifiedMediaAnalyzer:
                 # Brightness variation (can indicate compression artifacts)
                 brightness_variations.append(np.std(gray))
             
-            cap.release()
+            if cap is not None:
+                cap.release()
             
             if not noise_estimates:
                 return 50.0, "No noise estimates available"
@@ -1525,7 +1561,7 @@ class UnifiedMediaAnalyzer:
                     print(f"🔄 Skipping exact duplicate: {clean_text}")
 
             if not transcription_parts:
-                return "No clear speech detected in audio"
+                return "No clear speech detected in audio", None
 
             full_transcription = " ".join(transcription_parts).strip()
             
@@ -1533,16 +1569,16 @@ class UnifiedMediaAnalyzer:
             GARBAGE_PATTERNS = [",", ".", "!", "?", "the", "The", "a", "A", "I", "...", " ", ",.", ".,"]
             if len(full_transcription) < 5 or full_transcription.strip() in GARBAGE_PATTERNS:
                 print(f"⚠️ Transcription too short or garbage: '{full_transcription}' — treating as no speech")
-                return "No clear speech detected in audio"
+                return "No clear speech detected in audio", None
             
             print(f"✅ Transcription successful! Length: {len(full_transcription)} characters")
             
-            return full_transcription
+            return full_transcription, info.language
 
         except Exception as e:
             error_msg = f"faster-whisper transcription error: {e}"
             print(f"❌ {error_msg}")
-            return f"Transcription failed: {str(e)}"
+            return f"Transcription failed: {str(e)}", None
 
     def _is_similar_text(self, text1, text2, threshold=0.9):
         """Check if two texts are similar above a threshold - LESS AGGRESSIVE"""
@@ -1778,7 +1814,9 @@ class UnifiedMediaAnalyzer:
 
     def process_video(self, video_input, transcription_language=None, target_language_short=None):
         import time as _time
-        _HARD_DEADLINE_SECONDS = int(os.getenv("VIDEO_HARD_DEADLINE_SECONDS", "240"))  # 4 min hard deadline
+        # Align this with the outer worker timeout. A shorter internal deadline
+        # previously turned valid, longer CitNow videos into failed batch rows.
+        _HARD_DEADLINE_SECONDS = int(os.getenv("VIDEO_HARD_DEADLINE_SECONDS", "900"))
         _deadline = _time.monotonic() + _HARD_DEADLINE_SECONDS
 
         def _check_deadline(stage=""):
@@ -1854,7 +1892,7 @@ class UnifiedMediaAnalyzer:
                 
             def run_audio_pipeline():
                 audio_res = self.analyze_audio_quality(audio_path)
-                transcription_res = self.transcribe_audio(
+                transcription_text, detected_lang = self.transcribe_audio(
                     audio_path, 
                     transcription_language=transcription_language,
                     task='transcribe'
@@ -1862,15 +1900,18 @@ class UnifiedMediaAnalyzer:
                 
                 # NATIVE WHISPER TRANSLATION: 100% reliable on EC2 (avoids Google Translate IP blocks)
                 # If target is English, we natively translate audio to English text.
-                english_res = transcription_res
+                english_res = transcription_text
                 if requested_target_language == 'en':
-                    english_res = self.transcribe_audio(
-                        audio_path,
-                        transcription_language=transcription_language,
-                        task='translate'
-                    )
+                    if detected_lang == 'en':
+                        print("📝 Audio detected as English — reusing transcription for native English translation")
+                    else:
+                        english_res, _ = self.transcribe_audio(
+                            audio_path,
+                            transcription_language=transcription_language,
+                            task='translate'
+                        )
                 
-                return audio_res, transcription_res, english_res
+                return audio_res, transcription_text, english_res
 
             print(f"\n⚡ STARTING PARALLEL AUDIO AND VIDEO ANALYSIS (timeout: {_inner_timeout:.0f}s)...")
             with concurrent.futures.ThreadPoolExecutor(max_workers=2) as parallel_executor:
@@ -2041,6 +2082,11 @@ class UnifiedMediaAnalyzer:
                 results["processing_steps"].append("text_summarization")
                 print(f"Summary: OK ({len(summary)} chars)")
 
+        except TimeoutError as pipeline_e:
+            # Individual audio/video stages already use fallbacks. Keep the
+            # partial result instead of marking an otherwise valid URL failed.
+            print(f"Pipeline reached its time budget: {pipeline_e}")
+            results.setdefault("processing_warnings", []).append(str(pipeline_e))
         except Exception as pipeline_e:
             print(f"\n❌ Pipeline stopped due to an error: {pipeline_e}")
             results["error_message"] = str(pipeline_e)

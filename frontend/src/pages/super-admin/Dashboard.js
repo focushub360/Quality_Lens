@@ -711,6 +711,39 @@ const DealerComparisonChart = ({ dealerA, dealerB, allResults, dealerRankings })
     return null;
   };
 
+  // Render chart labels as high-contrast badges so they remain readable on
+  // smaller displays and against the coloured chart series.
+  const ScoreAxisTick = ({ x, y, payload }) => (
+    <g>
+      <rect x={x - 42} y={y - 11} width={32} height={22} rx={7} fill="#E8F6F9" />
+      <text x={x - 26} y={y + 5} textAnchor="middle" fill={THEME.primaryDark} fontSize={12} fontWeight={800}>
+        {payload.value}
+      </text>
+    </g>
+  );
+
+  const MetricAxisTick = ({ x, y, payload }) => (
+    <g>
+      <rect x={x - 38} y={y + 5} width={76} height={22} rx={7} fill="#F0F7FA" />
+      <text x={x} y={y + 20} textAnchor="middle" fill={THEME.textPrimary} fontSize={12} fontWeight={800}>
+        {payload.value}
+      </text>
+    </g>
+  );
+
+  const BarValueLabel = ({ x, y, width, value, color }) => {
+    const label = Number(value || 0).toFixed(1);
+    const badgeWidth = 34;
+    return (
+      <g>
+        <rect x={x + width / 2 - badgeWidth / 2} y={Math.max(2, y - 27)} width={badgeWidth} height={21} rx={7} fill={color} />
+        <text x={x + width / 2} y={Math.max(2, y - 27) + 15} textAnchor="middle" fill="#FFFFFF" fontSize={11} fontWeight={800}>
+          {label}
+        </text>
+      </g>
+    );
+  };
+
   return (
     <Box>
       {/* Summary Cards */}
@@ -810,21 +843,22 @@ const DealerComparisonChart = ({ dealerA, dealerB, allResults, dealerRankings })
         <Typography variant="subtitle2" sx={{ fontWeight: 700, color: THEME.textPrimary, mb: 1.5, fontSize: '0.8rem' }}>
           📊 Quality Metrics Comparison
         </Typography>
-        <ResponsiveContainer width="100%" height={260}>
-          <RechartsBarChart data={metrics} margin={{ top: 10, right: 20, left: 0, bottom: 5 }} barGap={4}>
+        <ResponsiveContainer width="100%" height={285}>
+          <RechartsBarChart data={metrics} margin={{ top: 34, right: 20, left: 16, bottom: 28 }} barGap={6}>
             <CartesianGrid strokeDasharray="3 3" stroke={THEME.borderLight} vertical={false} />
-            <XAxis 
-              dataKey="name" 
-              stroke={THEME.textTertiary} 
-              fontSize={11} 
-              fontWeight={600}
-              tick={{ fill: THEME.textSecondary }}
+            <XAxis
+              dataKey="name"
+              axisLine={{ stroke: THEME.primary, strokeWidth: 1.5 }}
+              tickLine={false}
+              height={38}
+              tick={<MetricAxisTick />}
             />
-            <YAxis 
-              domain={[0, 10]} 
-              stroke={THEME.textTertiary} 
-              fontSize={10}
-              tick={{ fill: THEME.textTertiary }}
+            <YAxis
+              domain={[0, 10]}
+              width={52}
+              axisLine={{ stroke: THEME.primary, strokeWidth: 1.5 }}
+              tickLine={false}
+              tick={<ScoreAxisTick />}
             />
             <RechartsTooltip content={<CustomComparisonTooltip />} />
             <Bar 
@@ -835,7 +869,7 @@ const DealerComparisonChart = ({ dealerA, dealerB, allResults, dealerRankings })
               barSize={28}
               fillOpacity={0.85}
             >
-              <LabelList dataKey="a" position="top" fontSize={9} fontWeight={700} fill={COMPARISON_COLORS.dealerA.primary} />
+              <LabelList dataKey="a" position="top" content={<BarValueLabel color={COMPARISON_COLORS.dealerA.primary} />} />
             </Bar>
             <Bar 
               dataKey="b" 
@@ -845,7 +879,7 @@ const DealerComparisonChart = ({ dealerA, dealerB, allResults, dealerRankings })
               barSize={28}
               fillOpacity={0.85}
             >
-              <LabelList dataKey="b" position="top" fontSize={9} fontWeight={700} fill={COMPARISON_COLORS.dealerB.primary} />
+              <LabelList dataKey="b" position="top" content={<BarValueLabel color={COMPARISON_COLORS.dealerB.primary} />} />
             </Bar>
             <Legend 
               wrapperStyle={{ fontSize: '11px', fontWeight: 600, paddingTop: '8px' }}
@@ -862,8 +896,8 @@ const DealerComparisonChart = ({ dealerA, dealerB, allResults, dealerRankings })
           <Typography variant="subtitle2" sx={{ fontWeight: 700, color: THEME.textPrimary, mb: 1.5, fontSize: '0.8rem' }}>
             📈 Weekly Performance Trend
           </Typography>
-          <ResponsiveContainer width="100%" height={220}>
-            <AreaChart data={weeklyComparison} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
+          <ResponsiveContainer width="100%" height={245}>
+            <AreaChart data={weeklyComparison} margin={{ top: 16, right: 20, left: 16, bottom: 28 }}>
               <defs>
                 <linearGradient id="gradientA" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor={COMPARISON_COLORS.dealerA.primary} stopOpacity={0.3} />
@@ -875,8 +909,8 @@ const DealerComparisonChart = ({ dealerA, dealerB, allResults, dealerRankings })
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke={THEME.borderLight} vertical={false} />
-              <XAxis dataKey="week" stroke={THEME.textTertiary} fontSize={10} tick={{ fill: THEME.textSecondary }} />
-              <YAxis domain={[0, 10]} stroke={THEME.textTertiary} fontSize={10} tick={{ fill: THEME.textTertiary }} />
+              <XAxis dataKey="week" axisLine={{ stroke: THEME.primary, strokeWidth: 1.5 }} tickLine={false} height={38} tick={<MetricAxisTick />} />
+              <YAxis domain={[0, 10]} width={52} axisLine={{ stroke: THEME.primary, strokeWidth: 1.5 }} tickLine={false} tick={<ScoreAxisTick />} />
               <RechartsTooltip content={<CustomComparisonTooltip />} />
               <Area
                 type="monotone"

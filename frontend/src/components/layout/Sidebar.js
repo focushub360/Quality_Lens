@@ -321,7 +321,7 @@ export default function Sidebar() {
         background: 'rgba(13, 161, 184, 0.4)'
       }
     }}>
-      <Box sx={{ px: 2, py: 2.25, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '74px' }}>
+      <Box sx={{ px: 2, py: 2.25, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '90px' }}>
         <Box 
           component="img" 
           src={`${process.env.PUBLIC_URL || ''}/qualitylens-logo.png`}
@@ -330,7 +330,7 @@ export default function Sidebar() {
             e.target.onerror = null;
             e.target.src = '/qualitylens-logo.png';
           }}
-          sx={{ height: 48, width: 'auto', objectFit: 'contain' }} 
+          sx={{ height: 68, width: 'auto', objectFit: 'contain' }} 
         />
       </Box>
 
