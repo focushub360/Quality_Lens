@@ -637,14 +637,14 @@ async def lifespan(app: FastAPI):
     # 2. Create initial Super Admin (if not exists)
     await create_initial_super_admin_if_not_exists()
 
-    # 3. Initialize UnifiedMediaAnalyzer instance (Pre-warm models on startup for fast first analysis)
+    # 3. Initialize UnifiedMediaAnalyzer instance (models load lazily on first use to save RAM on t3a.large)
     logger.info("Initializing UnifiedMediaAnalyzer instance...")
     analyzer = UnifiedMediaAnalyzer()
-    try:
-        analyzer.load_pretrained_models()
-        logger.info("Pre-loaded essential models for UnifiedMediaAnalyzer.")
-    except Exception:
-        logger.exception("Could not pre-load all models for UnifiedMediaAnalyzer (continuing startup).")
+    # NOTE: Pre-warming disabled for t3a.large (8GB RAM) — loading all models at once exceeds memory.
+    # Models will be loaded on-demand during the first analysis request.
+    # To re-enable on larger instances, uncomment the line below:
+    # analyzer.load_pretrained_models()
+    logger.info("UnifiedMediaAnalyzer initialized (models will load on first use).")
 
     # 4. Start background cleanup task
     cleanup_task = asyncio.create_task(periodic_cleanup())
