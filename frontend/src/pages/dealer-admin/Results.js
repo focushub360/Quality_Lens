@@ -178,6 +178,7 @@ export default function Results() {
   // Pagination state
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [totalCount, setTotalCount] = useState(0);
 
   const [allRows, setAllRows] = useState([]); // All loaded rows
   const [currentPageBackend, setCurrentPageBackend] = useState(1); // Backend page number
@@ -205,6 +206,7 @@ export default function Results() {
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
       // Instantly load pre-calculated stats via MongoDB aggregations (<15ms)
+      let st = null;
       try {
         let statsEndpoint = '/results/summary-stats?';
         if (searchTerm) statsEndpoint += `&search=${encodeURIComponent(searchTerm)}`;
@@ -219,7 +221,7 @@ export default function Results() {
         }
         
         const statsRes = await api.get(statsEndpoint, { headers });
-        const st = statsRes.data;
+        st = statsRes.data;
         if (st && st.total !== undefined) {
           setStats(prev => ({
             ...prev,
@@ -275,9 +277,14 @@ export default function Results() {
       setAllRows(finalResults);
       setCurrentPageBackend(page + 2);
       
+      const serverTotal = (data && data.total !== undefined)
+        ? data.total
+        : (st && st.total !== undefined ? st.total : finalResults.length);
+      setTotalCount(serverTotal);
+
       // Update hasMore logically based on total
-      if (data.total !== undefined) {
-          setHasMore((page + 1) * rowsPerPage < data.total);
+      if (serverTotal !== undefined) {
+          setHasMore((page + 1) * rowsPerPage < serverTotal);
       } else {
           setHasMore(finalResults.length === rowsPerPage);
       }
@@ -288,6 +295,7 @@ export default function Results() {
       console.error('Error loading results:', error);
       setRows([]);
       setAllRows([]);
+      setTotalCount(0);
       setHasMore(false);
     } finally {
       setLoading(false);
@@ -319,6 +327,7 @@ export default function Results() {
       await api.delete(`/results/${id}`);
       setRows(rs => rs.filter(r => r._id !== id));
       setAllRows(rs => rs.filter(r => r._id !== id));
+      setTotalCount(tc => Math.max(0, tc - 1));
     } catch (err) {
       console.error(err);
       alert('Failed to delete record.');
@@ -1273,13 +1282,13 @@ export default function Results() {
                 </TableContainer>
 
                 {/* Enhanced Pagination */}
-                {filteredRows.length > 0 && (
+                {(totalCount > 0 || filteredRows.length > 0) && (
                   <TablePagination
                     rowsPerPageOptions={[5, 10, 25, 50]}
                     component="div"
-                    count={filteredRows.length} // Uses allRows via filteredRows
+                    count={totalCount}
                     rowsPerPage={rowsPerPage}
-                    page={page}
+                    page={totalCount <= 0 ? 0 : Math.min(page, Math.max(0, Math.ceil(totalCount / rowsPerPage) - 1))}
                     onPageChange={handleChangePage}
                     onRowsPerPageChange={handleChangeRowsPerPage}
                     sx={{
