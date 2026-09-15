@@ -26,8 +26,7 @@ import {
   AccordionDetails,
   Divider,
   Tabs,
-  Tab,
-  Tooltip
+  Tab
 } from '@mui/material';
 import {
   UploadFile,
@@ -39,15 +38,12 @@ import {
   ExpandMore,
   ExpandLess,
   Description,
-  Group,
   Business,
   SupervisorAccount,
-  Person,
   ArrowBack,
   Search,
   CheckCircleOutline,
-  HighlightOff,
-  InfoOutlined
+  HighlightOff
 } from '@mui/icons-material';
 import { importUsersFromExcel, previewUsersFromExcel } from '../../services/users';
 
