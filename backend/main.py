@@ -1360,15 +1360,61 @@ async def delete_user(user_id: str, current_user: UserInDB = Depends(get_current
     return Response(status_code=204)
 
 
+async def get_registered_dealerships_map() -> Dict[str, str]:
+    """
+    Returns a lookup mapping of clean_key -> canonical_dealer_name
+    for all registered dealerships currently in the database.
+    Prevents creation of fake/unregistered or multi-comma dealerships.
+    """
+    existing_dealers = {}
+    
+    # 1. From users collection (dealer_id and showroom_name)
+    async for u in users_collection.find({}, {"dealer_id": 1, "showroom_name": 1}):
+        did = u.get("dealer_id")
+        sname = u.get("showroom_name")
+        if did and str(did).strip() and str(did).strip().lower() != 'none':
+            d_str = str(did).strip()
+            if "," not in d_str and ";" not in d_str:
+                k = re.sub(r'[^a-zA-Z0-9]', '', d_str.lower())
+                if k:
+                    existing_dealers[k] = d_str
+        if sname and str(sname).strip() and str(sname).strip().lower() != 'none':
+            s_str = str(sname).strip()
+            if "," not in s_str and ";" not in s_str:
+                k = re.sub(r'[^a-zA-Z0-9]', '', s_str.lower())
+                if k and k not in existing_dealers:
+                    existing_dealers[k] = s_str
+
+    # 2. From dealer_settings collection
+    if dealer_settings_collection is not None:
+        async for ds in dealer_settings_collection.find({}, {"dealer_id": 1, "dealer_name": 1}):
+            did = ds.get("dealer_id")
+            dname = ds.get("dealer_name")
+            if did and str(did).strip() and "," not in str(did):
+                d_str = str(did).strip()
+                k = re.sub(r'[^a-zA-Z0-9]', '', d_str.lower())
+                if k:
+                    existing_dealers[k] = d_str
+            if dname and str(dname).strip() and "," not in str(dname):
+                d_str = str(dname).strip()
+                k = re.sub(r'[^a-zA-Z0-9]', '', d_str.lower())
+                if k and k not in existing_dealers:
+                    existing_dealers[k] = d_str
+
+    return existing_dealers
+
+
 @app.post("/users/preview-excel")
 async def preview_users_from_excel(
     file: UploadFile = File(...),
     current_user: UserInDB = Depends(get_current_super_admin)
 ):
     """
-    Super Admin endpoint to preview an Excel file before importing.
-    Parses dealers, counts Service Managers vs Service Advisors,
-    and returns a structured preview without modifying the database.
+    Super Admin endpoint to inspect an Excel file before importing.
+    Strictly verifies rows:
+      - Filters by EXISTING registered dealerships only.
+      - Excludes rows with uncreated dealerships, comma-separated dealer strings, or invalid data.
+      - Categorizes into 'Eligible' (matches existing dealers) and 'Excluded' (dealership not found).
     """
     if not file.filename.endswith((".xlsx", ".xls")):
         raise HTTPException(status_code=400, detail="Only Excel files (.xlsx, .xls) are supported.")
@@ -1401,13 +1447,10 @@ async def preview_users_from_excel(
             detail=f"Could not find an Email column. Available columns: {list(df.columns)}. Expected columns: Name, Job Title, E-mail, Dealer Names."
         )
 
-    total_rows = len(df)
-    total_managers = 0
-    total_advisors = 0
-    dealers_map = {}
-    warnings = []
+    # 1. Fetch registered dealerships in system
+    existing_dealers = await get_registered_dealerships_map()
 
-    # Pre-fetch existing emails from DB to show whether users are new or existing
+    # 2. Pre-fetch existing emails from DB to flag new vs existing users
     existing_emails_cursor = users_collection.find({}, {"email": 1, "username": 1})
     existing_emails_list = await existing_emails_cursor.to_list(None)
     existing_set = set()
@@ -1417,71 +1460,151 @@ async def preview_users_from_excel(
         if u.get("username"):
             existing_set.add(u["username"].lower().strip())
 
+    total_rows = len(df)
+    eligible_dealers_map = {}
+    excluded_dealers_map = {}
+    total_eligible_managers = 0
+    total_eligible_advisors = 0
+    total_excluded_users = 0
+
+    EMAIL_REGEX = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
     for idx, row in df.iterrows():
         row_num = idx + 2
 
+        # Extract Email
         raw_email = row[email_col] if email_col and pd.notna(row[email_col]) else None
         if not raw_email or str(raw_email).strip().lower() == 'nan':
             continue
 
         email = str(raw_email).strip().lower()
-        if "@" not in email:
-            warnings.append(f"Row {row_num}: Invalid email '{raw_email}' skipped.")
-            continue
 
+        # Extract Name
         raw_name = row[name_col] if name_col and pd.notna(row[name_col]) else ""
-        name = str(raw_name).strip() if raw_name and str(raw_name).strip().lower() != 'nan' else email.split("@")[0]
+        name = str(raw_name).strip() if raw_name and str(raw_name).strip().lower() != 'nan' else ""
 
+        # Extract Job Title
         raw_job = row[job_col] if job_col and pd.notna(row[job_col]) else ""
         job_title = str(raw_job).strip() if raw_job and str(raw_job).strip().lower() != 'nan' else ""
 
+        # Extract Dealer
         raw_dealer = row[dealer_col] if dealer_col and pd.notna(row[dealer_col]) else ""
-        dealer_name = str(raw_dealer).strip() if raw_dealer and str(raw_dealer).strip().lower() != 'nan' else "Unassigned Dealership"
+        dealer_name_raw = str(raw_dealer).strip() if raw_dealer and str(raw_dealer).strip().lower() != 'nan' else ""
 
-        job_lower = job_title.lower()
-        if any(term in job_lower for term in ["manager", "admin", "gm", "lead", "head", "director", "supervisor"]):
-            role = "dealer_admin"
-            role_display = "Service Manager"
-            total_managers += 1
+        # Validation: Email
+        if not EMAIL_REGEX.match(email):
+            reason = f"Invalid email format: '{raw_email}'"
+            ex_key = "Invalid Email"
+            if ex_key not in excluded_dealers_map:
+                excluded_dealers_map[ex_key] = {"dealer_name": ex_key, "reason": "Invalid email syntax", "total": 0, "users": []}
+            excluded_dealers_map[ex_key]["users"].append({"name": name or "Unknown", "email": email, "job_title": job_title, "reason": reason, "raw_dealer": dealer_name_raw})
+            excluded_dealers_map[ex_key]["total"] += 1
+            total_excluded_users += 1
+            continue
+
+        # Validation: Name
+        if not name or len(name) < 2:
+            name = email.split("@")[0]
+
+        # Validation: Dealership
+        if not dealer_name_raw:
+            reason = "Missing dealer name"
+            ex_key = "Missing Dealership"
+            if ex_key not in excluded_dealers_map:
+                excluded_dealers_map[ex_key] = {"dealer_name": ex_key, "reason": "No dealer specified in row", "total": 0, "users": []}
+            excluded_dealers_map[ex_key]["users"].append({"name": name, "email": email, "job_title": job_title, "reason": reason, "raw_dealer": ""})
+            excluded_dealers_map[ex_key]["total"] += 1
+            total_excluded_users += 1
+            continue
+
+        # Check for multiple comma-separated dealerships
+        if ("," in dealer_name_raw or ";" in dealer_name_raw) and len(dealer_name_raw.split(",")) > 2:
+            reason = "Multiple dealerships specified in single row (Regional/Corporate account)"
+            ex_key = dealer_name_raw[:60] + "..."
+            if ex_key not in excluded_dealers_map:
+                excluded_dealers_map[ex_key] = {"dealer_name": ex_key, "reason": reason, "total": 0, "users": []}
+            excluded_dealers_map[ex_key]["users"].append({"name": name, "email": email, "job_title": job_title, "reason": reason, "raw_dealer": dealer_name_raw})
+            excluded_dealers_map[ex_key]["total"] += 1
+            total_excluded_users += 1
+            continue
+
+        # Match against existing registered dealerships
+        clean_k = re.sub(r'[^a-zA-Z0-9]', '', dealer_name_raw.lower())
+        if clean_k in existing_dealers:
+            # MATCHED TO EXISTING REGISTERED DEALERSHIP
+            canonical_dealer = existing_dealers[clean_k]
+
+            job_lower = job_title.lower()
+            if any(term in job_lower for term in ["manager", "admin", "gm", "lead", "head", "director", "supervisor"]):
+                role = "dealer_admin"
+                role_display = "Service Manager"
+                total_eligible_managers += 1
+            else:
+                role = "dealer_user"
+                role_display = "Service Advisor"
+                total_eligible_advisors += 1
+
+            if canonical_dealer not in eligible_dealers_map:
+                eligible_dealers_map[canonical_dealer] = {
+                    "dealer_name": canonical_dealer,
+                    "service_managers": 0,
+                    "service_advisors": 0,
+                    "total": 0,
+                    "users": []
+                }
+
+            if role == "dealer_admin":
+                eligible_dealers_map[canonical_dealer]["service_managers"] += 1
+            else:
+                eligible_dealers_map[canonical_dealer]["service_advisors"] += 1
+            eligible_dealers_map[canonical_dealer]["total"] += 1
+
+            eligible_dealers_map[canonical_dealer]["users"].append({
+                "name": name,
+                "email": email,
+                "job_title": job_title,
+                "role": role,
+                "role_display": role_display,
+                "is_existing": email in existing_set
+            })
         else:
-            role = "dealer_user"
-            role_display = "Service Advisor"
-            total_advisors += 1
-
-        if dealer_name not in dealers_map:
-            dealers_map[dealer_name] = {
-                "dealer_name": dealer_name,
-                "service_managers": 0,
-                "service_advisors": 0,
-                "total": 0,
-                "users": []
-            }
-
-        if role == "dealer_admin":
-            dealers_map[dealer_name]["service_managers"] += 1
-        else:
-            dealers_map[dealer_name]["service_advisors"] += 1
-        dealers_map[dealer_name]["total"] += 1
-
-        dealers_map[dealer_name]["users"].append({
-            "name": name,
-            "email": email,
-            "job_title": job_title,
-            "role": role,
-            "role_display": role_display,
-            "is_existing": email in existing_set
-        })
+            # DEALERSHIP NOT REGISTERED YET - EXCLUDE!
+            reason = f"Dealership not created in system yet. Create '{dealer_name_raw}' in Dealer Management first to import."
+            ex_key = dealer_name_raw
+            if ex_key not in excluded_dealers_map:
+                excluded_dealers_map[ex_key] = {
+                    "dealer_name": dealer_name_raw,
+                    "reason": "Dealership not created yet in system",
+                    "total": 0,
+                    "users": []
+                }
+            excluded_dealers_map[ex_key]["users"].append({
+                "name": name,
+                "email": email,
+                "job_title": job_title,
+                "reason": reason,
+                "raw_dealer": dealer_name_raw
+            })
+            excluded_dealers_map[ex_key]["total"] += 1
+            total_excluded_users += 1
 
     return {
         "success": True,
         "filename": file.filename,
         "total_rows": total_rows,
-        "total_valid_users": total_managers + total_advisors,
-        "total_dealers": len(dealers_map),
-        "total_managers": total_managers,
-        "total_advisors": total_advisors,
-        "dealers": list(dealers_map.values()),
-        "warnings": warnings
+        "eligible_summary": {
+            "total_dealers": len(eligible_dealers_map),
+            "total_users": total_eligible_managers + total_eligible_advisors,
+            "total_managers": total_eligible_managers,
+            "total_advisors": total_eligible_advisors,
+            "dealers": list(eligible_dealers_map.values())
+        },
+        "excluded_summary": {
+            "total_dealers": len(excluded_dealers_map),
+            "total_users": total_excluded_users,
+            "dealers": list(excluded_dealers_map.values())
+        },
+        "registered_dealerships": sorted(list(set(existing_dealers.values())))
     }
 
 
@@ -1492,13 +1615,9 @@ async def import_users_from_excel(
     current_user: UserInDB = Depends(get_current_super_admin)
 ):
     """
-    Super Admin endpoint to import users in bulk from a master Excel sheet.
-    Expected columns: Name, Job Title, E-mail, Dealer Names.
-    Automatically assigns:
-      - 'dealer_admin' (Service Manager) if Job Title contains manager/admin/lead
-      - 'dealer_user' (Service Advisor) for other roles
-      - Respective dealership from 'Dealer Names'
-      - Hashes default password (default: 'sales@focus')
+    Super Admin endpoint to import users in bulk from Excel.
+    Strictly creates/updates users ONLY for existing registered dealerships.
+    Excludes rows where dealership is not created or invalid.
     """
     if not file.filename.endswith((".xlsx", ".xls")):
         raise HTTPException(status_code=400, detail="Only Excel files (.xlsx, .xls) are supported.")
@@ -1513,23 +1632,14 @@ async def import_users_from_excel(
     if df.empty:
         raise HTTPException(status_code=400, detail="The uploaded Excel sheet is empty.")
 
-    # Match columns flexibly (case-insensitive & stripped)
     cols = {str(c).strip().lower(): c for c in df.columns}
-
-    # Name column
     name_col = cols.get("name") or next((orig for low, orig in cols.items() if "name" in low and "dealer" not in low), None)
-
-    # Job title column
     job_col = cols.get("job title") or cols.get("job") or cols.get("designation") or cols.get("role") or next(
         (orig for low, orig in cols.items() if "job" in low or "title" in low or "designation" in low), None
     )
-
-    # Email column
     email_col = cols.get("e-mail") or cols.get("email") or cols.get("mail") or next(
         (orig for low, orig in cols.items() if "mail" in low), None
     )
-
-    # Dealer column
     dealer_col = cols.get("dealer names") or cols.get("dealer name") or cols.get("dealer") or cols.get("dealership") or next(
         (orig for low, orig in cols.items() if "dealer" in low), None
     )
@@ -1540,14 +1650,20 @@ async def import_users_from_excel(
             detail=f"Could not find an Email column. Available columns: {list(df.columns)}. Expected columns: Name, Job Title, E-mail, Dealer Names."
         )
 
+    # 1. Fetch registered dealerships in system
+    existing_dealers = await get_registered_dealerships_map()
+
     # Pre-hash the default password
     hashed_default_pwd = get_password_hash(default_password) if default_password else None
 
     total_rows = len(df)
     created_count = 0
     updated_count = 0
-    errors = []
+    excluded_count = 0
     dealer_stats = {}
+    excluded_details = []
+
+    EMAIL_REGEX = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
     for idx, row in df.iterrows():
         row_num = idx + 2
@@ -1557,8 +1673,9 @@ async def import_users_from_excel(
             continue
 
         email = str(raw_email).strip().lower()
-        if "@" not in email:
-            errors.append(f"Row {row_num}: Invalid email format '{raw_email}'")
+        if not EMAIL_REGEX.match(email):
+            excluded_count += 1
+            excluded_details.append(f"Row {row_num}: Skipped invalid email '{raw_email}'")
             continue
 
         raw_name = row[name_col] if name_col and pd.notna(row[name_col]) else ""
@@ -1568,11 +1685,28 @@ async def import_users_from_excel(
         job_title = str(raw_job).strip() if raw_job and str(raw_job).strip().lower() != 'nan' else ""
 
         raw_dealer = row[dealer_col] if dealer_col and pd.notna(row[dealer_col]) else ""
-        dealer_name = str(raw_dealer).strip() if raw_dealer and str(raw_dealer).strip().lower() != 'nan' else "Unassigned Dealership"
+        dealer_name_raw = str(raw_dealer).strip() if raw_dealer and str(raw_dealer).strip().lower() != 'nan' else ""
+
+        if not dealer_name_raw:
+            excluded_count += 1
+            excluded_details.append(f"Row {row_num} ({email}): Skipped empty dealer name")
+            continue
+
+        if ("," in dealer_name_raw or ";" in dealer_name_raw) and len(dealer_name_raw.split(",")) > 2:
+            excluded_count += 1
+            excluded_details.append(f"Row {row_num} ({email}): Skipped multi-dealer composite cell")
+            continue
+
+        # Check against existing registered dealerships
+        clean_k = re.sub(r'[^a-zA-Z0-9]', '', dealer_name_raw.lower())
+        if clean_k not in existing_dealers:
+            excluded_count += 1
+            excluded_details.append(f"Row {row_num} ({email}): Dealership '{dealer_name_raw}' not found in system (excluded)")
+            continue
+
+        canonical_dealer = existing_dealers[clean_k]
 
         # Determine Role:
-        # Service Manager -> dealer_admin
-        # Service Advisor -> dealer_user
         job_lower = job_title.lower()
         if any(term in job_lower for term in ["manager", "admin", "gm", "lead", "head", "director", "supervisor"]):
             role = "dealer_admin"
@@ -1582,15 +1716,15 @@ async def import_users_from_excel(
             role_metric = "service_advisors"
 
         # Track dealership summary
-        if dealer_name not in dealer_stats:
-            dealer_stats[dealer_name] = {
-                "dealer_name": dealer_name,
+        if canonical_dealer not in dealer_stats:
+            dealer_stats[canonical_dealer] = {
+                "dealer_name": canonical_dealer,
                 "service_managers": 0,
                 "service_advisors": 0,
                 "total": 0
             }
-        dealer_stats[dealer_name][role_metric] += 1
-        dealer_stats[dealer_name]["total"] += 1
+        dealer_stats[canonical_dealer][role_metric] += 1
+        dealer_stats[canonical_dealer]["total"] += 1
 
         try:
             existing_user = await users_collection.find_one({
@@ -1602,8 +1736,8 @@ async def import_users_from_excel(
 
             if existing_user:
                 update_fields = {
-                    "dealer_id": dealer_name,
-                    "showroom_name": dealer_name,
+                    "dealer_id": canonical_dealer,
+                    "showroom_name": canonical_dealer,
                     "role": role,
                     "job_title": job_title,
                     "is_active": True,
@@ -1627,8 +1761,8 @@ async def import_users_from_excel(
                     "name": name,
                     "hashed_password": hashed_default_pwd or get_password_hash("sales@focus"),
                     "role": role,
-                    "dealer_id": dealer_name,
-                    "showroom_name": dealer_name,
+                    "dealer_id": canonical_dealer,
+                    "showroom_name": canonical_dealer,
                     "job_title": job_title,
                     "phone_number": None,
                     "branch_id": None,
@@ -1643,16 +1777,17 @@ async def import_users_from_excel(
                 created_count += 1
         except Exception as ex:
             logger.error(f"Error processing row {row_num} ({email}): {ex}")
-            errors.append(f"Row {row_num} ({email}): {str(ex)}")
+            excluded_details.append(f"Row {row_num} ({email}): Error {str(ex)}")
 
     return {
         "success": True,
-        "message": f"Successfully processed Excel import: {created_count} users created, {updated_count} updated across {len(dealer_stats)} dealerships.",
+        "message": f"Import complete: {created_count} users created, {updated_count} updated across {len(dealer_stats)} registered dealerships ({excluded_count} uncreated/invalid rows excluded).",
         "total_rows": total_rows,
         "created_count": created_count,
         "updated_count": updated_count,
+        "excluded_count": excluded_count,
         "dealers_summary": list(dealer_stats.values()),
-        "errors": errors
+        "errors": excluded_details
     }
 
 

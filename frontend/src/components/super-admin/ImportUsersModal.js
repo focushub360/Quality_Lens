@@ -24,7 +24,10 @@ import {
   Accordion,
   AccordionSummary,
   AccordionDetails,
-  Divider
+  Divider,
+  Tabs,
+  Tab,
+  Tooltip
 } from '@mui/material';
 import {
   UploadFile,
@@ -41,7 +44,10 @@ import {
   SupervisorAccount,
   Person,
   ArrowBack,
-  Search
+  Search,
+  CheckCircleOutline,
+  HighlightOff,
+  InfoOutlined
 } from '@mui/icons-material';
 import { importUsersFromExcel, previewUsersFromExcel } from '../../services/users';
 
@@ -72,6 +78,7 @@ export default function ImportUsersModal({ open, onClose, onSuccess }) {
   const [showPassword, setShowPassword] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewData, setPreviewData] = useState(null);
+  const [activeTab, setActiveTab] = useState('eligible'); // 'eligible' or 'excluded'
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState('');
   const [result, setResult] = useState(null);
@@ -86,6 +93,7 @@ export default function ImportUsersModal({ open, onClose, onSuccess }) {
     setShowPassword(false);
     setPreviewLoading(false);
     setPreviewData(null);
+    setActiveTab('eligible');
     setImporting(false);
     setError('');
     setResult(null);
@@ -109,14 +117,18 @@ export default function ImportUsersModal({ open, onClose, onSuccess }) {
     setError('');
     setPreviewData(null);
     setResult(null);
+    setActiveTab('eligible');
     setPreviewLoading(true);
 
     try {
       const data = await previewUsersFromExcel(selectedFile);
       setPreviewData(data);
-      // Auto-expand first dealer if available
-      if (data.dealers && data.dealers.length > 0) {
-        setExpandedDealer(data.dealers[0].dealer_name);
+      // Auto-expand first eligible dealer if available
+      if (data.eligible_summary?.dealers && data.eligible_summary.dealers.length > 0) {
+        setExpandedDealer(data.eligible_summary.dealers[0].dealer_name);
+      } else if (data.excluded_summary?.dealers && data.excluded_summary.dealers.length > 0) {
+        setExpandedDealer(data.excluded_summary.dealers[0].dealer_name);
+        setActiveTab('excluded');
       }
     } catch (err) {
       console.error('Preview error:', err);
@@ -130,6 +142,7 @@ export default function ImportUsersModal({ open, onClose, onSuccess }) {
 
   const handleFileChange = (e) => {
     const selected = e.target.files?.[0];
+    if (e.target) e.target.value = '';
     if (!selected) return;
     if (!selected.name.match(/\.(xlsx|xls)$/i)) {
       setError('Please select a valid Excel file (.xlsx or .xls)');
@@ -180,15 +193,20 @@ export default function ImportUsersModal({ open, onClose, onSuccess }) {
     }
   };
 
-  // Filter preview dealers based on search
-  const filteredDealers = (previewData?.dealers || []).filter(dealer => {
+  const eligibleSummary = previewData?.eligible_summary || { total_dealers: 0, total_users: 0, total_managers: 0, total_advisors: 0, dealers: [] };
+  const excludedSummary = previewData?.excluded_summary || { total_dealers: 0, total_users: 0, dealers: [] };
+
+  // Filter current tab dealers based on search
+  const currentDealersList = activeTab === 'eligible' ? eligibleSummary.dealers : excludedSummary.dealers;
+
+  const filteredDealers = (currentDealersList || []).filter(dealer => {
     if (!previewSearch) return true;
     const q = previewSearch.toLowerCase();
     const dealerMatches = dealer.dealer_name.toLowerCase().includes(q);
     const userMatches = dealer.users?.some(u =>
-      u.name.toLowerCase().includes(q) ||
-      u.email.toLowerCase().includes(q) ||
-      u.job_title.toLowerCase().includes(q)
+      (u.name && u.name.toLowerCase().includes(q)) ||
+      (u.email && u.email.toLowerCase().includes(q)) ||
+      (u.job_title && u.job_title.toLowerCase().includes(q))
     );
     return dealerMatches || userMatches;
   });
@@ -204,7 +222,7 @@ export default function ImportUsersModal({ open, onClose, onSuccess }) {
           borderRadius: 3,
           boxShadow: THEME.shadowMd,
           overflow: 'hidden',
-          minHeight: previewData ? '600px' : 'auto'
+          minHeight: previewData ? '620px' : 'auto'
         }
       }}
     >
@@ -241,15 +259,15 @@ export default function ImportUsersModal({ open, onClose, onSuccess }) {
               {result
                 ? 'Import Completed'
                 : previewData
-                ? 'Pre-Import Inspection & Verification'
+                ? 'Pre-Import Inspection & Dealer Verification'
                 : 'Import Users from Excel'}
             </Typography>
             <Typography variant="caption" sx={{ color: THEME.textSecondary }}>
               {result
-                ? 'Accounts successfully created and assigned to dealerships'
+                ? 'Accounts successfully imported into registered dealerships'
                 : previewData
-                ? 'Verify dealers, Service Managers, and Service Advisors before saving'
-                : 'Auto-create Service Managers & Service Advisors grouped by Dealer'}
+                ? 'Review matched existing dealers vs. uncreated excluded dealers'
+                : 'Auto-create Service Managers & Service Advisors for existing dealerships'}
             </Typography>
           </Box>
         </Box>
@@ -270,10 +288,10 @@ export default function ImportUsersModal({ open, onClose, onSuccess }) {
           <Box sx={{ py: 8, textAlign: 'center' }}>
             <CircularProgress sx={{ color: THEME.primary, mb: 2 }} />
             <Typography variant="h6" sx={{ fontWeight: 600, color: THEME.textPrimary }}>
-              Analyzing Excel File...
+              Analyzing Excel File & Matching Dealerships...
             </Typography>
             <Typography variant="body2" sx={{ color: THEME.textSecondary }}>
-              Reading dealerships, calculating Service Managers & Service Advisors...
+              Cross-referencing spreadsheet against registered dealerships in the database...
             </Typography>
           </Box>
         )}
@@ -320,9 +338,10 @@ export default function ImportUsersModal({ open, onClose, onSuccess }) {
                 </Paper>
               </Box>
               <Typography variant="caption" sx={{ color: THEME.textSecondary, display: 'block', lineHeight: 1.5 }}>
-                • <strong>Service Manager</strong> (Dealer Admin): Assigned when Job Title contains <em>Service Manager</em> or <em>Manager / Admin</em>.<br />
-                • <strong>Service Advisor</strong> (Dealer User): Assigned for all advisor & technician roles.<br />
-                • <strong>Respective Dealership</strong>: Automatically grouped under the dealer in Column D with instant preview.
+                • <strong>Existing Dealers Only</strong>: System matches rows against existing created dealerships. If a dealership has not been created yet in Dealer Management, it is excluded until created.<br />
+                • <strong>Service Manager</strong>: Assigned automatically when Job Title contains <em>Service Manager</em> or <em>Manager / Admin / Lead</em>.<br />
+                • <strong>Service Advisor</strong>: Assigned automatically for all advisor and technician roles.<br />
+                • <strong>Clean & Reliable</strong>: Multi-dealer composite strings or invalid entries are safely quarantined.
               </Typography>
             </Box>
 
@@ -420,7 +439,7 @@ export default function ImportUsersModal({ open, onClose, onSuccess }) {
           </>
         )}
 
-        {/* STEP 2: PRE-IMPORT INSPECTION PREVIEW (BEFORE ACTUAL IMPORT) */}
+        {/* STEP 2: PRE-IMPORT INSPECTION PREVIEW */}
         {!previewLoading && previewData && !result && (
           <Box>
             {/* File Header Bar */}
@@ -446,7 +465,7 @@ export default function ImportUsersModal({ open, onClose, onSuccess }) {
                     {previewData.filename}
                   </Typography>
                   <Typography variant="caption" sx={{ color: THEME.textSecondary }}>
-                    Ready for inspection • {previewData.total_rows} rows scanned
+                    {previewData.total_rows} total rows scanned • {eligibleSummary.total_users} eligible for existing dealers • {excludedSummary.total_users} excluded
                   </Typography>
                 </Box>
               </Box>
@@ -472,20 +491,20 @@ export default function ImportUsersModal({ open, onClose, onSuccess }) {
                 mb: 2.5
               }}
             >
-              <Paper variant="outlined" sx={{ p: 1.5, textAlign: 'center', borderRadius: 2, bgcolor: '#FFFFFF' }}>
-                <Business sx={{ color: THEME.primary, fontSize: 24, mb: 0.5 }} />
-                <Typography variant="h5" sx={{ fontWeight: 800, color: THEME.textPrimary }}>
-                  {previewData.total_dealers}
+              <Paper variant="outlined" sx={{ p: 1.5, textAlign: 'center', borderRadius: 2, bgcolor: '#FFFFFF', borderColor: '#10B981' }}>
+                <CheckCircleOutline sx={{ color: '#10B981', fontSize: 24, mb: 0.5 }} />
+                <Typography variant="h5" sx={{ fontWeight: 800, color: '#10B981' }}>
+                  {eligibleSummary.total_users}
                 </Typography>
-                <Typography variant="caption" sx={{ color: THEME.textSecondary, fontWeight: 600, display: 'block' }}>
-                  Dealers Found
+                <Typography variant="caption" sx={{ color: '#047857', fontWeight: 700, display: 'block' }}>
+                  Eligible to Import
                 </Typography>
               </Paper>
 
               <Paper variant="outlined" sx={{ p: 1.5, textAlign: 'center', borderRadius: 2, bgcolor: '#F0FDFA', borderColor: '#99F6E4' }}>
                 <SupervisorAccount sx={{ color: '#0F766E', fontSize: 24, mb: 0.5 }} />
                 <Typography variant="h5" sx={{ fontWeight: 800, color: '#0F766E' }}>
-                  {previewData.total_managers}
+                  {eligibleSummary.total_managers}
                 </Typography>
                 <Typography variant="caption" sx={{ color: '#0F766E', fontWeight: 700, display: 'block' }}>
                   Service Managers
@@ -493,30 +512,30 @@ export default function ImportUsersModal({ open, onClose, onSuccess }) {
               </Paper>
 
               <Paper variant="outlined" sx={{ p: 1.5, textAlign: 'center', borderRadius: 2, bgcolor: '#F8FAFC' }}>
-                <Person sx={{ color: THEME.textSecondary, fontSize: 24, mb: 0.5 }} />
+                <Business sx={{ color: THEME.primary, fontSize: 24, mb: 0.5 }} />
                 <Typography variant="h5" sx={{ fontWeight: 800, color: THEME.textPrimary }}>
-                  {previewData.total_advisors}
+                  {eligibleSummary.total_dealers}
                 </Typography>
                 <Typography variant="caption" sx={{ color: THEME.textSecondary, fontWeight: 600, display: 'block' }}>
-                  Service Advisors
+                  Existing Dealers Matched
                 </Typography>
               </Paper>
 
-              <Paper variant="outlined" sx={{ p: 1.5, textAlign: 'center', borderRadius: 2, bgcolor: '#FFFFFF', borderColor: THEME.primaryLight }}>
-                <Group sx={{ color: THEME.primary, fontSize: 24, mb: 0.5 }} />
-                <Typography variant="h5" sx={{ fontWeight: 800, color: THEME.primary }}>
-                  {previewData.total_valid_users}
+              <Paper variant="outlined" sx={{ p: 1.5, textAlign: 'center', borderRadius: 2, bgcolor: '#FFFBEB', borderColor: '#FDE68A' }}>
+                <HighlightOff sx={{ color: '#D97706', fontSize: 24, mb: 0.5 }} />
+                <Typography variant="h5" sx={{ fontWeight: 800, color: '#D97706' }}>
+                  {excludedSummary.total_users}
                 </Typography>
-                <Typography variant="caption" sx={{ color: THEME.primary, fontWeight: 700, display: 'block' }}>
-                  Total Accounts
+                <Typography variant="caption" sx={{ color: '#B45309', fontWeight: 700, display: 'block' }}>
+                  Excluded (Dealer Not Found)
                 </Typography>
               </Paper>
             </Box>
 
             {/* Password Configuration for Import */}
-            <Box sx={{ mb: 2.5, p: 2, bgcolor: '#F8FAFC', borderRadius: 2, border: `1px solid ${THEME.border}` }}>
+            <Box sx={{ mb: 2, p: 2, bgcolor: '#F8FAFC', borderRadius: 2, border: `1px solid ${THEME.border}` }}>
               <Typography variant="subtitle2" sx={{ fontWeight: 700, color: THEME.textPrimary, mb: 0.5 }}>
-                Default Password for All Imported Accounts
+                Default Password for Imported Accounts
               </Typography>
               <TextField
                 fullWidth
@@ -541,14 +560,66 @@ export default function ImportUsersModal({ open, onClose, onSuccess }) {
               />
             </Box>
 
-            {/* Filter & Dealer Accordions Header */}
+            {/* Tabs for Eligible vs Excluded */}
+            <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
+              <Tabs
+                value={activeTab}
+                onChange={(e, val) => setActiveTab(val)}
+                textColor="primary"
+                indicatorColor="primary"
+              >
+                <Tab
+                  value="eligible"
+                  label={
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <CheckCircleOutline fontSize="small" sx={{ color: '#10B981' }} />
+                      <span>Eligible to Import ({eligibleSummary.total_users})</span>
+                    </Box>
+                  }
+                  sx={{ textTransform: 'none', fontWeight: 700 }}
+                />
+                <Tab
+                  value="excluded"
+                  label={
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <HighlightOff fontSize="small" sx={{ color: '#D97706' }} />
+                      <span>Excluded / Not Created ({excludedSummary.total_users})</span>
+                    </Box>
+                  }
+                  sx={{ textTransform: 'none', fontWeight: 700 }}
+                />
+              </Tabs>
+            </Box>
+
+            {/* Tab 1: Eligible Notice */}
+            {activeTab === 'eligible' && (
+              <Alert severity="success" sx={{ mb: 2, borderRadius: 2, py: 0.5 }}>
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                  These {eligibleSummary.total_users} users match {eligibleSummary.total_dealers} existing registered dealerships in your system and will be imported.
+                </Typography>
+              </Alert>
+            )}
+
+            {/* Tab 2: Excluded Notice */}
+            {activeTab === 'excluded' && (
+              <Alert severity="warning" sx={{ mb: 2, borderRadius: 2, py: 0.5 }}>
+                <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
+                  These {excludedSummary.total_users} users are EXCLUDED and will NOT be imported.
+                </Typography>
+                <Typography variant="caption" sx={{ display: 'block', color: '#92400E' }}>
+                  Their dealership has not been created yet in <strong>Dealer Management</strong>, or contains multiple combined dealerships. To import them later, create the dealership name in Dealer Management and re-upload this report.
+                </Typography>
+              </Alert>
+            )}
+
+            {/* Filter Search Header */}
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5, flexWrap: 'wrap', gap: 1 }}>
-              <Typography variant="subtitle1" sx={{ fontWeight: 700, color: THEME.textPrimary }}>
-                Dealerships & Assigned Users ({filteredDealers.length})
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, color: THEME.textPrimary }}>
+                {activeTab === 'eligible' ? 'Registered Dealerships Matched' : 'Excluded Dealerships'} ({filteredDealers.length})
               </Typography>
               <TextField
                 size="small"
-                placeholder="Filter dealer or user name..."
+                placeholder="Filter by dealer or user..."
                 value={previewSearch}
                 onChange={(e) => setPreviewSearch(e.target.value)}
                 sx={{ width: { xs: '100%', sm: 260 } }}
@@ -562,8 +633,8 @@ export default function ImportUsersModal({ open, onClose, onSuccess }) {
               />
             </Box>
 
-            {/* List of Dealers with Expandable Users */}
-            <Box sx={{ maxHeight: 340, overflowY: 'auto', pr: 0.5 }}>
+            {/* List of Dealers Accordions */}
+            <Box sx={{ maxHeight: 300, overflowY: 'auto', pr: 0.5 }}>
               {filteredDealers.length > 0 ? (
                 filteredDealers.map((dealer, dIdx) => (
                   <Accordion
@@ -573,7 +644,8 @@ export default function ImportUsersModal({ open, onClose, onSuccess }) {
                     sx={{
                       mb: 1.5,
                       borderRadius: '8px !important',
-                      border: `1px solid ${THEME.border}`,
+                      border: `1px solid ${activeTab === 'eligible' ? THEME.border : '#FDE68A'}`,
+                      bgcolor: activeTab === 'eligible' ? '#FFFFFF' : '#FFFDF5',
                       boxShadow: 'none',
                       '&:before': { display: 'none' }
                     }}
@@ -581,38 +653,53 @@ export default function ImportUsersModal({ open, onClose, onSuccess }) {
                     <AccordionSummary expandIcon={<ExpandMore />}>
                       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', pr: 2, flexWrap: 'wrap', gap: 1 }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Business sx={{ color: THEME.primary, fontSize: 20 }} />
+                          <Business sx={{ color: activeTab === 'eligible' ? THEME.primary : '#D97706', fontSize: 20 }} />
                           <Typography variant="subtitle2" sx={{ fontWeight: 700, color: THEME.textPrimary }}>
                             {dealer.dealer_name}
                           </Typography>
                         </Box>
-                        <Box sx={{ display: 'flex', gap: 1 }}>
-                          <Chip
-                            label={`${dealer.service_managers} Manager${dealer.service_managers === 1 ? '' : 's'}`}
-                            size="small"
-                            sx={{
-                              bgcolor: '#CCFBF1',
-                              color: '#0F766E',
-                              fontWeight: 700,
-                              fontSize: '0.725rem'
-                            }}
-                          />
-                          <Chip
-                            label={`${dealer.service_advisors} Advisor${dealer.service_advisors === 1 ? '' : 's'}`}
-                            size="small"
-                            sx={{
-                              bgcolor: '#F1F5F9',
-                              color: THEME.textSecondary,
-                              fontWeight: 600,
-                              fontSize: '0.725rem'
-                            }}
-                          />
-                          <Chip
-                            label={`${dealer.total} Total`}
-                            size="small"
-                            variant="outlined"
-                            sx={{ fontWeight: 700, fontSize: '0.725rem' }}
-                          />
+                        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                          {activeTab === 'eligible' ? (
+                            <>
+                              <Chip
+                                label={`${dealer.service_managers} Manager${dealer.service_managers === 1 ? '' : 's'}`}
+                                size="small"
+                                sx={{
+                                  bgcolor: '#CCFBF1',
+                                  color: '#0F766E',
+                                  fontWeight: 700,
+                                  fontSize: '0.725rem'
+                                }}
+                              />
+                              <Chip
+                                label={`${dealer.service_advisors} Advisor${dealer.service_advisors === 1 ? '' : 's'}`}
+                                size="small"
+                                sx={{
+                                  bgcolor: '#F1F5F9',
+                                  color: THEME.textSecondary,
+                                  fontWeight: 600,
+                                  fontSize: '0.725rem'
+                                }}
+                              />
+                              <Chip
+                                label={`${dealer.total} Total`}
+                                size="small"
+                                variant="outlined"
+                                sx={{ fontWeight: 700, fontSize: '0.725rem' }}
+                              />
+                            </>
+                          ) : (
+                            <Chip
+                              label={`${dealer.total} Excluded`}
+                              size="small"
+                              sx={{
+                                bgcolor: '#FEF3C7',
+                                color: '#B45309',
+                                fontWeight: 700,
+                                fontSize: '0.725rem'
+                              }}
+                            />
+                          )}
                         </Box>
                       </Box>
                     </AccordionSummary>
@@ -623,10 +710,16 @@ export default function ImportUsersModal({ open, onClose, onSuccess }) {
                           <TableHead>
                             <TableRow sx={{ bgcolor: '#F8FAFC' }}>
                               <TableCell sx={{ fontWeight: 700, fontSize: '0.75rem' }}>Name</TableCell>
-                              <TableCell sx={{ fontWeight: 700, fontSize: '0.75rem' }}>Excel Job Title</TableCell>
-                              <TableCell sx={{ fontWeight: 700, fontSize: '0.75rem' }}>Assigned Role</TableCell>
+                              <TableCell sx={{ fontWeight: 700, fontSize: '0.75rem' }}>Job Title in Excel</TableCell>
+                              {activeTab === 'eligible' ? (
+                                <TableCell sx={{ fontWeight: 700, fontSize: '0.75rem' }}>Role</TableCell>
+                              ) : (
+                                <TableCell sx={{ fontWeight: 700, fontSize: '0.75rem' }}>Exclusion Reason</TableCell>
+                              )}
                               <TableCell sx={{ fontWeight: 700, fontSize: '0.75rem' }}>Email</TableCell>
-                              <TableCell align="center" sx={{ fontWeight: 700, fontSize: '0.75rem' }}>Status</TableCell>
+                              {activeTab === 'eligible' && (
+                                <TableCell align="center" sx={{ fontWeight: 700, fontSize: '0.75rem' }}>Action</TableCell>
+                              )}
                             </TableRow>
                           </TableHead>
                           <TableBody>
@@ -638,31 +731,39 @@ export default function ImportUsersModal({ open, onClose, onSuccess }) {
                                 <TableCell sx={{ color: THEME.textSecondary, fontSize: '0.775rem' }}>
                                   {u.job_title || '—'}
                                 </TableCell>
-                                <TableCell>
-                                  <Chip
-                                    label={u.role_display}
-                                    size="small"
-                                    sx={{
-                                      bgcolor: u.role === 'dealer_admin' ? '#CCFBF1' : '#F1F5F9',
-                                      color: u.role === 'dealer_admin' ? '#0F766E' : THEME.textSecondary,
-                                      fontWeight: 700,
-                                      fontSize: '0.7rem',
-                                      height: 22
-                                    }}
-                                  />
-                                </TableCell>
+                                {activeTab === 'eligible' ? (
+                                  <TableCell>
+                                    <Chip
+                                      label={u.role_display}
+                                      size="small"
+                                      sx={{
+                                        bgcolor: u.role === 'dealer_admin' ? '#CCFBF1' : '#F1F5F9',
+                                        color: u.role === 'dealer_admin' ? '#0F766E' : THEME.textSecondary,
+                                        fontWeight: 700,
+                                        fontSize: '0.7rem',
+                                        height: 22
+                                      }}
+                                    />
+                                  </TableCell>
+                                ) : (
+                                  <TableCell sx={{ fontSize: '0.75rem', color: '#B45309' }}>
+                                    {u.reason || dealer.reason || 'Unregistered Dealership'}
+                                  </TableCell>
+                                )}
                                 <TableCell sx={{ fontSize: '0.775rem', color: THEME.textSecondary }}>
                                   {u.email}
                                 </TableCell>
-                                <TableCell align="center">
-                                  <Chip
-                                    label={u.is_existing ? 'Update Existing' : 'New User'}
-                                    size="small"
-                                    color={u.is_existing ? 'warning' : 'success'}
-                                    variant="outlined"
-                                    sx={{ fontWeight: 600, fontSize: '0.675rem', height: 20 }}
-                                  />
-                                </TableCell>
+                                {activeTab === 'eligible' && (
+                                  <TableCell align="center">
+                                    <Chip
+                                      label={u.is_existing ? 'Update Existing' : 'New User'}
+                                      size="small"
+                                      color={u.is_existing ? 'warning' : 'success'}
+                                      variant="outlined"
+                                      sx={{ fontWeight: 600, fontSize: '0.675rem', height: 20 }}
+                                    />
+                                  </TableCell>
+                                )}
                               </TableRow>
                             ))}
                           </TableBody>
@@ -674,20 +775,11 @@ export default function ImportUsersModal({ open, onClose, onSuccess }) {
               ) : (
                 <Paper variant="outlined" sx={{ p: 3, textAlign: 'center' }}>
                   <Typography variant="body2" sx={{ color: THEME.textSecondary }}>
-                    No dealerships or users matching "{previewSearch}"
+                    No dealerships matching "{previewSearch}"
                   </Typography>
                 </Paper>
               )}
             </Box>
-
-            {/* Warnings if any */}
-            {previewData.warnings && previewData.warnings.length > 0 && (
-              <Alert severity="warning" sx={{ mt: 2, borderRadius: 2 }}>
-                <Typography variant="caption" sx={{ fontWeight: 600 }}>
-                  {previewData.warnings.length} rows have missing or invalid email addresses and will be skipped.
-                </Typography>
-              </Alert>
-            )}
           </Box>
         )}
 
@@ -711,33 +803,41 @@ export default function ImportUsersModal({ open, onClose, onSuccess }) {
             <Box
               sx={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(3, 1fr)',
-                gap: 2,
+                gridTemplateColumns: 'repeat(4, 1fr)',
+                gap: 1.5,
                 mb: 3
               }}
             >
-              <Paper variant="outlined" sx={{ p: 2, textAlign: 'center', borderRadius: 2 }}>
+              <Paper variant="outlined" sx={{ p: 1.5, textAlign: 'center', borderRadius: 2 }}>
                 <Typography variant="h5" sx={{ fontWeight: 800, color: THEME.primary }}>
                   {result.created_count}
                 </Typography>
-                <Typography variant="caption" sx={{ color: THEME.textSecondary, fontWeight: 600 }}>
-                  New Accounts Created
+                <Typography variant="caption" sx={{ color: THEME.textSecondary, fontWeight: 600, display: 'block' }}>
+                  New Users Created
                 </Typography>
               </Paper>
-              <Paper variant="outlined" sx={{ p: 2, textAlign: 'center', borderRadius: 2 }}>
+              <Paper variant="outlined" sx={{ p: 1.5, textAlign: 'center', borderRadius: 2 }}>
                 <Typography variant="h5" sx={{ fontWeight: 800, color: THEME.accent }}>
                   {result.updated_count}
                 </Typography>
-                <Typography variant="caption" sx={{ color: THEME.textSecondary, fontWeight: 600 }}>
-                  Existing Accounts Updated
+                <Typography variant="caption" sx={{ color: THEME.textSecondary, fontWeight: 600, display: 'block' }}>
+                  Existing Updated
                 </Typography>
               </Paper>
-              <Paper variant="outlined" sx={{ p: 2, textAlign: 'center', borderRadius: 2 }}>
+              <Paper variant="outlined" sx={{ p: 1.5, textAlign: 'center', borderRadius: 2 }}>
                 <Typography variant="h5" sx={{ fontWeight: 800, color: THEME.textPrimary }}>
                   {result.dealers_summary?.length || 0}
                 </Typography>
-                <Typography variant="caption" sx={{ color: THEME.textSecondary, fontWeight: 600 }}>
-                  Dealerships Grouped
+                <Typography variant="caption" sx={{ color: THEME.textSecondary, fontWeight: 600, display: 'block' }}>
+                  Dealers Populated
+                </Typography>
+              </Paper>
+              <Paper variant="outlined" sx={{ p: 1.5, textAlign: 'center', borderRadius: 2, bgcolor: '#FFFBEB' }}>
+                <Typography variant="h5" sx={{ fontWeight: 800, color: '#D97706' }}>
+                  {result.excluded_count || 0}
+                </Typography>
+                <Typography variant="caption" sx={{ color: '#B45309', fontWeight: 600, display: 'block' }}>
+                  Rows Excluded
                 </Typography>
               </Paper>
             </Box>
@@ -746,7 +846,7 @@ export default function ImportUsersModal({ open, onClose, onSuccess }) {
             <Typography variant="subtitle2" sx={{ fontWeight: 700, color: THEME.textPrimary, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
               <Business fontSize="small" sx={{ color: THEME.primary }} /> Dealership Summary
             </Typography>
-            <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 280, mb: 2, borderRadius: 2 }}>
+            <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 260, mb: 2, borderRadius: 2 }}>
               <Table size="small" stickyHeader>
                 <TableHead>
                   <TableRow sx={{ bgcolor: '#F8FAFC' }}>
@@ -803,7 +903,7 @@ export default function ImportUsersModal({ open, onClose, onSuccess }) {
               </Table>
             </TableContainer>
 
-            {/* Warnings / skipped rows if any */}
+            {/* Warnings or skipped items */}
             {result.errors && result.errors.length > 0 && (
               <Box sx={{ mt: 2 }}>
                 <Button
@@ -813,7 +913,7 @@ export default function ImportUsersModal({ open, onClose, onSuccess }) {
                   onClick={() => setShowErrorsList(!showErrorsList)}
                   sx={{ color: THEME.warning, textTransform: 'none', fontWeight: 600 }}
                 >
-                  {result.errors.length} row warnings/skipped during import
+                  {result.errors.length} excluded row details
                 </Button>
                 <Collapse in={showErrorsList}>
                   <Paper variant="outlined" sx={{ p: 1.5, mt: 1, bgcolor: '#FFFBEB', borderColor: '#FDE68A', maxHeight: 150, overflowY: 'auto' }}>
@@ -831,7 +931,6 @@ export default function ImportUsersModal({ open, onClose, onSuccess }) {
       </DialogContent>
 
       <DialogActions sx={{ px: 3, py: 2, borderTop: `1px solid ${THEME.border}`, bgcolor: '#F8FAFC' }}>
-        {/* Step 1 Actions */}
         {!previewData && !result && (
           <Button
             onClick={handleClose}
@@ -842,7 +941,6 @@ export default function ImportUsersModal({ open, onClose, onSuccess }) {
           </Button>
         )}
 
-        {/* Step 2 Actions (Preview Confirmation) */}
         {previewData && !result && (
           <>
             <Button
@@ -859,10 +957,12 @@ export default function ImportUsersModal({ open, onClose, onSuccess }) {
             <Button
               variant="contained"
               onClick={handleConfirmImport}
-              disabled={importing}
+              disabled={importing || eligibleSummary.total_users === 0}
               startIcon={importing ? <CircularProgress size={18} color="inherit" /> : <CheckCircle />}
               sx={{
-                background: 'linear-gradient(135deg, #059669 0%, #10B981 100%)',
+                background: eligibleSummary.total_users > 0
+                  ? 'linear-gradient(135deg, #059669 0%, #10B981 100%)'
+                  : '#94A3B8',
                 textTransform: 'none',
                 fontWeight: 700,
                 fontSize: '0.95rem',
@@ -877,13 +977,14 @@ export default function ImportUsersModal({ open, onClose, onSuccess }) {
               }}
             >
               {importing
-                ? `Importing ${previewData.total_valid_users} Users...`
-                : `Confirm & Import ${previewData.total_valid_users} Users`}
+                ? `Importing ${eligibleSummary.total_users} Users...`
+                : eligibleSummary.total_users > 0
+                ? `Confirm & Import ${eligibleSummary.total_users} Eligible Users`
+                : 'No Registered Dealers Matched'}
             </Button>
           </>
         )}
 
-        {/* Step 3 Actions (Done) */}
         {result && (
           <Button
             variant="contained"
