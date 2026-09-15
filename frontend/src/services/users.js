@@ -24,4 +24,17 @@ export async function updateUserProfile(payload) {
   return res.data;
 }
 
+export async function importUsersFromExcel(file, defaultPassword = 'sales@focus') {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('default_password', defaultPassword);
+  const res = await api.post('/users/import-excel', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  });
+  return res.data;
+}
+
+
 

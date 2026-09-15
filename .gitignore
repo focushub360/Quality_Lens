@@ -21,6 +21,7 @@ frontend/dist/
 *.egg-info/
 dist/
 build/
+backups/
 
 # IDE
 .vscode/

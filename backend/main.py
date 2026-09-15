@@ -1360,6 +1360,177 @@ async def delete_user(user_id: str, current_user: UserInDB = Depends(get_current
     return Response(status_code=204)
 
 
+@app.post("/users/import-excel")
+async def import_users_from_excel(
+    file: UploadFile = File(...),
+    default_password: str = Form("sales@focus"),
+    current_user: UserInDB = Depends(get_current_super_admin)
+):
+    """
+    Super Admin endpoint to import users in bulk from a master Excel sheet.
+    Expected columns: Name, Job Title, E-mail, Dealer Names.
+    Automatically assigns:
+      - 'dealer_admin' (Service Manager) if Job Title contains manager/admin/lead
+      - 'dealer_user' (Service Advisor) for other roles
+      - Respective dealership from 'Dealer Names'
+      - Hashes default password (default: 'sales@focus')
+    """
+    if not file.filename.endswith((".xlsx", ".xls")):
+        raise HTTPException(status_code=400, detail="Only Excel files (.xlsx, .xls) are supported.")
+
+    try:
+        content = await file.read()
+        df = pd.read_excel(_io.BytesIO(content))
+    except Exception as e:
+        logger.error(f"Failed to read Excel file: {e}")
+        raise HTTPException(status_code=400, detail=f"Failed to parse Excel file: {str(e)}")
+
+    if df.empty:
+        raise HTTPException(status_code=400, detail="The uploaded Excel sheet is empty.")
+
+    # Match columns flexibly (case-insensitive & stripped)
+    cols = {str(c).strip().lower(): c for c in df.columns}
+
+    # Name column
+    name_col = cols.get("name") or next((orig for low, orig in cols.items() if "name" in low and "dealer" not in low), None)
+
+    # Job title column
+    job_col = cols.get("job title") or cols.get("job") or cols.get("designation") or cols.get("role") or next(
+        (orig for low, orig in cols.items() if "job" in low or "title" in low or "designation" in low), None
+    )
+
+    # Email column
+    email_col = cols.get("e-mail") or cols.get("email") or cols.get("mail") or next(
+        (orig for low, orig in cols.items() if "mail" in low), None
+    )
+
+    # Dealer column
+    dealer_col = cols.get("dealer names") or cols.get("dealer name") or cols.get("dealer") or cols.get("dealership") or next(
+        (orig for low, orig in cols.items() if "dealer" in low), None
+    )
+
+    if not email_col:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Could not find an Email column. Available columns: {list(df.columns)}. Expected columns: Name, Job Title, E-mail, Dealer Names."
+        )
+
+    # Pre-hash the default password
+    hashed_default_pwd = get_password_hash(default_password) if default_password else None
+
+    total_rows = len(df)
+    created_count = 0
+    updated_count = 0
+    errors = []
+    dealer_stats = {}
+
+    for idx, row in df.iterrows():
+        row_num = idx + 2
+
+        raw_email = row[email_col] if email_col and pd.notna(row[email_col]) else None
+        if not raw_email or str(raw_email).strip().lower() == 'nan':
+            continue
+
+        email = str(raw_email).strip().lower()
+        if "@" not in email:
+            errors.append(f"Row {row_num}: Invalid email format '{raw_email}'")
+            continue
+
+        raw_name = row[name_col] if name_col and pd.notna(row[name_col]) else ""
+        name = str(raw_name).strip() if raw_name and str(raw_name).strip().lower() != 'nan' else email.split("@")[0]
+
+        raw_job = row[job_col] if job_col and pd.notna(row[job_col]) else ""
+        job_title = str(raw_job).strip() if raw_job and str(raw_job).strip().lower() != 'nan' else ""
+
+        raw_dealer = row[dealer_col] if dealer_col and pd.notna(row[dealer_col]) else ""
+        dealer_name = str(raw_dealer).strip() if raw_dealer and str(raw_dealer).strip().lower() != 'nan' else "Unassigned Dealership"
+
+        # Determine Role:
+        # Service Manager -> dealer_admin
+        # Service Advisor -> dealer_user
+        job_lower = job_title.lower()
+        if any(term in job_lower for term in ["manager", "admin", "gm", "lead", "head", "director", "supervisor"]):
+            role = "dealer_admin"
+            role_metric = "service_managers"
+        else:
+            role = "dealer_user"
+            role_metric = "service_advisors"
+
+        # Track dealership summary
+        if dealer_name not in dealer_stats:
+            dealer_stats[dealer_name] = {
+                "dealer_name": dealer_name,
+                "service_managers": 0,
+                "service_advisors": 0,
+                "total": 0
+            }
+        dealer_stats[dealer_name][role_metric] += 1
+        dealer_stats[dealer_name]["total"] += 1
+
+        try:
+            existing_user = await users_collection.find_one({
+                "$or": [
+                    {"email": email},
+                    {"username": email}
+                ]
+            })
+
+            if existing_user:
+                update_fields = {
+                    "dealer_id": dealer_name,
+                    "showroom_name": dealer_name,
+                    "role": role,
+                    "job_title": job_title,
+                    "is_active": True,
+                    "status": "active",
+                    "updated_at": dt.utcnow()
+                }
+                if name:
+                    update_fields["name"] = name
+                if hashed_default_pwd:
+                    update_fields["hashed_password"] = hashed_default_pwd
+
+                await users_collection.update_one(
+                    {"_id": existing_user["_id"]},
+                    {"$set": update_fields}
+                )
+                updated_count += 1
+            else:
+                new_user_doc = {
+                    "username": email,
+                    "email": email,
+                    "name": name,
+                    "hashed_password": hashed_default_pwd or get_password_hash("sales@focus"),
+                    "role": role,
+                    "dealer_id": dealer_name,
+                    "showroom_name": dealer_name,
+                    "job_title": job_title,
+                    "phone_number": None,
+                    "branch_id": None,
+                    "branch_name": None,
+                    "is_active": True,
+                    "status": "active",
+                    "created_by_user_id": str(current_user.id),
+                    "created_at": dt.utcnow(),
+                    "updated_at": dt.utcnow()
+                }
+                await users_collection.insert_one(new_user_doc)
+                created_count += 1
+        except Exception as ex:
+            logger.error(f"Error processing row {row_num} ({email}): {ex}")
+            errors.append(f"Row {row_num} ({email}): {str(ex)}")
+
+    return {
+        "success": True,
+        "message": f"Successfully processed Excel import: {created_count} users created, {updated_count} updated across {len(dealer_stats)} dealerships.",
+        "total_rows": total_rows,
+        "created_count": created_count,
+        "updated_count": updated_count,
+        "dealers_summary": list(dealer_stats.values()),
+        "errors": errors
+    }
+
+
 @app.post("/dealers/{dealer_id}/delete")
 async def delete_dealership(
     dealer_id: str,

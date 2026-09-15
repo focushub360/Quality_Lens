@@ -42,9 +42,11 @@ import {
   Email as EmailIcon,
   Security,
   Visibility,
-  VisibilityOff
+  VisibilityOff,
+  UploadFile
 } from '@mui/icons-material';
 import { listUsers, createUser, updateUser, deleteUser } from '../../services/users';
+import ImportUsersModal from '../../components/super-admin/ImportUsersModal';
 
 const THEME = {
   primary: '#0DA1B8',
@@ -84,6 +86,7 @@ export default function UserManagement() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
+  const [importModalOpen, setImportModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
   const [form, setForm] = useState({
     username: '',
@@ -133,8 +136,9 @@ export default function UserManagement() {
       ];
       setAvailableDealers(REGISTERED_ACTIVE_DEALERS);
 
-      const dealerAdmins = userList.filter(user => user.role === 'dealer_admin');
-      setUsers(dealerAdmins);
+      // Load both Service Managers (dealer_admin) and Service Advisors (dealer_user)
+      const managedUsers = userList.filter(user => user.role === 'dealer_admin' || user.role === 'dealer_user');
+      setUsers(managedUsers);
     } catch (error) {
       console.error('Error loading users:', error);
       setError('Failed to load users');
@@ -320,30 +324,55 @@ export default function UserManagement() {
               </Typography>
             </Box>
 
-            <Button
-              variant="contained"
-              size="medium"
-              startIcon={<Add />}
-              onClick={() => setOpen(true)}
-              sx={{
-                borderRadius: 2.5,
-                px: 2.5,
-                py: 1,
-                fontWeight: 600,
-                textTransform: 'none',
-                fontSize: '0.875rem',
-                whiteSpace: 'nowrap',
-                background: THEME.gradientPrimary,
-                boxShadow: THEME.shadowMd,
-                '&:hover': {
-                  boxShadow: '0 6px 20px rgba(13, 161, 184, 0.4)',
-                  transform: 'translateY(-1px)'
-                },
-                transition: 'all 0.2s ease'
-              }}
-            >
-              New Administrator
-            </Button>
+            <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', flexWrap: 'wrap' }}>
+              <Button
+                variant="outlined"
+                size="medium"
+                startIcon={<UploadFile />}
+                onClick={() => setImportModalOpen(true)}
+                sx={{
+                  borderRadius: 2.5,
+                  px: 2.5,
+                  py: 1,
+                  fontWeight: 600,
+                  textTransform: 'none',
+                  fontSize: '0.875rem',
+                  whiteSpace: 'nowrap',
+                  borderColor: THEME.primary,
+                  color: THEME.primary,
+                  '&:hover': {
+                    background: THEME.primaryUltraLight,
+                    borderColor: THEME.primaryDark,
+                  }
+                }}
+              >
+                Import from Excel
+              </Button>
+              <Button
+                variant="contained"
+                size="medium"
+                startIcon={<Add />}
+                onClick={() => setOpen(true)}
+                sx={{
+                  borderRadius: 2.5,
+                  px: 2.5,
+                  py: 1,
+                  fontWeight: 600,
+                  textTransform: 'none',
+                  fontSize: '0.875rem',
+                  whiteSpace: 'nowrap',
+                  background: THEME.gradientPrimary,
+                  boxShadow: THEME.shadowMd,
+                  '&:hover': {
+                    boxShadow: '0 6px 20px rgba(13, 161, 184, 0.4)',
+                    transform: 'translateY(-1px)'
+                  },
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                New Administrator
+              </Button>
+            </Box>
           </Box>
         </Box>
 
@@ -602,7 +631,7 @@ export default function UserManagement() {
                               fontSize: '0.825rem',
                               fontWeight: 600
                             }}>
-                              {user.dealer_id ? (user.dealer_id.toLowerCase().includes('bmw') ? 'BMW-KUN' : user.dealer_id.toUpperCase()) : '—'}
+                              {user.dealer_id || '—'}
                             </Typography>
                           </TableCell>
                           <TableCell>
@@ -888,6 +917,12 @@ export default function UserManagement() {
             </Button>
           </DialogActions>
         </Dialog>
+
+        <ImportUsersModal
+          open={importModalOpen}
+          onClose={() => setImportModalOpen(false)}
+          onSuccess={() => load()}
+        />
       </Container>
     </Box>
   );
