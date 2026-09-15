@@ -36,5 +36,16 @@ export async function importUsersFromExcel(file, defaultPassword = 'sales@focus'
   return res.data;
 }
 
+export async function previewUsersFromExcel(file) {
+  const formData = new FormData();
+  formData.append('file', file);
+  const res = await api.post('/users/preview-excel', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  });
+  return res.data;
+}
+
 
 

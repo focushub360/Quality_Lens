@@ -1360,6 +1360,131 @@ async def delete_user(user_id: str, current_user: UserInDB = Depends(get_current
     return Response(status_code=204)
 
 
+@app.post("/users/preview-excel")
+async def preview_users_from_excel(
+    file: UploadFile = File(...),
+    current_user: UserInDB = Depends(get_current_super_admin)
+):
+    """
+    Super Admin endpoint to preview an Excel file before importing.
+    Parses dealers, counts Service Managers vs Service Advisors,
+    and returns a structured preview without modifying the database.
+    """
+    if not file.filename.endswith((".xlsx", ".xls")):
+        raise HTTPException(status_code=400, detail="Only Excel files (.xlsx, .xls) are supported.")
+
+    try:
+        content = await file.read()
+        df = pd.read_excel(_io.BytesIO(content))
+    except Exception as e:
+        logger.error(f"Failed to read Excel file for preview: {e}")
+        raise HTTPException(status_code=400, detail=f"Failed to parse Excel file: {str(e)}")
+
+    if df.empty:
+        raise HTTPException(status_code=400, detail="The uploaded Excel sheet is empty.")
+
+    cols = {str(c).strip().lower(): c for c in df.columns}
+    name_col = cols.get("name") or next((orig for low, orig in cols.items() if "name" in low and "dealer" not in low), None)
+    job_col = cols.get("job title") or cols.get("job") or cols.get("designation") or cols.get("role") or next(
+        (orig for low, orig in cols.items() if "job" in low or "title" in low or "designation" in low), None
+    )
+    email_col = cols.get("e-mail") or cols.get("email") or cols.get("mail") or next(
+        (orig for low, orig in cols.items() if "mail" in low), None
+    )
+    dealer_col = cols.get("dealer names") or cols.get("dealer name") or cols.get("dealer") or cols.get("dealership") or next(
+        (orig for low, orig in cols.items() if "dealer" in low), None
+    )
+
+    if not email_col:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Could not find an Email column. Available columns: {list(df.columns)}. Expected columns: Name, Job Title, E-mail, Dealer Names."
+        )
+
+    total_rows = len(df)
+    total_managers = 0
+    total_advisors = 0
+    dealers_map = {}
+    warnings = []
+
+    # Pre-fetch existing emails from DB to show whether users are new or existing
+    existing_emails_cursor = users_collection.find({}, {"email": 1, "username": 1})
+    existing_emails_list = await existing_emails_cursor.to_list(None)
+    existing_set = set()
+    for u in existing_emails_list:
+        if u.get("email"):
+            existing_set.add(u["email"].lower().strip())
+        if u.get("username"):
+            existing_set.add(u["username"].lower().strip())
+
+    for idx, row in df.iterrows():
+        row_num = idx + 2
+
+        raw_email = row[email_col] if email_col and pd.notna(row[email_col]) else None
+        if not raw_email or str(raw_email).strip().lower() == 'nan':
+            continue
+
+        email = str(raw_email).strip().lower()
+        if "@" not in email:
+            warnings.append(f"Row {row_num}: Invalid email '{raw_email}' skipped.")
+            continue
+
+        raw_name = row[name_col] if name_col and pd.notna(row[name_col]) else ""
+        name = str(raw_name).strip() if raw_name and str(raw_name).strip().lower() != 'nan' else email.split("@")[0]
+
+        raw_job = row[job_col] if job_col and pd.notna(row[job_col]) else ""
+        job_title = str(raw_job).strip() if raw_job and str(raw_job).strip().lower() != 'nan' else ""
+
+        raw_dealer = row[dealer_col] if dealer_col and pd.notna(row[dealer_col]) else ""
+        dealer_name = str(raw_dealer).strip() if raw_dealer and str(raw_dealer).strip().lower() != 'nan' else "Unassigned Dealership"
+
+        job_lower = job_title.lower()
+        if any(term in job_lower for term in ["manager", "admin", "gm", "lead", "head", "director", "supervisor"]):
+            role = "dealer_admin"
+            role_display = "Service Manager"
+            total_managers += 1
+        else:
+            role = "dealer_user"
+            role_display = "Service Advisor"
+            total_advisors += 1
+
+        if dealer_name not in dealers_map:
+            dealers_map[dealer_name] = {
+                "dealer_name": dealer_name,
+                "service_managers": 0,
+                "service_advisors": 0,
+                "total": 0,
+                "users": []
+            }
+
+        if role == "dealer_admin":
+            dealers_map[dealer_name]["service_managers"] += 1
+        else:
+            dealers_map[dealer_name]["service_advisors"] += 1
+        dealers_map[dealer_name]["total"] += 1
+
+        dealers_map[dealer_name]["users"].append({
+            "name": name,
+            "email": email,
+            "job_title": job_title,
+            "role": role,
+            "role_display": role_display,
+            "is_existing": email in existing_set
+        })
+
+    return {
+        "success": True,
+        "filename": file.filename,
+        "total_rows": total_rows,
+        "total_valid_users": total_managers + total_advisors,
+        "total_dealers": len(dealers_map),
+        "total_managers": total_managers,
+        "total_advisors": total_advisors,
+        "dealers": list(dealers_map.values()),
+        "warnings": warnings
+    }
+
+
 @app.post("/users/import-excel")
 async def import_users_from_excel(
     file: UploadFile = File(...),
