@@ -89,10 +89,13 @@ docker compose -f docker-compose.yml up --build
 - **Password:** `admin123`
 - *Access: Global management of all dealers and system configurations.*
 
-### 🏢 Dealer / Branch Admin
+### 🏢 Service Manager (Dealer Admin)
 - **Username:** `bmw_admin`
 - **Password:** `bmw_secret`
-- *Access: Dealership-specific performance analytics and team management.*
+- *Access: Dealership-specific performance analytics, team management, and configurations.*
+
+### 👤 Service Advisor (Dealer User)
+- *Access: Video uploads, individual analysis results, and advisor performance tracking.*
 
 ---
 

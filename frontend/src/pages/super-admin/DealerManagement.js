@@ -269,8 +269,8 @@ const normalizeId = (id) => {
 };
 
 const ROLE_OPTS = [
-  { value: 'dealer_admin', label: 'Dealer Admin' },
-  { value: 'dealer_user', label: 'Dealer User' }
+  { value: 'dealer_admin', label: 'Service Manager' },
+  { value: 'dealer_user', label: 'Service Advisor' }
 ];
 
 // Enhanced Service Advisor Card
@@ -2687,7 +2687,7 @@ export default function DealerManagement() {
                                     </TableCell>
                                     <TableCell>
                                       <Chip
-                                        label={user.role === 'dealer_admin' ? 'Dealer Admin' : 'User'}
+                                        label={user.role === 'dealer_admin' ? 'Service Manager' : user.role === 'dealer_user' ? 'Service Advisor' : 'User'}
                                         size="small"
                                         sx={{
                                           background: user.role === 'dealer_admin' ? THEME.accent : THEME.primary,

@@ -105,9 +105,9 @@ const ROLE_ACCESS = {
 
 const ROLE_LABEL = {
   super_admin: 'Super Admin',
-  dealer_admin: 'Dealer Admin',
+  dealer_admin: 'Service Manager',
   branch_admin: 'Branch Admin',
-  dealer_user: 'User', // "User" level
+  dealer_user: 'Service Advisor',
 };
 
 const ROLE_COLOR = {

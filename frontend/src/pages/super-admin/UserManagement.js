@@ -76,7 +76,8 @@ const THEME = {
 };
 
 const ROLE_OPTS = [
-  { value: 'dealer_admin', label: 'Dealer Admin' }
+  { value: 'dealer_admin', label: 'Service Manager' },
+  { value: 'dealer_user', label: 'Service Advisor' }
 ];
 
 export default function UserManagement() {
@@ -420,7 +421,8 @@ export default function UserManagement() {
                 }}
               >
                 <MenuItem value="all">All Roles</MenuItem>
-                <MenuItem value="dealer_admin">Dealer Admin</MenuItem>
+                <MenuItem value="dealer_admin">Service Manager</MenuItem>
+                <MenuItem value="dealer_user">Service Advisor</MenuItem>
               </TextField>
             </Stack>
           </Box>
@@ -577,7 +579,7 @@ export default function UserManagement() {
                           </TableCell>
                           <TableCell>
                             <Chip
-                              label="Dealer Admin"
+                              label={user.role === 'dealer_admin' ? 'Service Manager' : user.role === 'dealer_user' ? 'Service Advisor' : (user.role || 'Service Manager')}
                               size="small"
                               sx={{
                                 bgcolor: `${THEME.primary}15`,

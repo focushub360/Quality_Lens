@@ -39,17 +39,17 @@ const JOB_TITLES_BY_ROLE = {
 const CREATABLE_ROLES = {
   dealer_admin: [
     { value: 'branch_admin', label: 'Branch Admin' },
-    { value: 'dealer_user', label: 'User' },
+    { value: 'dealer_user', label: 'Service Advisor' },
   ],
   branch_admin: [
-    { value: 'dealer_user', label: 'User' },
+    { value: 'dealer_user', label: 'Service Advisor' },
   ],
 };
 
 const ROLE_LABELS = {
-  dealer_admin: 'Dealer Admin',
+  dealer_admin: 'Service Manager',
   branch_admin: 'Branch Admin',
-  dealer_user: 'User',
+  dealer_user: 'Service Advisor',
 };
 
 export default function DealerUsers() {

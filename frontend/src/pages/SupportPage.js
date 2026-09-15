@@ -53,12 +53,12 @@ export default function SupportPage() {
     if (role === 'super_admin') return [{ value: 'system_dev', label: 'System Development Team' }];
     if (role === 'dealer_admin') return [{ value: 'super_admin', label: 'Super Admin / QualityLens Support' }];
     if (role === 'branch_admin') return [
-      { value: 'dealer_admin', label: 'Dealer Admin' },
+      { value: 'dealer_admin', label: 'Service Manager' },
       { value: 'super_admin', label: 'Super Admin' }
     ];
     // Default for advisor/dealer_user
     return [
-      { value: 'dealer_admin', label: 'Dealer Admin' },
+      { value: 'dealer_admin', label: 'Service Manager' },
       { value: 'branch_admin', label: 'Branch Admin' },
       { value: 'super_admin', label: 'Super Admin' }
     ];

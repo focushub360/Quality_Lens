@@ -512,7 +512,7 @@ function GlobalAnalysisMonitor() {
                 const pct = total > 0 ? Math.round((processed / total) * 100) : 0;
                 const dName = b.dealer_name || b.dealer_id || 'Unknown Dealer';
                 const subUser = b.submitted_by_username || 'User';
-                const subRole = b.submitted_by_user_role || 'Dealer Admin';
+                const subRole = b.submitted_by_user_role === 'dealer_admin' ? 'Service Manager' : b.submitted_by_user_role === 'dealer_user' ? 'Service Advisor' : (b.submitted_by_user_role || 'Service Manager');
 
                 return (
                   <Box key={b.batch_id || b.batchId} sx={{ mb: 1, p: 0.75, borderRadius: 1.5, background: 'rgba(255,255,255,0.7)', border: '1px solid rgba(13,161,184,0.15)' }}>
@@ -570,7 +570,7 @@ function GlobalAnalysisMonitor() {
             ) : completedBatches.map(b => {
               const dName = b.dealer_name || b.dealer_id || 'Unknown Dealer';
               const subUser = b.submitted_by_username || 'User';
-              const subRole = b.submitted_by_user_role || 'Dealer Admin';
+              const subRole = b.submitted_by_user_role === 'dealer_admin' ? 'Service Manager' : b.submitted_by_user_role === 'dealer_user' ? 'Service Advisor' : (b.submitted_by_user_role || 'Service Manager');
               return (
                 <Box key={b.batch_id || b.batchId} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.75, p: 0.5, borderRadius: 1, background: 'rgba(255,255,255,0.4)' }}>
                   <Box sx={{ minWidth: 0, flex: 1, mr: 0.5 }}>

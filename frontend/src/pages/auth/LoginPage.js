@@ -75,9 +75,9 @@ export default function LoginPage() {
     if (isAuthenticated && role) {
       const roleLabels = {
         super_admin: 'Super Admin',
-        dealer_admin: 'Dealer Admin',
+        dealer_admin: 'Service Manager',
         branch_admin: 'Branch Admin',
-        dealer_user: 'Dealer User'
+        dealer_user: 'Service Advisor'
       };
 
       setSnackbar({
