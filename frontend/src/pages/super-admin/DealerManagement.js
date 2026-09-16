@@ -71,12 +71,10 @@ import {
   Star,
   EmojiEvents,
   FilterList,
-  MoreVert,
-  UploadFile
+  MoreVert
 } from '@mui/icons-material';
 import { listUsers, createUser, updateUser, deleteUser } from '../../services/users';
 import { listDealerUsers, getDealerUserStats, deleteDealership, updateDealerStatus } from '../../services/dealer_user';
-import ImportUsersModal from '../../components/super-admin/ImportUsersModal';
 
 import api from '../../services/api';
 import {
@@ -637,7 +635,6 @@ export default function DealerManagement() {
 
   // Create Dealer Form
   const [createDealerOpen, setCreateDealerOpen] = useState(false);
-  const [importModalOpen, setImportModalOpen] = useState(false);
   const [createDealerError, setCreateDealerError] = useState('');
   const [createDealerForm, setCreateDealerForm] = useState({
     dealer_id: '', showroom_name: ''
@@ -1369,28 +1366,6 @@ export default function DealerManagement() {
             Dealership Network
           </Typography>
           <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-            <Button
-              variant="contained"
-              startIcon={<UploadFile />}
-              onClick={() => setImportModalOpen(true)}
-              sx={{
-                background: 'linear-gradient(135deg, #059669 0%, #10B981 100%)',
-                borderRadius: 3,
-                px: 3.5,
-                py: 1.5,
-                fontWeight: 600,
-                textTransform: 'none',
-                fontSize: '16px',
-                boxShadow: THEME.shadowMd,
-                '&:hover': {
-                  boxShadow: THEME.shadowLg,
-                  transform: 'translateY(-1px)'
-                },
-                transition: 'all 0.2s ease-in-out'
-              }}
-            >
-              Import Users from Excel
-            </Button>
             <Button
               variant="contained"
               startIcon={<Add />}
@@ -4133,11 +4108,6 @@ export default function DealerManagement() {
             </Button>
           </DialogActions>
         </Dialog>
-        <ImportUsersModal
-          open={importModalOpen}
-          onClose={() => setImportModalOpen(false)}
-          onSuccess={() => setRefreshCounter(prev => prev + 1)}
-        />
         <style jsx>{`
           @keyframes spin {
             0% { transform: rotate(0deg); }
