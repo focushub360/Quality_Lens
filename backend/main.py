@@ -541,6 +541,13 @@ async def get_current_dealer_admin(current_user: UserInDB = Depends(get_current_
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized: Dealer Admin role required.")
     return current_user
 
+async def get_current_admin_or_dealer_admin(current_user: UserInDB = Depends(get_current_user)) -> UserInDB:
+    """Ensures the current authenticated user has either 'super_admin' or 'dealer_admin' role."""
+    if current_user.role not in ["super_admin", "dealer_admin"]:
+        logger.warning(f"User {current_user.username} attempted unauthorized access (requires super_admin or dealer_admin).")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized: Super Admin or Service Manager role required.")
+    return current_user
+
 # -----------------------------
 # Initial Super Admin Creation
 # -----------------------------
@@ -1407,14 +1414,15 @@ async def get_registered_dealerships_map() -> Dict[str, str]:
 @app.post("/users/preview-excel")
 async def preview_users_from_excel(
     file: UploadFile = File(...),
-    current_user: UserInDB = Depends(get_current_super_admin)
+    current_user: UserInDB = Depends(get_current_admin_or_dealer_admin)
 ):
     """
-    Super Admin endpoint to inspect an Excel file before importing.
+    Super Admin & Service Manager endpoint to inspect an Excel file before importing.
     Strictly verifies rows:
+      - For Service Manager: restricts scope strictly to their assigned dealership and assigns Service Advisor role.
       - Filters by EXISTING registered dealerships only.
-      - Excludes rows with uncreated dealerships, comma-separated dealer strings, or invalid data.
-      - Categorizes into 'Eligible' (matches existing dealers) and 'Excluded' (dealership not found).
+      - Excludes rows with uncreated dealerships, comma-separated dealer strings, or outside-scope dealers.
+      - Categorizes into 'Eligible' and 'Excluded'.
     """
     if not file.filename.endswith((".xlsx", ".xls")):
         raise HTTPException(status_code=400, detail="Only Excel files (.xlsx, .xls) are supported.")
@@ -1466,6 +1474,15 @@ async def preview_users_from_excel(
     total_eligible_managers = 0
     total_eligible_advisors = 0
     total_excluded_users = 0
+
+    is_dealer_admin = current_user.role == "dealer_admin"
+    manager_dealer_id = str(current_user.dealer_id or "").strip()
+    manager_showroom = str(current_user.showroom_name or "").strip()
+    manager_dealer_clean = re.sub(r'[^a-zA-Z0-9]', '', manager_dealer_id.lower())
+    manager_showroom_clean = re.sub(r'[^a-zA-Z0-9]', '', manager_showroom.lower())
+
+    if is_dealer_admin and not manager_dealer_clean and not manager_showroom_clean:
+        raise HTTPException(status_code=400, detail="Service Manager has no assigned dealership.")
 
     EMAIL_REGEX = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
@@ -1534,15 +1551,54 @@ async def preview_users_from_excel(
             # MATCHED TO EXISTING REGISTERED DEALERSHIP
             canonical_dealer = existing_dealers[clean_k]
 
-            job_lower = job_title.lower()
-            if any(term in job_lower for term in ["manager", "admin", "gm", "lead", "head", "director", "supervisor"]):
-                role = "dealer_admin"
-                role_display = "Service Manager"
-                total_eligible_managers += 1
-            else:
+            if is_dealer_admin:
+                canon_clean = re.sub(r'[^a-zA-Z0-9]', '', canonical_dealer.lower())
+                matches_my_dealer = (
+                    clean_k == manager_dealer_clean or
+                    clean_k == manager_showroom_clean or
+                    canon_clean == manager_dealer_clean or
+                    canon_clean == manager_showroom_clean or
+                    (manager_dealer_clean and manager_dealer_clean in clean_k) or
+                    (clean_k and clean_k in manager_dealer_clean) or
+                    (manager_showroom_clean and manager_showroom_clean in clean_k) or
+                    (clean_k and clean_k in manager_showroom_clean)
+                )
+                if not matches_my_dealer:
+                    reason = f"Belongs to '{dealer_name_raw}' (Outside your workshop scope: '{manager_showroom or manager_dealer_id}')"
+                    ex_key = f"{dealer_name_raw} (Other Dealership)"
+                    if ex_key not in excluded_dealers_map:
+                        excluded_dealers_map[ex_key] = {
+                            "dealer_name": dealer_name_raw,
+                            "reason": f"Outside workshop scope of {manager_showroom or manager_dealer_id}",
+                            "total": 0,
+                            "users": []
+                        }
+                    excluded_dealers_map[ex_key]["users"].append({
+                        "name": name,
+                        "email": email,
+                        "job_title": job_title,
+                        "reason": reason,
+                        "raw_dealer": dealer_name_raw
+                    })
+                    excluded_dealers_map[ex_key]["total"] += 1
+                    total_excluded_users += 1
+                    continue
+
+                # When imported by Service Manager, ALWAYS set role to Service Advisor (dealer_user)
                 role = "dealer_user"
                 role_display = "Service Advisor"
                 total_eligible_advisors += 1
+                canonical_dealer = manager_showroom or manager_dealer_id or canonical_dealer
+            else:
+                job_lower = job_title.lower()
+                if any(term in job_lower for term in ["manager", "admin", "gm", "lead", "head", "director", "supervisor"]):
+                    role = "dealer_admin"
+                    role_display = "Service Manager"
+                    total_eligible_managers += 1
+                else:
+                    role = "dealer_user"
+                    role_display = "Service Advisor"
+                    total_eligible_advisors += 1
 
             if canonical_dealer not in eligible_dealers_map:
                 eligible_dealers_map[canonical_dealer] = {
@@ -1612,12 +1668,13 @@ async def preview_users_from_excel(
 async def import_users_from_excel(
     file: UploadFile = File(...),
     default_password: str = Form("sales@focus"),
-    current_user: UserInDB = Depends(get_current_super_admin)
+    current_user: UserInDB = Depends(get_current_admin_or_dealer_admin)
 ):
     """
-    Super Admin endpoint to import users in bulk from Excel.
+    Super Admin & Service Manager endpoint to import users in bulk from Excel.
     Strictly creates/updates users ONLY for existing registered dealerships.
-    Excludes rows where dealership is not created or invalid.
+    For Service Manager: strictly enforces their dealership scope and assigns Service Advisor role.
+    Excludes rows where dealership is not created or outside scope.
     """
     if not file.filename.endswith((".xlsx", ".xls")):
         raise HTTPException(status_code=400, detail="Only Excel files (.xlsx, .xls) are supported.")
@@ -1663,6 +1720,15 @@ async def import_users_from_excel(
     dealer_stats = {}
     excluded_details = []
 
+    is_dealer_admin = current_user.role == "dealer_admin"
+    manager_dealer_id = str(current_user.dealer_id or "").strip()
+    manager_showroom = str(current_user.showroom_name or "").strip()
+    manager_dealer_clean = re.sub(r'[^a-zA-Z0-9]', '', manager_dealer_id.lower())
+    manager_showroom_clean = re.sub(r'[^a-zA-Z0-9]', '', manager_showroom.lower())
+
+    if is_dealer_admin and not manager_dealer_clean and not manager_showroom_clean:
+        raise HTTPException(status_code=400, detail="Service Manager has no assigned dealership.")
+
     EMAIL_REGEX = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
     for idx, row in df.iterrows():
@@ -1706,14 +1772,35 @@ async def import_users_from_excel(
 
         canonical_dealer = existing_dealers[clean_k]
 
-        # Determine Role:
-        job_lower = job_title.lower()
-        if any(term in job_lower for term in ["manager", "admin", "gm", "lead", "head", "director", "supervisor"]):
-            role = "dealer_admin"
-            role_metric = "service_managers"
-        else:
+        if is_dealer_admin:
+            canon_clean = re.sub(r'[^a-zA-Z0-9]', '', canonical_dealer.lower())
+            matches_my_dealer = (
+                clean_k == manager_dealer_clean or
+                clean_k == manager_showroom_clean or
+                canon_clean == manager_dealer_clean or
+                canon_clean == manager_showroom_clean or
+                (manager_dealer_clean and manager_dealer_clean in clean_k) or
+                (clean_k and clean_k in manager_dealer_clean) or
+                (manager_showroom_clean and manager_showroom_clean in clean_k) or
+                (clean_k and clean_k in manager_showroom_clean)
+            )
+            if not matches_my_dealer:
+                excluded_count += 1
+                excluded_details.append(f"Row {row_num} ({email}): Belongs to '{dealer_name_raw}' (outside your workshop scope)")
+                continue
+
             role = "dealer_user"
             role_metric = "service_advisors"
+            canonical_dealer = manager_dealer_id
+        else:
+            # Determine Role for Super Admin:
+            job_lower = job_title.lower()
+            if any(term in job_lower for term in ["manager", "admin", "gm", "lead", "head", "director", "supervisor"]):
+                role = "dealer_admin"
+                role_metric = "service_managers"
+            else:
+                role = "dealer_user"
+                role_metric = "service_advisors"
 
         # Track dealership summary
         if canonical_dealer not in dealer_stats:
@@ -1737,7 +1824,7 @@ async def import_users_from_excel(
             if existing_user:
                 update_fields = {
                     "dealer_id": canonical_dealer,
-                    "showroom_name": canonical_dealer,
+                    "showroom_name": (manager_showroom or canonical_dealer) if is_dealer_admin else canonical_dealer,
                     "role": role,
                     "job_title": job_title,
                     "is_active": True,
@@ -1762,7 +1849,7 @@ async def import_users_from_excel(
                     "hashed_password": hashed_default_pwd or get_password_hash("sales@focus"),
                     "role": role,
                     "dealer_id": canonical_dealer,
-                    "showroom_name": canonical_dealer,
+                    "showroom_name": (manager_showroom or canonical_dealer) if is_dealer_admin else canonical_dealer,
                     "job_title": job_title,
                     "phone_number": None,
                     "branch_id": None,

@@ -2,14 +2,15 @@ import React, { useEffect, useState, useContext } from 'react';
 import {
   Box, Typography, Button, TextField, IconButton, MenuItem, Chip,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-  Paper, CircularProgress, Alert, Snackbar, Container, Grid, Divider,
+  Paper, CircularProgress, Alert, Snackbar, Container, Grid,
   Switch, FormControlLabel, Tooltip
 } from '@mui/material';
 import {
-  Add, Delete, PersonOutline, CheckCircle, ArrowBack, Event
+  Delete, PersonOutline, ArrowBack, UploadFile
 } from '@mui/icons-material';
 import { listMyDealerUsers, createDealerUser, updateDealerUser, deleteDealerUser } from '../../services/dealer_user';
 import { AuthContext } from '../../contexts/AuthContext';
+import ImportUsersModal from '../../components/super-admin/ImportUsersModal';
 
 // QualityLens Theme aligned colors
 const THEME = {
@@ -24,8 +25,6 @@ const THEME = {
   textPrimary: '#1E293B',
   textSecondary: '#64748B',
 };
-
-const DEALER_USER_BASE_URL = 'https://focus-user.focusengineeringapp.com';
 
 // Allowed job titles per hierarchy level (by user role being created)
 const JOB_TITLES_BY_ROLE = {
@@ -64,6 +63,7 @@ export default function DealerUsers() {
   const [error, setError] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+  const [importModalOpen, setImportModalOpen] = useState(false);
 
   const [form, setForm] = useState({
     title: 'Mr',
@@ -94,12 +94,19 @@ export default function DealerUsers() {
       let filtered = [];
 
       const myId = authUser?._id || authUser?.id;
+      const myDealer = (authUser?.dealer_id || '').toLowerCase().trim();
+      const myShowroom = (authUser?.showroom_name || '').toLowerCase().trim();
+
       if (authUser?.role === 'dealer_admin') {
-        // dealer_admin sees branch_admin and dealer_user they created
-        filtered = safeData.filter(u =>
-          u.created_by_user_id === myId &&
-          (u.role === 'branch_admin' || u.role === 'dealer_user')
-        );
+        // dealer_admin sees users belonging to their dealership or created by them
+        filtered = safeData.filter(u => {
+          const uDealer = (u.dealer_id || '').toLowerCase().trim();
+          const uShowroom = (u.showroom_name || '').toLowerCase().trim();
+          const matchesDealer = (myDealer && (uDealer === myDealer || uDealer.includes(myDealer) || myDealer.includes(uDealer))) ||
+                                (myShowroom && (uShowroom === myShowroom || uDealer === myShowroom));
+          const isCreator = u.created_by_user_id === myId;
+          return (isCreator || matchesDealer) && (u.role === 'branch_admin' || u.role === 'dealer_user');
+        });
       } else if (authUser?.role === 'branch_admin') {
         // branch_admin sees only dealer_user they created in their branch
         filtered = safeData.filter(u =>
@@ -271,21 +278,39 @@ export default function DealerUsers() {
 
         {viewState === 'list' && (
           <Box>
-            <Button
-              variant="contained"
-              startIcon={<PersonOutline />}
-              onClick={handleCreateNew}
-              sx={{ 
-                background: THEME.success, 
-                mb: 3, 
-                '&:hover': { background: '#059669' },
-                textTransform: 'none',
-                fontWeight: 600,
-                px: 3
-              }}
-            >
-              Create New User
-            </Button>
+            <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
+              <Button
+                variant="contained"
+                startIcon={<PersonOutline />}
+                onClick={handleCreateNew}
+                sx={{ 
+                  background: THEME.success, 
+                  '&:hover': { background: '#059669' },
+                  textTransform: 'none',
+                  fontWeight: 600,
+                  px: 3
+                }}
+              >
+                Create New User
+              </Button>
+              {authUser?.role === 'dealer_admin' && (
+                <Button
+                  variant="contained"
+                  startIcon={<UploadFile />}
+                  onClick={() => setImportModalOpen(true)}
+                  sx={{
+                    background: 'linear-gradient(135deg, #0DA1B8 0%, #00B4DB 100%)',
+                    '&:hover': { background: 'linear-gradient(135deg, #0C587D 0%, #0891B2 100%)' },
+                    textTransform: 'none',
+                    fontWeight: 600,
+                    px: 3,
+                    boxShadow: '0 2px 8px rgba(13, 161, 184, 0.25)'
+                  }}
+                >
+                  Import from Excel
+                </Button>
+              )}
+            </Box>
 
             <TableContainer component={Paper} elevation={0} sx={{ border: `1px solid ${THEME.border}` }}>
               <Table>
@@ -604,6 +629,11 @@ export default function DealerUsers() {
           </Box>
         )}
 
+        <ImportUsersModal
+          open={importModalOpen}
+          onClose={() => setImportModalOpen(false)}
+          onSuccess={load}
+        />
       </Container>
     </Box>
   );
