@@ -317,6 +317,19 @@ export default function Navbar() {
               }}>
                 {ROLE_LABEL[role] || 'User'}
               </Typography>
+              {(user?.showroom_name || user?.dealer_id) && role !== 'super_admin' && (
+                <Typography variant="caption" sx={{
+                  fontWeight: 600,
+                  color: THEME.primary,
+                  fontSize: '0.68rem',
+                  maxWidth: 160,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap'
+                }}>
+                  {user.showroom_name || user.dealer_id}
+                </Typography>
+              )}
             </Box>
 
             {/* User Avatar */}
@@ -384,9 +397,26 @@ export default function Navbar() {
           <Typography variant="subtitle2" fontWeight={600} color={THEME.textPrimary}>
             {user?.username || 'User'}
           </Typography>
-          <Typography variant="caption" color={THEME.textSecondary}>
+          <Typography variant="caption" color={THEME.textSecondary} sx={{ display: 'block', mb: 0.5 }}>
             {user?.email || 'user@example.com'}
           </Typography>
+          {(user?.showroom_name || user?.dealer_id) && (
+            <Chip
+              size="small"
+              icon={<Business sx={{ fontSize: '13px !important' }} />}
+              label={user.showroom_name || user.dealer_id}
+              sx={{
+                mt: 0.5,
+                fontSize: '0.72rem',
+                height: 22,
+                bgcolor: '#E0F2FE',
+                color: '#0369A1',
+                fontWeight: 600,
+                maxWidth: 220,
+                '& .MuiChip-label': { px: 1, textOverflow: 'ellipsis', overflow: 'hidden' }
+              }}
+            />
+          )}
         </Box>
         <Divider />
 

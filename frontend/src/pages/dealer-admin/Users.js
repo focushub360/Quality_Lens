@@ -263,7 +263,9 @@ export default function DealerUsers() {
             <Box sx={{ width: '100%' }}>
               <Box sx={{ background: THEME.primary, color: 'white', p: 2, borderRadius: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <Typography variant="h5" sx={{ fontWeight: 600 }}>
-                  {authUser?.branch_name ? `${authUser.branch_name} - Workshop's Users` : "Dealer Standard - Workshop's Users"}
+                  {authUser?.showroom_name || authUser?.dealer_id || authUser?.branch_name
+                    ? `${authUser.showroom_name || authUser.dealer_id || authUser.branch_name} - Workshop's Users`
+                    : "Workshop's Users"}
                 </Typography>
               </Box>
             </Box>
