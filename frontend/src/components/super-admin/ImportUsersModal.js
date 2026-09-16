@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useContext } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -46,6 +46,7 @@ import {
   HighlightOff
 } from '@mui/icons-material';
 import { importUsersFromExcel, previewUsersFromExcel } from '../../services/users';
+import { AuthContext } from '../../contexts/AuthContext';
 
 const THEME = {
   primary: '#0DA1B8',
@@ -69,6 +70,9 @@ const THEME = {
 };
 
 export default function ImportUsersModal({ open, onClose, onSuccess }) {
+  const { user: authUser } = useContext(AuthContext);
+  const isDealerAdmin = authUser?.role === 'dealer_admin';
+
   const [file, setFile] = useState(null);
   const [defaultPassword, setDefaultPassword] = useState('sales@focus');
   const [showPassword, setShowPassword] = useState(false);
@@ -262,8 +266,8 @@ export default function ImportUsersModal({ open, onClose, onSuccess }) {
               {result
                 ? 'Accounts successfully imported into registered dealerships'
                 : previewData
-                ? 'Review matched existing dealers vs. uncreated excluded dealers'
-                : 'Auto-create Service Managers & Service Advisors for existing dealerships'}
+                ? (isDealerAdmin ? 'Review eligible Service Advisors for your dealership' : 'Review matched existing dealers vs. uncreated excluded dealers')
+                : (isDealerAdmin ? `Auto-create Service Advisors for ${authUser?.showroom_name || authUser?.dealer_id || 'your workshop'}` : 'Auto-create Service Managers & Service Advisors for existing dealerships')}
             </Typography>
           </Box>
         </Box>
@@ -333,12 +337,21 @@ export default function ImportUsersModal({ open, onClose, onSuccess }) {
                   <Typography variant="body2" sx={{ fontWeight: 700, color: THEME.textPrimary }}>Dealer Names</Typography>
                 </Paper>
               </Box>
-              <Typography variant="caption" sx={{ color: THEME.textSecondary, display: 'block', lineHeight: 1.5 }}>
-                • <strong>Existing Dealers Only</strong>: System matches rows against existing created dealerships. If a dealership has not been created yet in Dealer Management, it is excluded until created.<br />
-                • <strong>Service Manager</strong>: Assigned automatically when Job Title contains <em>Service Manager</em> or <em>Manager / Admin / Lead</em>.<br />
-                • <strong>Service Advisor</strong>: Assigned automatically for all advisor and technician roles.<br />
-                • <strong>Clean & Reliable</strong>: Multi-dealer composite strings or invalid entries are safely quarantined.
-              </Typography>
+              {isDealerAdmin ? (
+                <Typography variant="caption" sx={{ color: THEME.textSecondary, display: 'block', lineHeight: 1.6 }}>
+                  • <strong>Workshop Scope</strong>: System automatically matches rows belonging to <strong>{authUser?.showroom_name || authUser?.dealer_id}</strong>.<br />
+                  • <strong>Service Advisor</strong>: All eligible staff from your dealership are set up as <strong>Service Advisors</strong>.<br />
+                  • <strong>Other Dealerships Excluded</strong>: Rows belonging to other dealerships in the file are quarantined in the Excluded tab.<br />
+                  • <strong>Safe & Non-Destructive</strong>: Only your dealership's workshop accounts are created or updated.
+                </Typography>
+              ) : (
+                <Typography variant="caption" sx={{ color: THEME.textSecondary, display: 'block', lineHeight: 1.5 }}>
+                  • <strong>Existing Dealers Only</strong>: System matches rows against existing created dealerships. If a dealership has not been created yet in Dealer Management, it is excluded until created.<br />
+                  • <strong>Service Manager</strong>: Assigned automatically when Job Title contains <em>Service Manager</em> or <em>Manager / Admin / Lead</em>.<br />
+                  • <strong>Service Advisor</strong>: Assigned automatically for all advisor and technician roles.<br />
+                  • <strong>Clean & Reliable</strong>: Multi-dealer composite strings or invalid entries are safely quarantined.
+                </Typography>
+              )}
             </Box>
 
             {/* Default Password Setting */}
