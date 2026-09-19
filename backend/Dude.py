@@ -2003,51 +2003,53 @@ class UnifiedMediaAnalyzer:
                 }
                 print("⏭️ No speech — visual fallback summary & translation generated.")
             else:
-                # Always translate to English. Use Whisper native first, then Google fallback.
-                is_valid_native = (
-                    native_english_transcription and
-                    len(native_english_transcription.strip()) >= 10 and
-                    native_english_transcription.strip().lower() not in GARBAGE_TEXTS and
-                    not native_english_transcription.startswith("Transcription failed:")
-                )
+                # Determine translation based on requested target language
+                target_lang = requested_target_language or "en"
+                print(f"🌍 Processing translation to target language: '{target_lang.upper()}' (detected source: '{results['transcription']['language']}')")
 
-                # Check for Whisper native hallucinations (much longer than source)
-                if is_valid_native and transcription:
-                    native_words = len(native_english_transcription.split())
-                    trans_words = len(transcription.split())
-                    if trans_words > 0 and native_words > (2 * trans_words + 5):
-                        print(f"⚠️ Native translation suspiciously long ({native_words} vs {trans_words} words) — discarding.")
-                        is_valid_native = False
-
-                if is_valid_native:
-                    translation = native_english_transcription
-                    print(f"✅ Used native AI translation to English ({len(translation)} chars)")
+                # If detected source matches target language, translation is the transcription text
+                if results['transcription']['language'] == target_lang and target_lang == "en":
+                    translation = transcription
+                    is_valid_translation = True
+                    print("📝 Spoken audio is already in English — using transcription for translation.")
                 else:
-                    # Native translation returned garbage or hallucinated — fall back to Google
-                    print("⚠️ Native translation hallucinated or failed — falling back to Google Translate")
-                    translation = self.translate_text(transcription, target_language='en')
+                    # High-quality translation: Use Google Translate via deep_translator first
+                    # It delivers superior translation for Indian regional languages without Whisper base hallucinations
+                    print(f"🔄 Translating via Google Translate to '{target_lang}'...")
+                    translation = self.translate_text(transcription, target_language=target_lang)
 
-                # Validate translation output — if still empty, use transcription as-is
-                is_valid_translation = (
-                    translation and
-                    len(translation.strip()) >= 10 and
-                    translation.strip().lower() not in GARBAGE_TEXTS
-                )
+                    is_valid_translation = (
+                        translation and
+                        len(translation.strip()) >= 5 and
+                        translation.strip().lower() not in GARBAGE_TEXTS and
+                        not translation.startswith("Translation error")
+                    )
 
-                # Ultimate fallback: use transcription itself as translation
+                    # Fallback for English target: try native Whisper translation if Google was unavailable
+                    if not is_valid_translation and target_lang == "en" and native_english_transcription:
+                        if (
+                            len(native_english_transcription.strip()) >= 10 and
+                            native_english_transcription.strip().lower() not in GARBAGE_TEXTS and
+                            not native_english_transcription.startswith("Transcription failed:")
+                        ):
+                            translation = native_english_transcription
+                            is_valid_translation = True
+                            print("⚠️ Google Translate unavailable — fell back to native Whisper translation.")
+
+                # Ultimate fallback: if translation produced no result, use original transcription
                 if not is_valid_translation:
                     translation = transcription
-                    is_valid_translation = len(transcription.strip()) >= 10
-                    print("⚠️ Translation produced no result — using original transcription as translation.")
+                    is_valid_translation = len(transcription.strip()) >= 5
+                    print("⚠️ Translation produced no result — using original transcription.")
 
                 results["translation"] = {
                     "translated_text": translation,
-                    "target_language": "en",
+                    "target_language": target_lang,
                     "length": len(translation),
                     "status": "ok" if is_valid_translation else "fallback_transcription"
                 }
                 results["processing_steps"].append("translation")
-                print(f"Translation: OK ({len(translation)} chars)")
+                print(f"Translation: OK ({len(translation)} chars, target: {target_lang.upper()})")
 
                 print("\n📝 GENERATING SUMMARY")
                 print("-" * 40)

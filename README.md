@@ -72,8 +72,8 @@ npm start
 ### 2. Server / Cloud Deployment (Backend)
 The backend is optimized for deployment on AWS EC2 or any Docker-ready high-spec cloud provider.
 
-- **Cloud Instance**: AWS EC2 Instance (served via Caddy proxy)
-- **Production API URL**: `http://3.110.138.205:8000`
+- **Cloud Instance**: AWS EC2 Instance (served via Caddy reverse proxy)
+- **Production API URL**: `https://api.focusengineeringapp.com`
 
 To deploy the backend to your live server using Docker Compose:
 ```bash
@@ -85,14 +85,15 @@ docker compose -f docker-compose.yml up --build
 ## 🔑 Access Control
 
 ### 👑 Super Admin
-- **Username:** `admin`
-- **Password:** `admin123`
-- *Access: Global management of all dealers and system configurations.*
+- **Username:** `admin` (or `Sales@focusengineering.in`)
+- **Password:** `admin123` (or `sales@focus`)
+- *Access: Global management of all dealers, bulk reports, and system configurations.*
 
 ### 🏢 Service Manager (Dealer Admin)
-- **Username:** `bmw_admin`
-- **Password:** `bmw_secret`
-- *Access: Dealership-specific performance analytics, team management, and configurations.*
+- **Username:** `bmw_admin` *(Password: `bmw_secret`)*
+- **Alternative:** `Suresh.ganiga` *(Password: `sales@focus`)*
+- **Dealership:** `EMINENT CARS PRIVATE LIMITED`
+- *Access: Dealership-specific performance analytics, team management, dealer Excel import, and configurations.*
 
 ### 👤 Service Advisor (Dealer User)
 - *Access: Video uploads, individual analysis results, and advisor performance tracking.*
@@ -102,8 +103,8 @@ docker compose -f docker-compose.yml up --build
 ## ☁️ Ecosystem URLs
 
 - **Primary Live Frontend**: [https://qualitylens.focusengineeringapp.com](https://qualitylens.focusengineeringapp.com)
-- **API Backend (AWS EC2)**: `http://3.110.138.205:8000`
-- **API Documentation**: [FastAPI Docs](http://3.110.138.205:8000/docs)
+- **API Backend (AWS EC2)**: `https://api.focusengineeringapp.com`
+- **API Documentation**: [FastAPI Docs](https://api.focusengineeringapp.com/docs)
 
 ---
 

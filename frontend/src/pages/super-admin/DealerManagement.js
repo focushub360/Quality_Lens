@@ -71,7 +71,8 @@ import {
   Star,
   EmojiEvents,
   FilterList,
-  MoreVert
+  MoreVert,
+  Translate
 } from '@mui/icons-material';
 import { listUsers, createUser, updateUser, deleteUser } from '../../services/users';
 import { listDealerUsers, getDealerUserStats, deleteDealership, updateDealerStatus } from '../../services/dealer_user';
@@ -3981,6 +3982,126 @@ export default function DealerManagement() {
                                 fontSize: '0.875rem'
                               }}>
                                 {selectedResult.summarization?.summary || 'No summary available'}
+                              </Typography>
+                            </Paper>
+                          </CardContent>
+                        </Card>
+                      </Grid>
+
+                      {/* Transcription (Original Speech) */}
+                      <Grid item xs={12} md={6}>
+                        <Card sx={{
+                          background: THEME.surfaceElevated,
+                          border: `1px solid ${THEME.border}`,
+                          borderRadius: 3,
+                          boxShadow: THEME.shadowSm,
+                          height: '100%'
+                        }}>
+                          <CardContent sx={{ p: 3, height: '100%', display: 'flex', flexDirection: 'column' }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                <Mic sx={{
+                                  color: THEME.primary,
+                                  mr: 1.5,
+                                  fontSize: 20
+                                }} />
+                                <Typography variant="h6" sx={{
+                                  color: THEME.textPrimary,
+                                  fontWeight: 600
+                                }}>
+                                  Transcription (Original Audio)
+                                </Typography>
+                              </Box>
+                              {selectedResult.transcription_language && (
+                                <Chip
+                                  size="small"
+                                  label={`Spoken: ${selectedResult.transcription_language.toUpperCase()}`}
+                                  sx={{
+                                    fontSize: '0.72rem',
+                                    height: 22,
+                                    background: THEME.primaryUltraLight,
+                                    color: THEME.primary,
+                                    fontWeight: 600
+                                  }}
+                                />
+                              )}
+                            </Box>
+                            <Paper sx={{
+                              p: 2,
+                              background: THEME.surface,
+                              border: `1px solid ${THEME.borderLight}`,
+                              borderRadius: 2,
+                              flex: 1,
+                              overflow: 'auto',
+                              maxHeight: 300
+                            }}>
+                              <Typography variant="body2" sx={{
+                                color: THEME.textPrimary,
+                                whiteSpace: 'pre-wrap',
+                                lineHeight: 1.6,
+                                fontSize: '0.875rem'
+                              }}>
+                                {selectedResult.transcription?.text || 'No transcription available for this video'}
+                              </Typography>
+                            </Paper>
+                          </CardContent>
+                        </Card>
+                      </Grid>
+
+                      {/* Translation */}
+                      <Grid item xs={12} md={6}>
+                        <Card sx={{
+                          background: THEME.surfaceElevated,
+                          border: `1px solid ${THEME.border}`,
+                          borderRadius: 3,
+                          boxShadow: THEME.shadowSm,
+                          height: '100%'
+                        }}>
+                          <CardContent sx={{ p: 3, height: '100%', display: 'flex', flexDirection: 'column' }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                <Translate sx={{
+                                  color: THEME.accent,
+                                  mr: 1.5,
+                                  fontSize: 20
+                                }} />
+                                <Typography variant="h6" sx={{
+                                  color: THEME.textPrimary,
+                                  fontWeight: 600
+                                }}>
+                                  Translation
+                                </Typography>
+                              </Box>
+                              {selectedResult.target_language_used && (
+                                <Chip
+                                  size="small"
+                                  label={`Target: ${selectedResult.target_language_used.toUpperCase()}`}
+                                  sx={{
+                                    fontSize: '0.72rem',
+                                    height: 22,
+                                    background: THEME.accentUltraLight,
+                                    color: THEME.accent,
+                                    fontWeight: 600
+                                  }}
+                                />
+                              )}
+                            </Box>
+                            <Paper sx={{
+                              p: 2,
+                              background: THEME.surface,
+                              border: `1px solid ${THEME.borderLight}`,
+                              borderRadius: 2,
+                              flex: 1,
+                              overflow: 'auto',
+                              maxHeight: 300
+                            }}>
+                              <Typography variant="body2" sx={{
+                                color: THEME.textPrimary,
+                                whiteSpace: 'pre-wrap',
+                                lineHeight: 1.6,
+                                fontSize: '0.875rem'
+                              }}>
+                                {selectedResult.translation?.translated_text || 'No translation available for this video'}
                               </Typography>
                             </Paper>
                           </CardContent>

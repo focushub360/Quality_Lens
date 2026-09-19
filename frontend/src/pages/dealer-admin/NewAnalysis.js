@@ -705,10 +705,49 @@ export default function NewAnalysis() {
                         border: `1px solid ${THEME.border}`,
                         background: THEME.surface
                       }}>
-                        <Typography variant="subtitle2" fontWeight="700" sx={{ color: THEME.textPrimary, mb: 1 }}>
+                        <Typography variant="subtitle2" fontWeight="700" sx={{ color: THEME.textPrimary, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
                           💡 Summary
                         </Typography>
                         <Typography variant="body2" sx={{ color: THEME.textSecondary, lineHeight: 1.7 }}>
+                          {txt}
+                        </Typography>
+                      </Paper>
+                    ) : null
+                  })()}
+
+                  {/* Transcription (Original Speech) */}
+                  {(() => {
+                    const GARBAGE = ['the', 'a', ',', '.', '!', '?', '...', ',.']
+                    const GARBAGE_PHRASES = ['no clear speech detected', 'transcription failed', 'translation failed', 'summarization failed', 'no meaningful summary']
+                    const txt = resultData.transcription?.text
+                    const isValid = txt &&
+                      txt.trim().length >= 5 &&
+                      !GARBAGE.includes(txt.trim().toLowerCase()) &&
+                      !GARBAGE_PHRASES.some(p => txt.trim().toLowerCase().includes(p))
+                    const spokenLang = resultData.transcription?.language || resultData.transcription_language || 'Auto'
+                    return isValid ? (
+                      <Paper elevation={0} sx={{
+                        p: 2.5, mb: 2, borderRadius: 2,
+                        border: `1px solid ${THEME.border}`,
+                        background: THEME.surface
+                      }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                          <Typography variant="subtitle2" fontWeight="700" sx={{ color: THEME.textPrimary, display: 'flex', alignItems: 'center', gap: 1 }}>
+                            🎙️ Transcription (Original Spoken Audio)
+                          </Typography>
+                          <Chip
+                            label={`Spoken: ${spokenLang.toUpperCase()}`}
+                            size="small"
+                            sx={{
+                              fontWeight: 600,
+                              fontSize: '0.72rem',
+                              height: 22,
+                              background: THEME.primaryUltraLight,
+                              color: THEME.primary
+                            }}
+                          />
+                        </Box>
+                        <Typography variant="body2" sx={{ color: THEME.textSecondary, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
                           {txt}
                         </Typography>
                       </Paper>
@@ -721,19 +760,33 @@ export default function NewAnalysis() {
                     const GARBAGE_PHRASES = ['no clear speech detected', 'transcription failed', 'translation failed', 'summarization failed', 'no meaningful summary']
                     const txt = resultData.translation?.translated_text
                     const isValid = txt &&
-                      txt.trim().length >= 10 &&
+                      txt.trim().length >= 5 &&
                       !GARBAGE.includes(txt.trim().toLowerCase()) &&
                       !GARBAGE_PHRASES.some(p => txt.trim().toLowerCase().includes(p))
+                    const targetLang = resultData.translation?.target_language || resultData.target_language_used || 'EN'
                     return isValid ? (
                       <Paper elevation={0} sx={{
                         p: 2.5, mb: 2, borderRadius: 2,
                         border: `1px solid ${THEME.border}`,
                         background: THEME.surface
                       }}>
-                        <Typography variant="subtitle2" fontWeight="700" sx={{ color: THEME.textPrimary, mb: 1 }}>
-                          🌐 Translation
-                        </Typography>
-                        <Typography variant="body2" sx={{ color: THEME.textSecondary, lineHeight: 1.7 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                          <Typography variant="subtitle2" fontWeight="700" sx={{ color: THEME.textPrimary, display: 'flex', alignItems: 'center', gap: 1 }}>
+                            🌐 Translation
+                          </Typography>
+                          <Chip
+                            label={`Target: ${targetLang.toUpperCase()}`}
+                            size="small"
+                            sx={{
+                              fontWeight: 600,
+                              fontSize: '0.72rem',
+                              height: 22,
+                              background: THEME.accentUltraLight,
+                              color: THEME.accent
+                            }}
+                          />
+                        </Box>
+                        <Typography variant="body2" sx={{ color: THEME.textSecondary, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
                           {txt}
                         </Typography>
                       </Paper>
