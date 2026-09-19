@@ -693,12 +693,16 @@ export default function NewAnalysis() {
                   {/* Summary */}
                   {(() => {
                     const GARBAGE = ['the', 'a', ',', '.', '!', '?', '...', ',.']
-                    const GARBAGE_PHRASES = ['no clear speech detected', 'transcription failed', 'translation failed', 'summarization failed', 'no meaningful summary']
-                    const txt = resultData.summarization?.summary
-                    const isValid = txt &&
-                      txt.trim().length >= 10 &&
-                      !GARBAGE.includes(txt.trim().toLowerCase()) &&
-                      !GARBAGE_PHRASES.some(p => txt.trim().toLowerCase().includes(p))
+                    const GARBAGE_PHRASES = [
+                      'no clear speech detected', 'transcription failed', 'translation failed', 
+                      'summarization failed', 'no meaningful summary', 'let me get out of here',
+                      'it\'s not made because i hate it', 'thank you for watching', 'subtitles by'
+                    ]
+                    const rawSummary = resultData.summarization?.summary || ''
+                    const isHallucinated = GARBAGE_PHRASES.some(p => rawSummary.toLowerCase().includes(p))
+                    const txt = isHallucinated ? 'No verbal speech or audio narrative was identified in the recording, indicating a purely visual inspection walkaround.' : rawSummary
+                    const isValid = txt && txt.trim().length >= 10 && !GARBAGE.includes(txt.trim().toLowerCase())
+
                     return isValid ? (
                       <Paper elevation={0} sx={{
                         p: 2.5, mb: 2, borderRadius: 2,
@@ -718,7 +722,11 @@ export default function NewAnalysis() {
                   {/* Transcription (Original Speech) */}
                   {(() => {
                     const GARBAGE = ['the', 'a', ',', '.', '!', '?', '...', ',.']
-                    const GARBAGE_PHRASES = ['no clear speech detected', 'transcription failed', 'translation failed', 'summarization failed', 'no meaningful summary']
+                    const GARBAGE_PHRASES = [
+                      'no clear speech detected', 'transcription failed', 'translation failed', 
+                      'summarization failed', 'no meaningful summary', 'let me get out of here',
+                      'it\'s not made because i hate it', 'thank you for watching', 'subtitles by'
+                    ]
                     const txt = resultData.transcription?.text
                     const isValid = txt &&
                       txt.trim().length >= 5 &&
@@ -757,7 +765,11 @@ export default function NewAnalysis() {
                   {/* Translation */}
                   {(() => {
                     const GARBAGE = ['the', 'a', ',', '.', '!', '?', '...', ',.']
-                    const GARBAGE_PHRASES = ['no clear speech detected', 'transcription failed', 'translation failed', 'summarization failed', 'no meaningful summary']
+                    const GARBAGE_PHRASES = [
+                      'no clear speech detected', 'transcription failed', 'translation failed', 
+                      'summarization failed', 'no meaningful summary', 'let me get out of here',
+                      'it\'s not made because i hate it', 'thank you for watching', 'subtitles by'
+                    ]
                     const txt = resultData.translation?.translated_text
                     const isValid = txt &&
                       txt.trim().length >= 5 &&

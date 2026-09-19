@@ -1533,25 +1533,55 @@ class UnifiedMediaAnalyzer:
                 task=task,
                 beam_size=5,
                 best_of=5,
-                temperature=[0.0, 0.2, 0.4, 0.6, 0.8], # Use temperature fallback to escape loops
-                condition_on_previous_text=False, # CRITICAL: Prevents hallucination loops (वूरा वूरा)
+                temperature=0.0, # Deterministic greedy decoding — strictly prevents creative hallucinations on ambient noise
+                condition_on_previous_text=False, # Prevents hallucination repetition loops
                 vad_filter=True,
                 vad_parameters=dict(
                     min_silence_duration_ms=500,
                     speech_pad_ms=300
                 ),
-                no_speech_threshold=0.6, # Stricter on silence
+                no_speech_threshold=0.5, # Stricter silence threshold
             )
 
             print(f"🔊 Detected language: '{info.language}' (probability: {info.language_probability:.2f})")
+
+            # Known Whisper hallucination patterns on silence, ambient hum, or music
+            HALLUCINATION_PATTERNS = [
+                "let me get out of here",
+                "it's not made because i hate it",
+                "thank you for watching",
+                "thanks for watching",
+                "subtitles by",
+                "subscribed to",
+                "subscribe to",
+                "see you in the next video",
+                "see you next time",
+                "bye bye",
+                "bye-bye",
+                "please like and subscribe",
+                "amara.org",
+            ]
 
             transcription_parts = []
             last_segment = ""
             
             for segment in segments:
+                # Reject segments that faster-whisper flags as noise/silence
+                if getattr(segment, 'no_speech_prob', 0) > 0.40:
+                    print(f"🔇 Skipping segment with high no_speech_prob ({segment.no_speech_prob:.2f}): '{segment.text.strip()}'")
+                    continue
+                if getattr(segment, 'avg_logprob', 0) < -1.0:
+                    print(f"🔇 Skipping low confidence segment ({segment.avg_logprob:.2f}): '{segment.text.strip()}'")
+                    continue
+
                 clean_text = segment.text.strip()
-                
                 if not clean_text:
+                    continue
+
+                # Check if segment matches known hallucination phrases
+                lower_text = clean_text.lower()
+                if any(h in lower_text for h in HALLUCINATION_PATTERNS):
+                    print(f"⚠️ Discarding known Whisper hallucination: '{clean_text}'")
                     continue
                     
                 if clean_text != last_segment:
@@ -1561,6 +1591,7 @@ class UnifiedMediaAnalyzer:
                     print(f"🔄 Skipping exact duplicate: {clean_text}")
 
             if not transcription_parts:
+                print("ℹ️ No valid speech segments detected after hallucination filtering.")
                 return "No clear speech detected in audio", None
 
             full_transcription = " ".join(transcription_parts).strip()
@@ -1570,9 +1601,13 @@ class UnifiedMediaAnalyzer:
             if len(full_transcription) < 5 or full_transcription.strip() in GARBAGE_PATTERNS:
                 print(f"⚠️ Transcription too short or garbage: '{full_transcription}' — treating as no speech")
                 return "No clear speech detected in audio", None
+
+            # Double-check final text against known hallucination phrases
+            if any(h in full_transcription.lower() for h in HALLUCINATION_PATTERNS):
+                print(f"⚠️ Full transcription contains hallucination pattern — discarding: '{full_transcription}'")
+                return "No clear speech detected in audio", None
             
             print(f"✅ Transcription successful! Length: {len(full_transcription)} characters")
-            
             return full_transcription, info.language
 
         except Exception as e:
