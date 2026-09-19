@@ -764,15 +764,21 @@ export default function NewAnalysis() {
 
                   {/* Translation */}
                   {(() => {
+                    const status = resultData.translation?.status
+                    if (status === 'visual_fallback' || status === 'no_speech') return null
+
                     const GARBAGE = ['the', 'a', ',', '.', '!', '?', '...', ',.']
                     const GARBAGE_PHRASES = [
                       'no clear speech detected', 'transcription failed', 'translation failed', 
                       'summarization failed', 'no meaningful summary', 'let me get out of here',
-                      'it\'s not made because i hate it', 'thank you for watching', 'subtitles by'
+                      'it\'s not made because i hate it', 'thank you for watching', 'subtitles by',
+                      'documents a walkaround', 'visual inspection walkaround', 'the lighting is clean'
                     ]
                     const txt = resultData.translation?.translated_text
+                    if (!txt || txt.includes('documents a walkaround') || txt.includes('visual inspection walkaround')) return null
+
                     const isValid = txt &&
-                      txt.trim().length >= 5 &&
+                      txt.trim().length >= 3 &&
                       !GARBAGE.includes(txt.trim().toLowerCase()) &&
                       !GARBAGE_PHRASES.some(p => txt.trim().toLowerCase().includes(p))
                     const targetLang = resultData.translation?.target_language || resultData.target_language_used || 'EN'
@@ -784,7 +790,7 @@ export default function NewAnalysis() {
                       }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
                           <Typography variant="subtitle2" fontWeight="700" sx={{ color: THEME.textPrimary, display: 'flex', alignItems: 'center', gap: 1 }}>
-                            🌐 Translation
+                            🌐 Translation (Spoken Words Translated to English)
                           </Typography>
                           <Chip
                             label={`Target: ${targetLang.toUpperCase()}`}

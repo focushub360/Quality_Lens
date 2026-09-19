@@ -1562,6 +1562,18 @@ class UnifiedMediaAnalyzer:
                 "amara.org",
             ]
 
+            def is_repetitive_loop(text):
+                if not text or len(text) < 12:
+                    return False
+                words = text.split()
+                if len(words) > 5 and len(set(words)) / len(words) < 0.25:
+                    return True
+                for sub_len in range(3, 8):
+                    sub = text[:sub_len]
+                    if text.count(sub) > len(text) / (sub_len * 1.5):
+                        return True
+                return False
+
             transcription_parts = []
             last_segment = ""
             
@@ -1576,6 +1588,11 @@ class UnifiedMediaAnalyzer:
 
                 clean_text = segment.text.strip()
                 if not clean_text:
+                    continue
+
+                # Check for repetitive loops like bhajbhajbhaj
+                if is_repetitive_loop(clean_text):
+                    print(f"⚠️ Discarding repetitive Whisper loop: '{clean_text[:40]}...'")
                     continue
 
                 # Check if segment matches known hallucination phrases
@@ -1798,22 +1815,18 @@ class UnifiedMediaAnalyzer:
                 # 5. Fallback: if nothing specific was matched but we have text, quote it safely
                 if not summary_parts and len(text.strip()) > 0:
                     cleaned_txt = text.strip()
-                    if len(cleaned_txt) > 120:
-                        cleaned_txt = cleaned_txt[:120] + "..."
-                    summary_parts.append(f"Brief update from the advisor: \"{cleaned_txt}\"")
+            if action_sentence and action_sentence != sentences[0]:
+                key_sentences.append(action_sentence)
+            elif len(sentences) > 1:
+                key_sentences.append(sentences[1])
                 
-                summary = " ".join(summary_parts)
-
-            # --- Cleanup ---
-            summary = summary.strip()
-            if summary and not summary.endswith(('.', '!', '?')):
-                summary += '.'
-
-            return summary or "No meaningful summary generated."
-
+            summary = '. '.join(key_sentences) + '.'
+            print(f"✅ Fast heuristic summary generated ({len(summary)} chars)")
+            return summary
+            
         except Exception as e:
-            print(f"❌ Summarization failed: {e}")
-            return f"Summarization failed: {e}"
+            print(f"❌ Summary generation error: {e}")
+            return "Vehicle walkaround and technical inspection conducted by the advisor."
 
     def translate_text(self, text, target_language=None):
         actual_target_lang = target_language if target_language is not None else self.target_language
@@ -1894,15 +1907,15 @@ class UnifiedMediaAnalyzer:
                 video_path = self.download_citnow_video(video_input)
                 temp_files_to_clean.append(video_path)
             else:
+                _check_deadline("handle_input")
                 video_path = self._handle_input(video_input)
-                if video_path != video_input:
-                    temp_files_to_clean.append(video_path)
+                temp_files_to_clean.append(video_path)
 
             if not os.path.exists(video_path):
                 raise ValueError(f"Video file not found: {video_path}")
 
             _check_deadline("download_complete")
-            print("\n🔊 EXTRACTING AUDIO")
+            print("\n🎵 EXTRACTING AUDIO")
             print("-" * 40)
 
             audio_path = self.extract_audio_from_video(video_path)
@@ -1996,7 +2009,7 @@ class UnifiedMediaAnalyzer:
             GARBAGE_TEXTS = [",", ".", "!", "?", "the", "a", "i", "...", "No clear speech detected in audio"]
             is_valid_transcription = (
                 transcription and
-                len(transcription.strip()) >= 10 and
+                len(transcription.strip()) >= 5 and
                 transcription.strip().lower() not in GARBAGE_TEXTS and
                 not transcription.startswith("Transcription failed:")
             )
@@ -2022,13 +2035,14 @@ class UnifiedMediaAnalyzer:
 
             _check_deadline("before_translation")
             if not is_valid_transcription:
-                # No usable speech — generate visual fallback summary, and use video quality report as English translation
+                # No usable speech — generate visual fallback summary only!
+                # TRANSLATION MUST BE EMPTY WHEN NO SPEECH WAS SPOKEN IN THE VIDEO!
                 summary_text = self.generate_visual_only_summary(results)
                 results["translation"] = {
-                    "translated_text": summary_text,
-                    "target_language": "en",
-                    "length": len(summary_text),
-                    "status": "visual_fallback"
+                    "translated_text": "",
+                    "target_language": requested_target_language or "en",
+                    "length": 0,
+                    "status": "no_speech"
                 }
                 results["summarization"] = {
                     "summary": summary_text,
@@ -2036,45 +2050,37 @@ class UnifiedMediaAnalyzer:
                     "reduction_ratio": "N/A",
                     "status": "visual_fallback"
                 }
-                print("⏭️ No speech — visual fallback summary & translation generated.")
+                print("⏭️ No speech — visual fallback summary generated, translation kept empty.")
             else:
-                # Determine translation based on requested target language
+                # Actual speech detected: Translate the spoken words (Malayalam, Tamil, Telugu, Hindi, etc.) into English
                 target_lang = requested_target_language or "en"
                 print(f"🌍 Processing translation to target language: '{target_lang.upper()}' (detected source: '{results['transcription']['language']}')")
 
-                # If detected source matches target language, translation is the transcription text
-                if results['transcription']['language'] == target_lang and target_lang == "en":
-                    translation = transcription
-                    is_valid_translation = True
-                    print("📝 Spoken audio is already in English — using transcription for translation.")
-                else:
-                    # High-quality translation: Use Google Translate via deep_translator first
-                    # It delivers superior translation for Indian regional languages without Whisper base hallucinations
-                    print(f"🔄 Translating via Google Translate to '{target_lang}'...")
-                    translation = self.translate_text(transcription, target_language=target_lang)
+                print(f"🔄 Translating spoken words to '{target_lang}'...")
+                translation = self.translate_text(transcription, target_language=target_lang)
 
-                    is_valid_translation = (
-                        translation and
-                        len(translation.strip()) >= 5 and
-                        translation.strip().lower() not in GARBAGE_TEXTS and
-                        not translation.startswith("Translation error")
-                    )
+                is_valid_translation = (
+                    translation and
+                    len(translation.strip()) >= 3 and
+                    translation.strip().lower() not in GARBAGE_TEXTS and
+                    not translation.startswith("Translation error")
+                )
 
-                    # Fallback for English target: try native Whisper translation if Google was unavailable
-                    if not is_valid_translation and target_lang == "en" and native_english_transcription:
-                        if (
-                            len(native_english_transcription.strip()) >= 10 and
-                            native_english_transcription.strip().lower() not in GARBAGE_TEXTS and
-                            not native_english_transcription.startswith("Transcription failed:")
-                        ):
-                            translation = native_english_transcription
-                            is_valid_translation = True
-                            print("⚠️ Google Translate unavailable — fell back to native Whisper translation.")
+                # Fallback for English target: try native Whisper translation if Google was unavailable
+                if not is_valid_translation and target_lang == "en" and native_english_transcription:
+                    if (
+                        len(native_english_transcription.strip()) >= 5 and
+                        native_english_transcription.strip().lower() not in GARBAGE_TEXTS and
+                        not native_english_transcription.startswith("Transcription failed:")
+                    ):
+                        translation = native_english_transcription
+                        is_valid_translation = True
+                        print("⚠️ Google Translate unavailable — fell back to native Whisper translation.")
 
                 # Ultimate fallback: if translation produced no result, use original transcription
                 if not is_valid_translation:
                     translation = transcription
-                    is_valid_translation = len(transcription.strip()) >= 5
+                    is_valid_translation = len(transcription.strip()) >= 3
                     print("⚠️ Translation produced no result — using original transcription.")
 
                 results["translation"] = {

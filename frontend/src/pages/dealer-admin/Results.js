@@ -2382,7 +2382,13 @@ export default function Results() {
                               lineHeight: 1.6,
                               fontSize: '0.875rem'
                             }}>
-                              {selectedResult.translation?.translated_text || 'No translation available for this video'}
+                              {(() => {
+                                const txt = selectedResult.translation?.translated_text || '';
+                                if (!txt || txt.includes('documents a walkaround') || txt.includes('visual inspection walkaround')) {
+                                  return 'No spoken words in video (pure visual inspection walkaround)';
+                                }
+                                return txt;
+                              })()}
                             </Typography>
                           </Paper>
                         </CardContent>
