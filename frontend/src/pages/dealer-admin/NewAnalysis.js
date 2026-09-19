@@ -727,19 +727,18 @@ export default function NewAnalysis() {
                       'summarization failed', 'no meaningful summary', 'let me get out of here',
                       'it\'s not made because i hate it', 'thank you for watching', 'subtitles by'
                     ]
-                    const txt = resultData.transcription?.text
-                    const isValid = txt &&
-                      txt.trim().length >= 5 &&
-                      !GARBAGE.includes(txt.trim().toLowerCase()) &&
-                      !GARBAGE_PHRASES.some(p => txt.trim().toLowerCase().includes(p))
+                    const rawText = resultData.transcription?.text || ''
+                    const isGarbage = GARBAGE.includes(rawText.trim().toLowerCase()) || GARBAGE_PHRASES.some(p => rawText.trim().toLowerCase().includes(p))
+                    const hasSpeech = rawText.trim().length >= 5 && !isGarbage
                     const spokenLang = resultData.transcription?.language || resultData.transcription_language || 'Auto'
-                    return isValid ? (
+
+                    return (
                       <Paper elevation={0} sx={{
                         p: 2.5, mb: 2, borderRadius: 2,
                         border: `1px solid ${THEME.border}`,
                         background: THEME.surface
                       }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
                           <Typography variant="subtitle2" fontWeight="700" sx={{ color: THEME.textPrimary, display: 'flex', alignItems: 'center', gap: 1 }}>
                             🎙️ Transcription (Original Spoken Audio)
                           </Typography>
@@ -755,40 +754,40 @@ export default function NewAnalysis() {
                             }}
                           />
                         </Box>
-                        <Typography variant="body2" sx={{ color: THEME.textSecondary, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
-                          {txt}
-                        </Typography>
+                        {hasSpeech ? (
+                          <Typography variant="body2" sx={{ color: THEME.textPrimary, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
+                            {rawText}
+                          </Typography>
+                        ) : (
+                          <Typography variant="body2" sx={{ color: THEME.textTertiary, fontStyle: 'italic', lineHeight: 1.7 }}>
+                            No verbal speech detected in audio recording (purely visual inspection walkaround).
+                          </Typography>
+                        )}
                       </Paper>
-                    ) : null
+                    );
                   })()}
 
                   {/* Translation */}
                   {(() => {
-                    const status = resultData.translation?.status
-                    if (status === 'visual_fallback' || status === 'no_speech') return null
-
                     const GARBAGE = ['the', 'a', ',', '.', '!', '?', '...', ',.']
                     const GARBAGE_PHRASES = [
                       'no clear speech detected', 'transcription failed', 'translation failed', 
                       'summarization failed', 'no meaningful summary', 'let me get out of here',
-                      'it\'s not made because i hate it', 'thank you for watching', 'subtitles by',
-                      'documents a walkaround', 'visual inspection walkaround', 'the lighting is clean'
+                      'it\'s not made because i hate it', 'thank you for watching', 'subtitles by'
                     ]
-                    const txt = resultData.translation?.translated_text
-                    if (!txt || txt.includes('documents a walkaround') || txt.includes('visual inspection walkaround')) return null
-
-                    const isValid = txt &&
-                      txt.trim().length >= 3 &&
-                      !GARBAGE.includes(txt.trim().toLowerCase()) &&
-                      !GARBAGE_PHRASES.some(p => txt.trim().toLowerCase().includes(p))
+                    const rawTranslation = resultData.translation?.translated_text || ''
+                    const isVisualSummary = rawTranslation.includes('documents a walkaround') || rawTranslation.includes('visual inspection walkaround') || rawTranslation.includes('The lighting is clean')
+                    const isGarbage = GARBAGE.includes(rawTranslation.trim().toLowerCase()) || GARBAGE_PHRASES.some(p => rawTranslation.trim().toLowerCase().includes(p)) || isVisualSummary
+                    const hasTranslation = rawTranslation.trim().length >= 3 && !isGarbage && resultData.translation?.status !== 'no_speech' && resultData.translation?.status !== 'visual_fallback'
                     const targetLang = resultData.translation?.target_language || resultData.target_language_used || 'EN'
-                    return isValid ? (
+
+                    return (
                       <Paper elevation={0} sx={{
                         p: 2.5, mb: 2, borderRadius: 2,
                         border: `1px solid ${THEME.border}`,
                         background: THEME.surface
                       }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
                           <Typography variant="subtitle2" fontWeight="700" sx={{ color: THEME.textPrimary, display: 'flex', alignItems: 'center', gap: 1 }}>
                             🌐 Translation (Spoken Words Translated to English)
                           </Typography>
@@ -804,11 +803,17 @@ export default function NewAnalysis() {
                             }}
                           />
                         </Box>
-                        <Typography variant="body2" sx={{ color: THEME.textSecondary, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
-                          {txt}
-                        </Typography>
+                        {hasTranslation ? (
+                          <Typography variant="body2" sx={{ color: THEME.textPrimary, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
+                            {rawTranslation}
+                          </Typography>
+                        ) : (
+                          <Typography variant="body2" sx={{ color: THEME.textTertiary, fontStyle: 'italic', lineHeight: 1.7 }}>
+                            No verbal speech in video to translate.
+                          </Typography>
+                        )}
                       </Paper>
-                    ) : null
+                    );
                   })()}
 
                   {/* Overall Label / Quality */}
