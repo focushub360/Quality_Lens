@@ -17,6 +17,7 @@ import { useContext } from 'react';
 import { AuthContext } from '../../contexts/AuthContext';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import CalendarDateRangePicker from '../../components/common/CalendarDateRangePicker';
 
 // QualityLens Branding Theme (consistent across dashboard)
 const THEME = {
@@ -172,7 +173,14 @@ export default function Results() {
   const [refreshCounter, setRefreshCounter] = useState(0);
   const [userStats, setUserStats] = useState([]);
   const [dealershipFilter, setDealershipFilter] = useState(''); // '' = All
-  const [dateFilter, setDateFilter] = useState('All Time'); // Date filter
+  const [dateFilter, setDateFilter] = useState('All Time'); // Date filter (legacy string compatibility)
+  const [dateRange, setDateRange] = useState({
+    startDate: null,
+    endDate: null,
+    preset: 'All Time',
+    label: 'All Time'
+  });
+  const [activityMap, setActivityMap] = useState({});
   const [exportAnchor, setExportAnchor] = useState(null); // export dropdown
 
   // Pagination state
@@ -184,6 +192,39 @@ export default function Results() {
   const [currentPageBackend, setCurrentPageBackend] = useState(1); // Backend page number
   const [hasMore, setHasMore] = useState(true); // More data to load
 
+  // Pre-fetch calendar activity map across records for seamless color-coded days
+  useEffect(() => {
+    const prefetchActivity = async () => {
+      try {
+        const token = localStorage.getItem('auth_token');
+        const headers = token ? { Authorization: `Bearer ${token}` } : {};
+        const res = await api.get('/results?per_page=1000&minimal=true', { headers });
+        const data = res.data?.results || res.data || [];
+        if (Array.isArray(data) && data.length > 0) {
+          const map = {};
+          data.forEach(r => {
+            if (!r || !r.created_at) return;
+            const d = new Date(r.created_at);
+            if (isNaN(d.getTime())) return;
+            const ymd = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+            if (!map[ymd]) {
+              map[ymd] = { count: 0, totalScore: 0, avgScore: 0 };
+            }
+            map[ymd].count += 1;
+            const score = Number(r.overall_quality?.overall_score ?? r.overall_quality_score ?? 0);
+            if (score > 0) {
+              map[ymd].totalScore += score;
+              map[ymd].avgScore = map[ymd].totalScore / map[ymd].count;
+            }
+          });
+          setActivityMap(prev => ({ ...map, ...prev }));
+        }
+      } catch (err) {
+        console.warn('Could not prefetch full calendar activity:', err);
+      }
+    };
+    prefetchActivity();
+  }, []);
 
   // Dashboard stats
   const [stats, setStats] = useState({
@@ -194,9 +235,7 @@ export default function Results() {
     qualityDistribution: { excellent: 0, good: 0, fair: 0, poor: 0 }
   });
 
-
-
-    const loadData = async (silent = false) => {
+  const loadData = async (silent = false) => {
     if (!silent) setLoading(true);
     try {
       const urlParams = new URLSearchParams(window.location.search);
@@ -205,19 +244,27 @@ export default function Results() {
       const token = localStorage.getItem('auth_token');
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
+      // Map presets to timeRange if applicable
+      let timeRangeParam = null;
+      if (dateRange.preset && dateRange.preset !== 'All Time' && dateRange.preset !== 'Custom') {
+        const timeMap = {
+          'Today': 'day',
+          'Yesterday': 'day',
+          'Last 7 Days': 'week',
+          'Last 30 Days': 'month',
+          'This Month': 'month'
+        };
+        timeRangeParam = timeMap[dateRange.preset];
+      }
+
       // Instantly load pre-calculated stats via MongoDB aggregations (<15ms)
       let st = null;
       try {
         let statsEndpoint = '/results/summary-stats?';
         if (searchTerm) statsEndpoint += `&search=${encodeURIComponent(searchTerm)}`;
-        if (dateFilter && dateFilter !== 'All Time') {
-            const timeMap = {
-                'Today': 'day',
-                'Yesterday': 'day',
-                'Last 7 Days': 'week',
-                'Last 30 Days': 'month'
-            };
-            if(timeMap[dateFilter]) statsEndpoint += `&timeRange=${timeMap[dateFilter]}`;
+        if (timeRangeParam) statsEndpoint += `&timeRange=${timeRangeParam}`;
+        if (dateRange.startDate && dateRange.endDate) {
+          statsEndpoint += `&start_date=${dateRange.startDate}&end_date=${dateRange.endDate}`;
         }
         
         const statsRes = await api.get(statsEndpoint, { headers });
@@ -243,14 +290,10 @@ export default function Results() {
       if (searchTerm) endpointParams.append('search', searchTerm);
       if (dealershipFilter) endpointParams.append('search', dealershipFilter); // Approximate filter if dealer is string
       
-      if (dateFilter && dateFilter !== 'All Time') {
-            const timeMap = {
-                'Today': 'day',
-                'Yesterday': 'day', 
-                'Last 7 Days': 'week',
-                'Last 30 Days': 'month'
-            };
-            if(timeMap[dateFilter]) endpointParams.append('timeRange', timeMap[dateFilter]);
+      if (timeRangeParam) endpointParams.append('timeRange', timeRangeParam);
+      if (dateRange.startDate && dateRange.endDate) {
+        endpointParams.append('start_date', dateRange.startDate);
+        endpointParams.append('end_date', dateRange.endDate);
       }
 
       const res = await api.get(`/results?${endpointParams.toString()}`, { headers });
@@ -271,6 +314,55 @@ export default function Results() {
 
       // Filter out failed videos completely from the dashboard
       finalResults = finalResults.filter(r => r.status !== 'failed' && !r.error_message);
+
+      // Client-side date filter safeguard for exact boundary matching
+      if (dateRange.startDate && dateRange.endDate) {
+        const s = new Date(dateRange.startDate);
+        s.setHours(0, 0, 0, 0);
+        const e = new Date(dateRange.endDate);
+        e.setHours(23, 59, 59, 999);
+        finalResults = finalResults.filter(r => {
+          if (!r.created_at) return false;
+          const d = new Date(r.created_at);
+          return d >= s && d <= e;
+        });
+      }
+
+      // Update calendar activity map with newly loaded results
+      const newActivity = {};
+      (rawResults || []).forEach(r => {
+        if (!r || !r.created_at) return;
+        const d = new Date(r.created_at);
+        if (isNaN(d.getTime())) return;
+        const ymd = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        if (!newActivity[ymd]) {
+          newActivity[ymd] = { count: 0, totalScore: 0, avgScore: 0 };
+        }
+        newActivity[ymd].count += 1;
+        const score = Number(r.overall_quality?.overall_score ?? r.overall_quality_score ?? 0);
+        if (score > 0) {
+          newActivity[ymd].totalScore += score;
+          newActivity[ymd].avgScore = newActivity[ymd].totalScore / newActivity[ymd].count;
+        }
+      });
+      if (Object.keys(newActivity).length > 0) {
+        setActivityMap(prev => ({ ...prev, ...newActivity }));
+      }
+
+      // Recalculate stats dynamically for custom date range filter
+      if (dateRange.preset !== 'All Time' && (dateRange.startDate || dateRange.endDate)) {
+        const tot = finalResults.length;
+        const avgV = tot ? (finalResults.reduce((acc, r) => acc + (Number(r.video_analysis?.quality_score ?? r.video_quality_score ?? 0)), 0) / tot) : 0;
+        const avgA = tot ? (finalResults.reduce((acc, r) => acc + (Number(r.audio_analysis?.score ?? r.audio_quality_score ?? 0)), 0) / tot) : 0;
+        const avgO = tot ? (finalResults.reduce((acc, r) => acc + (Number(r.overall_quality?.overall_score ?? r.overall_quality_score ?? 0)), 0) / tot) : 0;
+        setStats({
+          totalResults: tot,
+          averageVideoScore: avgV,
+          averageAudioScore: avgA,
+          averageOverallScore: avgO,
+          qualityDistribution: { excellent: 0, good: 0, fair: 0, poor: 0 }
+        });
+      }
 
       // Update states safely
       setRows(finalResults);
@@ -313,7 +405,7 @@ export default function Results() {
       clearTimeout(timer);
       clearInterval(interval);
     };
-  }, [page, rowsPerPage, searchTerm, dateFilter, dealershipFilter, refreshCounter]);
+  }, [page, rowsPerPage, searchTerm, dateRange, dealershipFilter, refreshCounter]);
 
 
   const handleViewDetails = (result) => {
@@ -793,28 +885,23 @@ export default function Results() {
                   }}
                 />
 
-                {/* Date Filter Dropdown */}
-                <TextField
-                  select
-                  size="small"
-                  label="Date Range"
-                  value={dateFilter}
-                  onChange={(e) => { setDateFilter(e.target.value); setPage(0); }}
-                  sx={{
-                    minWidth: 150,
-                    '& .MuiOutlinedInput-root': {
-                      background: THEME.background,
-                      borderRadius: 2,
-                      '&:hover fieldset': { borderColor: THEME.primary },
-                    }
+                {/* Calendar Date Range Picker with Heatmap Activity */}
+                <CalendarDateRangePicker
+                  startDate={dateRange.startDate}
+                  endDate={dateRange.endDate}
+                  dateFilterPreset={dateRange.preset}
+                  activityMap={activityMap}
+                  onApply={({ startDate, endDate, preset, label }) => {
+                    setDateRange({ startDate, endDate, preset, label });
+                    setDateFilter(preset === 'Custom' ? `${startDate} – ${endDate}` : preset);
+                    setPage(0);
                   }}
-                >
-                  {['All Time', 'Today', 'Yesterday', 'Last 7 Days', 'Last 30 Days'].map(option => (
-                    <MenuItem key={option} value={option}>
-                      {option === 'All Time' ? '📅 All Time' : option}
-                    </MenuItem>
-                  ))}
-                </TextField>
+                  onClear={() => {
+                    setDateRange({ startDate: null, endDate: null, preset: 'All Time', label: 'All Time' });
+                    setDateFilter('All Time');
+                    setPage(0);
+                  }}
+                />
 
                 {/* Dealership Filter Dropdown */}
                 {dealershipOptions.length > 0 && (
