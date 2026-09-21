@@ -41,7 +41,7 @@ const THEME = {
   error: '#EF4444',
   errorLight: '#FEF2F2',
   gradientPrimary: 'linear-gradient(135deg, #0083B0 0%, #00B4DB 100%)',
-  shadowLg: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)'
+  shadowLg: '0 12px 28px -5px rgba(0, 0, 0, 0.12), 0 8px 12px -6px rgba(0, 0, 0, 0.08)'
 };
 
 const MONTH_NAMES = [
@@ -51,7 +51,7 @@ const MONTH_NAMES = [
 
 const WEEKDAY_NAMES = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 
-// Helpers for date calculations
+// Helpers for date formatting and calculations
 function formatYMD(date) {
   if (!date) return '';
   const d = new Date(date);
@@ -115,7 +115,7 @@ export default function CalendarDateRangePicker({
     setTempPreset(dateFilterPreset || 'All Time');
   }, [startDate, endDate, dateFilterPreset]);
 
-  // When opening popover, reset view to selected date or current date
+  // Open Popover
   const handleOpen = (e) => {
     if (disabled) return;
     setAnchorEl(e.currentTarget);
@@ -157,7 +157,13 @@ export default function CalendarDateRangePicker({
   };
 
   // Day click logic
-  const handleDateClick = (dayDate) => {
+  const handleDateClick = (dayDate, isCurrentMonth) => {
+    if (!isCurrentMonth) {
+      // Auto-switch month if clicking padding days
+      setViewYear(dayDate.getFullYear());
+      setViewMonth(dayDate.getMonth());
+    }
+
     if (!tempStart || (tempStart && tempEnd)) {
       // First click: start a new range
       setTempStart(dayDate);
@@ -331,6 +337,23 @@ export default function CalendarDateRangePicker({
     return sum;
   }, [viewYear, viewMonth, activityMap]);
 
+  // Calculate selected range total videos
+  const selectedRangeVideos = useMemo(() => {
+    if (tempPreset === 'All Time' || (!tempStart && !tempEnd)) {
+      return Object.values(activityMap || {}).reduce((acc, curr) => acc + (curr.count || 0), 0);
+    }
+    const s = tempStart || tempEnd;
+    const e = tempEnd || tempStart;
+    let count = 0;
+    Object.keys(activityMap || {}).forEach(dateStr => {
+      const d = parseYMD(dateStr);
+      if (isDateInRange(d, s, e)) {
+        count += (activityMap[dateStr]?.count || 0);
+      }
+    });
+    return count;
+  }, [tempStart, tempEnd, tempPreset, activityMap]);
+
   return (
     <Box sx={{ display: 'inline-block' }}>
       {/* ─── Trigger Button ─── */}
@@ -339,10 +362,10 @@ export default function CalendarDateRangePicker({
         sx={{
           display: 'flex',
           alignItems: 'center',
-          gap: 1,
-          px: 1.5,
-          py: 0.8,
-          minWidth: 165,
+          gap: 1.2,
+          px: 1.8,
+          py: 0.6,
+          minWidth: 175,
           height: 40,
           background: THEME.surfaceElevated,
           borderRadius: 2,
@@ -358,7 +381,7 @@ export default function CalendarDateRangePicker({
       >
         <CalendarMonth
           sx={{
-            fontSize: 18,
+            fontSize: 19,
             color: triggerLabel !== 'All Time' ? THEME.primary : THEME.textSecondary
           }}
         />
@@ -367,11 +390,11 @@ export default function CalendarDateRangePicker({
             variant="caption"
             sx={{
               color: THEME.textTertiary,
-              fontSize: '0.68rem',
+              fontSize: '0.66rem',
               lineHeight: 1,
-              fontWeight: 600,
+              fontWeight: 700,
               textTransform: 'uppercase',
-              letterSpacing: '0.5px'
+              letterSpacing: '0.6px'
             }}
           >
             Date Range
@@ -402,7 +425,7 @@ export default function CalendarDateRangePicker({
               '&:hover': { color: THEME.error, bgcolor: THEME.errorLight }
             }}
           >
-            <Close sx={{ fontSize: 14 }} />
+            <Close sx={{ fontSize: 15 }} />
           </IconButton>
         ) : (
           <ArrowDropDown sx={{ color: THEME.textTertiary, fontSize: 20 }} />
@@ -418,13 +441,13 @@ export default function CalendarDateRangePicker({
         transformOrigin={{ vertical: 'top', horizontal: 'left' }}
         PaperProps={{
           sx: {
-            mt: 1,
+            mt: 1.2,
             borderRadius: 3,
             boxShadow: THEME.shadowLg,
             border: `1px solid ${THEME.border}`,
             background: THEME.surfaceElevated,
             overflow: 'hidden',
-            width: { xs: 320, sm: 620 },
+            width: { xs: 320, sm: 640 },
             maxWidth: '96vw'
           }
         }}
@@ -433,11 +456,11 @@ export default function CalendarDateRangePicker({
           {/* Left Column: Quick Presets Sidebar */}
           <Box
             sx={{
-              width: { xs: '100%', sm: 180 },
+              width: { xs: '100%', sm: 185 },
               background: THEME.surface,
               borderRight: { xs: 'none', sm: `1px solid ${THEME.border}` },
               borderBottom: { xs: `1px solid ${THEME.border}`, sm: 'none' },
-              p: 2,
+              p: 2.2,
               display: 'flex',
               flexDirection: 'column',
               justifyContent: 'space-between'
@@ -453,7 +476,7 @@ export default function CalendarDateRangePicker({
                   letterSpacing: '0.6px',
                   display: 'block',
                   mb: 1.5,
-                  px: 1
+                  px: 0.5
                 }}
               >
                 Date Presets
@@ -500,14 +523,15 @@ export default function CalendarDateRangePicker({
             {/* Upload Activity Summary in Sidebar */}
             <Box
               sx={{
-                mt: 2,
-                p: 1.5,
+                mt: 2.5,
+                p: 1.6,
                 background: THEME.surfaceElevated,
                 borderRadius: 2,
-                border: `1px solid ${THEME.borderLight}`
+                border: `1px solid ${THEME.borderLight}`,
+                boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
               }}
             >
-              <Typography variant="caption" sx={{ color: THEME.textTertiary, fontWeight: 600 }}>
+              <Typography variant="caption" sx={{ color: THEME.textTertiary, fontWeight: 700 }}>
                 {MONTH_NAMES[viewMonth]} Uploads
               </Typography>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
@@ -527,11 +551,11 @@ export default function CalendarDateRangePicker({
           </Box>
 
           {/* Right Column: Month Calendar View */}
-          <Box sx={{ flex: 1, p: 2.5 }}>
+          <Box sx={{ flex: 1, p: 2.5, pl: { sm: 3 }, pr: { sm: 3 } }}>
             {/* Calendar Month Navigation Header */}
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Typography variant="subtitle1" fontWeight="700" sx={{ color: THEME.textPrimary }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.2 }}>
+                <Typography variant="subtitle1" fontWeight="700" sx={{ color: THEME.textPrimary, letterSpacing: '-0.2px' }}>
                   {MONTH_NAMES[viewMonth]} {viewYear}
                 </Typography>
                 <Chip
@@ -566,7 +590,7 @@ export default function CalendarDateRangePicker({
                 display: 'grid',
                 gridTemplateColumns: 'repeat(7, 1fr)',
                 textAlign: 'center',
-                mb: 1
+                mb: 1.2
               }}
             >
               {WEEKDAY_NAMES.map(dayName => (
@@ -576,7 +600,7 @@ export default function CalendarDateRangePicker({
                   sx={{
                     color: THEME.textTertiary,
                     fontWeight: 700,
-                    fontSize: '0.75rem'
+                    fontSize: '0.74rem'
                   }}
                 >
                   {dayName}
@@ -589,8 +613,8 @@ export default function CalendarDateRangePicker({
               sx={{
                 display: 'grid',
                 gridTemplateColumns: 'repeat(7, 1fr)',
-                rowGap: '4px',
-                columnGap: '2px'
+                rowGap: '6px',
+                columnGap: '4px'
               }}
             >
               {calendarCells.map(({ date, isCurrentMonth }, idx) => {
@@ -604,13 +628,12 @@ export default function CalendarDateRangePicker({
                 const inRange = isDateInRange(date, effectiveStart, effectiveEnd);
                 const isCurrentToday = isSameDay(date, today);
 
-                // Activity tier color-coding:
+                // Activity tiers:
                 // High Uploads: >= 4 (Green)
                 // Moderate Uploads: 1 to 3 (Yellow/Amber)
-                // Zero Uploads: 0 (Gray/Neutral)
                 const isHighActivity = activity.count >= 4;
                 const isMediumActivity = activity.count >= 1 && activity.count < 4;
-                const hasUploads = activity.count > 0;
+                const hasUploads = isCurrentMonth && activity.count > 0;
 
                 const activityColor = isHighActivity
                   ? THEME.success
@@ -620,7 +643,7 @@ export default function CalendarDateRangePicker({
 
                 // Range background styles
                 let cellBg = 'transparent';
-                let textColor = isCurrentMonth ? THEME.textPrimary : THEME.textTertiary;
+                let textColor = isCurrentMonth ? THEME.textPrimary : '#CBD5E1';
                 let borderRadius = '8px';
 
                 if (isSelectedStart || isSelectedEnd) {
@@ -632,6 +655,8 @@ export default function CalendarDateRangePicker({
                   cellBg = THEME.primaryUltraLight;
                   textColor = THEME.primaryDark;
                   borderRadius = '0';
+                } else if (isCurrentToday) {
+                  cellBg = 'rgba(13, 161, 184, 0.05)';
                 }
 
                 const tooltipTitle = (
@@ -656,11 +681,11 @@ export default function CalendarDateRangePicker({
                 return (
                   <Tooltip key={idx} title={tooltipTitle} arrow placement="top">
                     <Box
-                      onClick={() => handleDateClick(date)}
+                      onClick={() => handleDateClick(date, isCurrentMonth)}
                       onMouseEnter={() => setHoverDate(date)}
                       onMouseLeave={() => setHoverDate(null)}
                       sx={{
-                        height: 44,
+                        minHeight: 46,
                         display: 'flex',
                         flexDirection: 'column',
                         alignItems: 'center',
@@ -669,11 +694,12 @@ export default function CalendarDateRangePicker({
                         cursor: 'pointer',
                         background: cellBg,
                         borderRadius: borderRadius,
+                        opacity: isCurrentMonth ? 1 : 0.38,
                         transition: 'all 0.15s ease',
                         border: isCurrentToday && !isSelectedStart && !isSelectedEnd ? `1.5px solid ${THEME.primary}` : '1.5px solid transparent',
                         '&:hover': {
                           background: isSelectedStart || isSelectedEnd ? THEME.gradientPrimary : THEME.accentLight,
-                          transform: 'scale(1.05)',
+                          transform: 'scale(1.04)',
                           zIndex: 2
                         }
                       }}
@@ -682,7 +708,7 @@ export default function CalendarDateRangePicker({
                       <Typography
                         variant="body2"
                         sx={{
-                          fontSize: '0.82rem',
+                          fontSize: '0.84rem',
                           fontWeight: (isSelectedStart || isSelectedEnd || isCurrentToday) ? 700 : 500,
                           color: textColor,
                           lineHeight: 1
@@ -691,25 +717,25 @@ export default function CalendarDateRangePicker({
                         {date.getDate()}
                       </Typography>
 
-                      {/* Day Upload Activity Indicator (Color Coded Green / Red / Amber) */}
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: '2px', mt: '3px' }}>
+                      {/* Day Upload Activity Pill */}
+                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mt: '3px', height: 14 }}>
                         {hasUploads ? (
                           <Box
                             sx={{
-                              display: 'flex',
+                              display: 'inline-flex',
                               alignItems: 'center',
                               justifyContent: 'center',
-                              px: 0.4,
-                              height: 12,
-                              borderRadius: '6px',
+                              px: 0.6,
+                              height: 14,
+                              borderRadius: '10px',
                               background: isSelectedStart || isSelectedEnd
-                                ? 'rgba(255, 255, 255, 0.3)'
+                                ? 'rgba(255, 255, 255, 0.25)'
                                 : isHighActivity
-                                ? THEME.successLight
-                                : THEME.warningLight,
+                                ? 'rgba(16, 185, 129, 0.12)'
+                                : 'rgba(245, 158, 11, 0.14)',
                               border: `1px solid ${
                                 isSelectedStart || isSelectedEnd
-                                  ? '#FFFFFF'
+                                  ? 'rgba(255, 255, 255, 0.8)'
                                   : isHighActivity
                                   ? THEME.success
                                   : THEME.warning
@@ -718,35 +744,30 @@ export default function CalendarDateRangePicker({
                           >
                             <Box
                               sx={{
-                                width: 5,
-                                height: 5,
+                                width: 4,
+                                height: 4,
                                 borderRadius: '50%',
                                 background: isSelectedStart || isSelectedEnd ? '#FFFFFF' : activityColor,
-                                mr: 0.3
+                                mr: 0.4
                               }}
                             />
                             <Typography
                               variant="caption"
                               sx={{
-                                fontSize: '0.62rem',
-                                fontWeight: 700,
+                                fontSize: '0.64rem',
+                                fontWeight: 800,
                                 lineHeight: 1,
-                                color: isSelectedStart || isSelectedEnd ? '#FFFFFF' : activityColor
+                                color: isSelectedStart || isSelectedEnd
+                                  ? '#FFFFFF'
+                                  : isHighActivity
+                                  ? '#059669'
+                                  : '#D97706'
                               }}
                             >
                               {activity.count}
                             </Typography>
                           </Box>
-                        ) : (
-                          <Box
-                            sx={{
-                              width: 3,
-                              height: 3,
-                              borderRadius: '50%',
-                              background: isSelectedStart || isSelectedEnd ? '#FFFFFF' : THEME.borderLight
-                            }}
-                          />
-                        )}
+                        ) : null}
                       </Box>
                     </Box>
                   </Tooltip>
@@ -771,19 +792,19 @@ export default function CalendarDateRangePicker({
                 Upload Volume:
               </Typography>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6 }}>
                   <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: THEME.success }} />
                   <Typography variant="caption" sx={{ color: THEME.textSecondary, fontWeight: 600 }}>
                     High (≥4)
                   </Typography>
                 </Box>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6 }}>
                   <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: THEME.warning }} />
                   <Typography variant="caption" sx={{ color: THEME.textSecondary, fontWeight: 600 }}>
                     Medium (1–3)
                   </Typography>
                 </Box>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6 }}>
                   <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#CBD5E1' }} />
                   <Typography variant="caption" sx={{ color: THEME.textTertiary, fontWeight: 500 }}>
                     No Uploads (0)
@@ -801,6 +822,7 @@ export default function CalendarDateRangePicker({
             alignItems: 'center',
             justifyContent: 'space-between',
             p: 2,
+            px: 2.5,
             background: THEME.surface,
             borderTop: `1px solid ${THEME.border}`
           }}
@@ -809,14 +831,18 @@ export default function CalendarDateRangePicker({
             <Typography variant="caption" sx={{ color: THEME.textSecondary, fontWeight: 600 }}>
               {tempStart && tempEnd ? (
                 <>
-                  Selected: <strong>{formatDisplayLabel('Custom', tempStart, tempEnd)}</strong>
+                  Selected: <strong>{formatDisplayLabel('Custom', tempStart, tempEnd)}</strong>{' '}
+                  <span style={{ color: THEME.primary, fontWeight: 700 }}>({selectedRangeVideos} video{selectedRangeVideos === 1 ? '' : 's'})</span>
                 </>
               ) : tempStart ? (
                 <>
                   Select end date (Start: <strong>{formatDisplayLabel('Custom', tempStart, null)}</strong>)
                 </>
               ) : (
-                'Viewing all records'
+                <>
+                  Showing all records{' '}
+                  <span style={{ color: THEME.textTertiary }}>({selectedRangeVideos} total)</span>
+                </>
               )}
             </Typography>
           </Box>
@@ -852,7 +878,11 @@ export default function CalendarDateRangePicker({
                 background: THEME.gradientPrimary,
                 fontWeight: 700,
                 textTransform: 'none',
-                px: 2
+                px: 2.2,
+                boxShadow: '0 2px 8px rgba(13, 161, 184, 0.25)',
+                '&:hover': {
+                  background: 'linear-gradient(135deg, #007299 0%, #00a4c7 100%)'
+                }
               }}
             >
               Apply Range

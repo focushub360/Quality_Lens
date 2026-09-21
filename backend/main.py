@@ -3455,6 +3455,8 @@ async def get_bulk_excel_data(batch_id: str, chunk: int = 0, current_user: UserI
 async def get_summary_stats(
     dealer_id: Optional[str] = None,
     timeRange: Optional[str] = Query(None),
+    start_date: Optional[str] = Query(None),
+    end_date: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
     current_user: UserInDB = Depends(get_current_user)
 ):
@@ -3471,22 +3473,36 @@ async def get_summary_stats(
             query["dealer_id"] = current_user.dealer_id
         query["submitted_by_user_id"] = str(current_user.id)
 
-    if timeRange and timeRange.lower() != "all":
+    if start_date or end_date:
+        date_query = {}
+        if start_date:
+            try:
+                date_query["$gte"] = dt.strptime(start_date, "%Y-%m-%d")
+            except Exception:
+                pass
+        if end_date:
+            try:
+                date_query["$lte"] = dt.strptime(end_date, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
+            except Exception:
+                pass
+        if date_query:
+            query["created_at"] = date_query
+    elif timeRange and timeRange.lower() != "all":
         now = dt.utcnow()
         if timeRange.lower() == "day":
-            start_date = now - timedelta(days=1)
+            st_date = now - timedelta(days=1)
         elif timeRange.lower() == "week":
-            start_date = now - timedelta(weeks=1)
+            st_date = now - timedelta(weeks=1)
         elif timeRange.lower() == "month":
-            start_date = now - timedelta(days=30)
+            st_date = now - timedelta(days=30)
         elif timeRange.lower() == "quarter":
-            start_date = now - timedelta(days=90)
+            st_date = now - timedelta(days=90)
         elif timeRange.lower() == "year":
-            start_date = now - timedelta(days=365)
+            st_date = now - timedelta(days=365)
         else:
-            start_date = None
-        if start_date:
-            query["created_at"] = {"$gte": start_date}
+            st_date = None
+        if st_date:
+            query["created_at"] = {"$gte": st_date}
 
     if search:
         search_regex = {"$regex": search, "$options": "i"}
@@ -3534,6 +3550,8 @@ async def get_all_results(
     batch_id: Optional[str] = None,
     dealer_id: Optional[str] = None,
     timeRange: Optional[str] = Query(None),
+    start_date: Optional[str] = Query(None),
+    end_date: Optional[str] = Query(None),
     search: Optional[str] = Query(None, description="Search term for filtering by metadata"),
     minimal: bool = Query(False, description="If true, excludes heavy text fields for faster loading"),
     current_user: UserInDB = Depends(get_current_user)
@@ -3552,22 +3570,36 @@ async def get_all_results(
             raise HTTPException(status_code=400, detail="Invalid batch ID format.")
         query["batch_id"] = batch_id
 
-    if timeRange and timeRange.lower() != "all":
+    if start_date or end_date:
+        date_query = {}
+        if start_date:
+            try:
+                date_query["$gte"] = dt.strptime(start_date, "%Y-%m-%d")
+            except Exception:
+                pass
+        if end_date:
+            try:
+                date_query["$lte"] = dt.strptime(end_date, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
+            except Exception:
+                pass
+        if date_query:
+            query["created_at"] = date_query
+    elif timeRange and timeRange.lower() != "all":
         now = dt.utcnow()
         if timeRange.lower() == "day":
-            start_date = now - timedelta(days=1)
+            st_date = now - timedelta(days=1)
         elif timeRange.lower() == "week":
-            start_date = now - timedelta(weeks=1)
+            st_date = now - timedelta(weeks=1)
         elif timeRange.lower() == "month":
-            start_date = now - timedelta(days=30)
+            st_date = now - timedelta(days=30)
         elif timeRange.lower() == "quarter":
-            start_date = now - timedelta(days=90)
+            st_date = now - timedelta(days=90)
         elif timeRange.lower() == "year":
-            start_date = now - timedelta(days=365)
+            st_date = now - timedelta(days=365)
         else:
-            start_date = None
-        if start_date:
-            query["created_at"] = {"$gte": start_date}
+            st_date = None
+        if st_date:
+            query["created_at"] = {"$gte": st_date}
 
     if search:
         search_regex = {"$regex": search, "$options": "i"}
