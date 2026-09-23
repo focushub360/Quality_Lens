@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useContext } from 'react';
 import {
   Box,
   Container,
@@ -26,7 +26,6 @@ import {
   CircularProgress,
   Tooltip,
   Stack,
-  Toolbar,
   Autocomplete,
   Switch,
   FormControlLabel
@@ -41,11 +40,13 @@ import {
   Business,
   Email as EmailIcon,
   Security,
+  AdminPanelSettings,
   Visibility,
   VisibilityOff,
   UploadFile
 } from '@mui/icons-material';
 import { listUsers, createUser, updateUser, deleteUser } from '../../services/users';
+import { AuthContext } from '../../contexts/AuthContext';
 import ImportUsersModal from '../../components/super-admin/ImportUsersModal';
 
 const THEME = {
@@ -72,17 +73,21 @@ const THEME = {
   errorLight: '#FEE2E2',
   gradientPrimary: 'linear-gradient(135deg, #0083B0 0%, #00B4DB 100%)',
   gradientAccent: 'linear-gradient(135deg, #0DA1B8 0%, #0C587D 100%)',
+  gradientSuperAdmin: 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)',
   shadowSm: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
   shadowMd: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
   hover: '#F0FDFA'
 };
 
 const ROLE_OPTS = [
-  { value: 'dealer_admin', label: 'Service Manager' },
-  { value: 'dealer_user', label: 'Service Advisor' }
+  { value: 'super_admin', label: 'Super Admin (Global Administrator)' },
+  { value: 'dealer_admin', label: 'Service Manager (Dealer Admin)' },
+  { value: 'branch_admin', label: 'Branch Admin' },
+  { value: 'dealer_user', label: 'Service Advisor (Dealer User)' }
 ];
 
 export default function UserManagement() {
+  const { user: authUser } = useContext(AuthContext);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
@@ -91,7 +96,7 @@ export default function UserManagement() {
   const [form, setForm] = useState({
     username: '',
     email: '',
-    role: 'dealer_admin',
+    role: 'super_admin',
     password: '',
     dealer_id: '',
     showroom_name: '',
@@ -109,7 +114,23 @@ export default function UserManagement() {
   const [roleFilter, setRoleFilter] = useState('all');
   const [availableDealers, setAvailableDealers] = useState([]);
 
+  const currentAuthUsername = authUser?.username || authUser?.sub || '';
+  const currentAuthId = authUser?.user_id || authUser?._id || authUser?.id || '';
+
+  const isCurrentLoggedInUser = (targetUser) => {
+    if (!targetUser) return false;
+    const targetId = targetUser._id || targetUser.id;
+    return (
+      (currentAuthUsername && targetUser.username && currentAuthUsername.toLowerCase() === targetUser.username.toLowerCase()) ||
+      (currentAuthId && targetId && currentAuthId === targetId)
+    );
+  };
+
   const handleToggleStatus = async (user) => {
+    if (isCurrentLoggedInUser(user)) {
+      alert('You cannot deactivate your own logged-in account.');
+      return;
+    }
     const userId = user._id || user.id;
     const currentActive = user.is_active !== false && user.status !== 'inactive';
     try {
@@ -126,7 +147,7 @@ export default function UserManagement() {
     try {
       const data = await listUsers();
       const userList = Array.isArray(data) ? data : [];
-      
+
       const REGISTERED_ACTIVE_DEALERS = [
         { id: 'BIRD', name: 'BIRD' },
         { id: 'BMW-KUN', name: 'BMW-KUN' },
@@ -136,9 +157,8 @@ export default function UserManagement() {
       ];
       setAvailableDealers(REGISTERED_ACTIVE_DEALERS);
 
-      // Load both Service Managers (dealer_admin) and Service Advisors (dealer_user)
-      const managedUsers = userList.filter(user => user.role === 'dealer_admin' || user.role === 'dealer_user');
-      setUsers(managedUsers);
+      // Load all system users including super_admin, dealer_admin, branch_admin, dealer_user
+      setUsers(userList);
     } catch (error) {
       console.error('Error loading users:', error);
       setError('Failed to load users');
@@ -153,7 +173,15 @@ export default function UserManagement() {
 
   useEffect(() => {
     if (!open) {
-      setForm({ username: '', email: '', role: 'dealer_admin', password: '', dealer_id: '', showroom_name: '', is_active: true });
+      setForm({
+        username: '',
+        email: '',
+        role: 'super_admin',
+        password: '',
+        dealer_id: '',
+        showroom_name: '',
+        is_active: true
+      });
       setEditingUser(null);
       setError('');
     }
@@ -161,21 +189,31 @@ export default function UserManagement() {
 
   const handleCreate = async () => {
     setError('');
-    if (!form.username || !form.email || !form.password || !form.showroom_name) {
-      setError('Username, email, password, and showroom name are required');
+    if (!form.username || !form.email || !form.password) {
+      setError('Username, email, and password are required');
       return;
     }
     if (form.role === 'dealer_admin' && !form.dealer_id) {
       setError('Dealer ID is required for Dealer Admins to link data');
       return;
     }
+    if (form.role !== 'super_admin' && !form.showroom_name) {
+      setError('Showroom name is required for dealer accounts');
+      return;
+    }
+
     try {
-      await createUser(form);
+      const payload = {
+        ...form,
+        dealer_id: form.role === 'super_admin' ? (form.dealer_id || null) : form.dealer_id,
+        showroom_name: form.role === 'super_admin' ? (form.showroom_name || 'CitNow Headquarters') : form.showroom_name
+      };
+      await createUser(payload);
       setOpen(false);
       load();
     } catch (error) {
       console.error('Error creating user:', error);
-      setError(error.response?.data?.error || 'Failed to create user');
+      setError(error.response?.data?.detail || error.response?.data?.error || 'Failed to create user');
     }
   };
 
@@ -183,8 +221,12 @@ export default function UserManagement() {
     if (!editingUser) return;
     setError('');
 
-    if (!form.username || !form.email || !form.showroom_name) {
-      setError('Username, email, and showroom name are required');
+    if (!form.username || !form.email) {
+      setError('Username and email are required');
+      return;
+    }
+    if (form.role !== 'super_admin' && !form.showroom_name) {
+      setError('Showroom name is required for dealer accounts');
       return;
     }
 
@@ -193,8 +235,11 @@ export default function UserManagement() {
       if (!updateData.password) {
         delete updateData.password;
       }
-      if (updateData.dealer_id === '') {
-        updateData.dealer_id = null;
+      if (updateData.dealer_id === '' || updateData.role === 'super_admin') {
+        updateData.dealer_id = updateData.dealer_id || null;
+      }
+      if (updateData.role === 'super_admin' && !updateData.showroom_name) {
+        updateData.showroom_name = 'CitNow Headquarters';
       }
 
       await updateUser(editingUser._id || editingUser.id, updateData);
@@ -202,18 +247,24 @@ export default function UserManagement() {
       load();
     } catch (error) {
       console.error('Error updating user:', error);
-      setError(error.response?.data?.error || 'Failed to update user');
+      setError(error.response?.data?.detail || error.response?.data?.error || 'Failed to update user');
     }
   };
 
-  const handleDelete = async (id) => {
-    if (window.confirm('Are you sure you want to delete this administrator?')) {
+  const handleDelete = async (targetUser) => {
+    if (isCurrentLoggedInUser(targetUser)) {
+      alert('You cannot delete your own logged-in account.');
+      return;
+    }
+    const targetId = targetUser._id || targetUser.id;
+    const roleLabel = targetUser.role === 'super_admin' ? 'Super Admin' : targetUser.role;
+    if (window.confirm(`Are you sure you want to delete administrator "${targetUser.username}" (${roleLabel})?`)) {
       try {
-        await deleteUser(id);
+        await deleteUser(targetId);
         load();
       } catch (error) {
         console.error('Error deleting user:', error);
-        alert('Failed to delete user');
+        alert(error.response?.data?.detail || 'Failed to delete user');
       }
     }
   };
@@ -224,7 +275,7 @@ export default function UserManagement() {
       username: user.username || '',
       email: user.email || '',
       role: user.role || 'dealer_admin',
-      password: user.plain_password || '',
+      password: '',
       dealer_id: user.dealer_id || '',
       showroom_name: user.showroom_name || '',
       is_active: user.is_active !== false && user.status !== 'inactive'
@@ -247,10 +298,12 @@ export default function UserManagement() {
   };
 
   const filteredUsers = users.filter(user => {
+    const searchLower = searchQuery.toLowerCase();
     const matchesSearch =
-      user.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (user.dealer_id || '').toLowerCase().includes(searchQuery.toLowerCase());
+      (user.username || '').toLowerCase().includes(searchLower) ||
+      (user.email || '').toLowerCase().includes(searchLower) ||
+      (user.dealer_id || '').toLowerCase().includes(searchLower) ||
+      (user.showroom_name || '').toLowerCase().includes(searchLower);
 
     const matchesRole = roleFilter === 'all' || user.role === roleFilter;
 
@@ -273,17 +326,56 @@ export default function UserManagement() {
     page * rowsPerPage + rowsPerPage
   );
 
-  const getRoleColor = (role) => {
+  const getRoleBadge = (role) => {
     switch (role) {
-      case 'super_admin': return THEME.warning;
-      case 'dealer_admin': return THEME.primary;
-      default: return THEME.textSecondary;
+      case 'super_admin':
+        return {
+          label: 'Super Admin',
+          color: '#B45309',
+          bg: '#FEF3C7',
+          border: '#FDE68A',
+          icon: <Security sx={{ fontSize: '13px !important' }} />
+        };
+      case 'dealer_admin':
+        return {
+          label: 'Service Manager',
+          color: '#0369A1',
+          bg: '#E0F2FE',
+          border: '#BAE6FD',
+          icon: <Business sx={{ fontSize: '13px !important' }} />
+        };
+      case 'branch_admin':
+        return {
+          label: 'Branch Admin',
+          color: '#4338CA',
+          bg: '#EEF2FF',
+          border: '#C7D2FE',
+          icon: <Person sx={{ fontSize: '13px !important' }} />
+        };
+      case 'dealer_user':
+        return {
+          label: 'Service Advisor',
+          color: '#047857',
+          bg: '#D1FAE5',
+          border: '#A7F3D0',
+          icon: <Person sx={{ fontSize: '13px !important' }} />
+        };
+      default:
+        return {
+          label: role || 'User',
+          color: '#475569',
+          bg: '#F1F5F9',
+          border: '#E2E8F0',
+          icon: <Person sx={{ fontSize: '13px !important' }} />
+        };
     }
   };
 
   const isEditMode = Boolean(editingUser);
-  const dialogTitle = isEditMode ? 'Edit Administrator' : 'Create New Administrator';
-  const submitButtonText = isEditMode ? 'Update' : 'Create';
+  const dialogTitle = isEditMode
+    ? (form.role === 'super_admin' ? 'Edit Super Admin' : 'Edit Administrator')
+    : (form.role === 'super_admin' ? 'Create New Super Admin' : 'Create New Administrator');
+  const submitButtonText = isEditMode ? 'Update Account' : 'Create Account';
 
   return (
     <Box sx={{
@@ -317,10 +409,10 @@ export default function UserManagement() {
                   backgroundClip: 'text'
                 }}
               >
-                Administrator Management
+                Administrator & User Management
               </Typography>
               <Typography variant="body2" sx={{ color: THEME.textSecondary, fontSize: '0.875rem' }}>
-                Manage system administrators and dealer admins
+                Manage Super Admins, Dealer Service Managers, Branch Admins, and Service Advisors
               </Typography>
             </Box>
 
@@ -352,7 +444,19 @@ export default function UserManagement() {
                 variant="contained"
                 size="medium"
                 startIcon={<Add />}
-                onClick={() => setOpen(true)}
+                onClick={() => {
+                  setForm({
+                    username: '',
+                    email: '',
+                    role: 'super_admin',
+                    password: '',
+                    dealer_id: '',
+                    showroom_name: 'CitNow Headquarters',
+                    is_active: true
+                  });
+                  setEditingUser(null);
+                  setOpen(true);
+                }}
                 sx={{
                   borderRadius: 2.5,
                   px: 2.5,
@@ -370,7 +474,7 @@ export default function UserManagement() {
                   transition: 'all 0.2s ease'
                 }}
               >
-                New Administrator
+                + New Administrator
               </Button>
             </Box>
           </Box>
@@ -392,12 +496,11 @@ export default function UserManagement() {
           }}>
             <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems="center">
               <TextField
-                placeholder="Search by username, email, or dealer ID..."
+                placeholder="Search by username, email, showroom, or dealer ID..."
                 size="medium"
                 value={searchQuery}
                 onChange={(e) => {
                   setSearchQuery(e.target.value);
-                  setPage(page); // Fixed the reference
                   setPage(0);
                 }}
                 InputProps={{
@@ -432,7 +535,7 @@ export default function UserManagement() {
                   setPage(0);
                 }}
                 sx={{
-                  minWidth: 200,
+                  minWidth: 220,
                   '& .MuiOutlinedInput-root': {
                     backgroundColor: '#FFFFFF',
                     borderRadius: 2,
@@ -450,7 +553,9 @@ export default function UserManagement() {
                 }}
               >
                 <MenuItem value="all">All Roles</MenuItem>
+                <MenuItem value="super_admin">Super Admin</MenuItem>
                 <MenuItem value="dealer_admin">Service Manager</MenuItem>
+                <MenuItem value="branch_admin">Branch Admin</MenuItem>
                 <MenuItem value="dealer_user">Service Advisor</MenuItem>
               </TextField>
             </Stack>
@@ -476,7 +581,19 @@ export default function UserManagement() {
               <Button
                 variant="contained"
                 startIcon={<Add />}
-                onClick={() => setOpen(true)}
+                onClick={() => {
+                  setForm({
+                    username: '',
+                    email: '',
+                    role: 'super_admin',
+                    password: '',
+                    dealer_id: '',
+                    showroom_name: 'CitNow Headquarters',
+                    is_active: true
+                  });
+                  setEditingUser(null);
+                  setOpen(true);
+                }}
                 sx={{ background: THEME.gradientPrimary }}
               >
                 Create Administrator
@@ -500,7 +617,7 @@ export default function UserManagement() {
                     background: 'linear-gradient(135deg, rgba(13, 161, 184, 0.08) 0%, rgba(12, 88, 125, 0.08) 100%)',
                     '& th': { py: 1.2, px: 1.2 }
                   }}>
-                    <TableCell sx={{ width: '20%' }}>
+                    <TableCell sx={{ width: '22%' }}>
                       <TableSortLabel
                         active={orderBy === 'username'}
                         direction={orderBy === 'username' ? order : 'asc'}
@@ -511,7 +628,7 @@ export default function UserManagement() {
                         </Typography>
                       </TableSortLabel>
                     </TableCell>
-                    <TableCell sx={{ width: '25%' }}>
+                    <TableCell sx={{ width: '22%' }}>
                       <TableSortLabel
                         active={orderBy === 'email'}
                         direction={orderBy === 'email' ? order : 'asc'}
@@ -522,12 +639,12 @@ export default function UserManagement() {
                         </Typography>
                       </TableSortLabel>
                     </TableCell>
-                    <TableCell sx={{ width: '12%' }}>
+                    <TableCell sx={{ width: '16%' }}>
                       <Typography variant="subtitle2" sx={{ fontWeight: 600, fontSize: '0.85rem' }}>
                         Role
                       </Typography>
                     </TableCell>
-                    <TableCell sx={{ width: '13%' }}>
+                    <TableCell sx={{ width: '15%' }}>
                       <TableSortLabel
                         active={orderBy === 'showroom_name'}
                         direction={orderBy === 'showroom_name' ? order : 'asc'}
@@ -538,7 +655,7 @@ export default function UserManagement() {
                         </Typography>
                       </TableSortLabel>
                     </TableCell>
-                    <TableCell sx={{ width: '12%' }}>
+                    <TableCell sx={{ width: '10%' }}>
                       <TableSortLabel
                         active={orderBy === 'dealer_id'}
                         direction={orderBy === 'dealer_id' ? order : 'asc'}
@@ -549,82 +666,106 @@ export default function UserManagement() {
                         </Typography>
                       </TableSortLabel>
                     </TableCell>
-                    <TableCell sx={{ width: '12%' }}>
+                    <TableCell sx={{ width: '10%' }}>
                       <Typography variant="subtitle2" sx={{ fontWeight: 600, fontSize: '0.85rem' }}>
                         Status (Login)
                       </Typography>
                     </TableCell>
-                    <TableCell align="right" sx={{ width: '6%', pr: 2 }}>
+                    <TableCell align="right" sx={{ width: '5%', pr: 2 }}>
                       <Typography variant="subtitle2" sx={{ fontWeight: 600, fontSize: '0.85rem' }}>
                         Actions
                       </Typography>
                     </TableCell>
                   </TableRow>
                 </TableHead>
-                  <TableBody>
-                    {paginatedUsers.map((user) => {
-                      const isActiveUser = user.is_active !== false && user.status !== 'inactive';
-                      return (
-                        <TableRow
-                          key={user._id || user.id}
-                          hover
-                          sx={{
-                            '&:hover': {
-                              bgcolor: 'rgba(13, 161, 184, 0.04)'
-                            },
-                            borderBottom: `1px solid ${THEME.borderLight}`,
-                            '& td': { py: 1.2, px: 1.5 }
-                          }}
-                        >
-                          <TableCell>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.2 }}>
-                              <Box
-                                sx={{
-                                  width: 34,
-                                  height: 34,
-                                  borderRadius: '50%',
-                                  background: THEME.gradientPrimary,
-                                  color: 'white',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  fontWeight: 700,
-                                  fontSize: '0.875rem',
-                                  boxShadow: '0 2px 6px rgba(13, 161, 184, 0.2)',
-                                  flexShrink: 0
-                                }}
-                              >
-                                {user.username.charAt(0).toUpperCase()}
-                              </Box>
+                <TableBody>
+                  {paginatedUsers.map((user) => {
+                    const isActiveUser = user.is_active !== false && user.status !== 'inactive';
+                    const isSelf = isCurrentLoggedInUser(user);
+                    const isSuperAdminRole = user.role === 'super_admin';
+                    const badge = getRoleBadge(user.role);
+
+                    return (
+                      <TableRow
+                        key={user._id || user.id}
+                        hover
+                        sx={{
+                          '&:hover': {
+                            bgcolor: 'rgba(13, 161, 184, 0.04)'
+                          },
+                          borderBottom: `1px solid ${THEME.borderLight}`,
+                          '& td': { py: 1.2, px: 1.5 }
+                        }}
+                      >
+                        <TableCell>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.2 }}>
+                            <Box
+                              sx={{
+                                width: 34,
+                                height: 34,
+                                borderRadius: '50%',
+                                background: isSuperAdminRole ? THEME.gradientSuperAdmin : THEME.gradientPrimary,
+                                color: 'white',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontWeight: 700,
+                                fontSize: '0.875rem',
+                                boxShadow: isSuperAdminRole ? '0 2px 6px rgba(245, 158, 11, 0.3)' : '0 2px 6px rgba(13, 161, 184, 0.2)',
+                                flexShrink: 0
+                              }}
+                            >
+                              {user.username.charAt(0).toUpperCase()}
+                            </Box>
+                            <Box>
                               <Typography variant="body2" sx={{ fontWeight: 600, color: THEME.textPrimary, fontSize: '0.85rem' }}>
                                 {user.username}
+                                {isSelf && (
+                                  <Chip
+                                    label="You"
+                                    size="small"
+                                    sx={{ ml: 0.8, height: 18, fontSize: '0.625rem', bgcolor: '#EEF2FF', color: '#4F46E5', fontWeight: 700 }}
+                                  />
+                                )}
                               </Typography>
                             </Box>
-                          </TableCell>
-                          <TableCell>
-                            <Typography variant="body2" sx={{ color: THEME.textSecondary, fontSize: '0.825rem' }}>
-                              {user.email}
-                            </Typography>
-                          </TableCell>
-                          <TableCell>
+                          </Box>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2" sx={{ color: THEME.textSecondary, fontSize: '0.825rem' }}>
+                            {user.email}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Chip
+                            icon={badge.icon}
+                            label={badge.label}
+                            size="small"
+                            sx={{
+                              bgcolor: badge.bg,
+                              color: badge.color,
+                              border: `1px solid ${badge.border}`,
+                              fontWeight: 700,
+                              fontSize: '0.72rem',
+                              height: 24,
+                              '& .MuiChip-icon': { color: `${badge.color} !important` }
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2" sx={{ fontWeight: 500, color: THEME.textPrimary, fontSize: '0.85rem' }}>
+                            {isSuperAdminRole ? (user.showroom_name || 'CitNow Headquarters') : (user.showroom_name || '—')}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          {isSuperAdminRole && !user.dealer_id ? (
                             <Chip
-                              label={user.role === 'dealer_admin' ? 'Service Manager' : user.role === 'dealer_user' ? 'Service Advisor' : (user.role || 'Service Manager')}
+                              label="Global"
                               size="small"
-                              sx={{
-                                bgcolor: `${THEME.primary}15`,
-                                color: THEME.primary,
-                                fontWeight: 600,
-                                fontSize: '0.7rem',
-                                height: 22
-                              }}
+                              variant="outlined"
+                              sx={{ height: 20, fontSize: '0.675rem', fontWeight: 600, color: '#D97706', borderColor: '#FDE68A', bgcolor: '#FFFBEB' }}
                             />
-                          </TableCell>
-                          <TableCell>
-                            <Typography variant="body2" sx={{ fontWeight: 500, color: THEME.textPrimary, fontSize: '0.85rem' }}>
-                              {user.showroom_name || '—'}
-                            </Typography>
-                          </TableCell>
-                          <TableCell>
+                          ) : (
                             <Typography variant="body2" sx={{
                               fontFamily: 'monospace',
                               color: user.dealer_id ? THEME.textPrimary : THEME.textSecondary,
@@ -633,48 +774,64 @@ export default function UserManagement() {
                             }}>
                               {user.dealer_id || '—'}
                             </Typography>
-                          </TableCell>
-                          <TableCell>
-                            <Tooltip title={isActiveUser ? "Click to Deactivate (Disables Login)" : "Click to Activate (Enables Login)"}>
-                              <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.8 }}>
-                                <Switch
-                                  size="small"
-                                  checked={isActiveUser}
-                                  onChange={() => handleToggleStatus(user)}
-                                  color="success"
-                                />
-                                <Chip
-                                  label={isActiveUser ? 'Active' : 'Inactive'}
-                                  size="small"
-                                  color={isActiveUser ? 'success' : 'error'}
-                                  variant="outlined"
-                                  sx={{ fontWeight: 700, fontSize: '0.675rem', height: 20 }}
-                                />
-                              </Box>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Tooltip title={isSelf ? "You cannot deactivate your own account" : isActiveUser ? "Click to Deactivate (Disables Login)" : "Click to Activate (Enables Login)"}>
+                            <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.8 }}>
+                              <Switch
+                                size="small"
+                                checked={isActiveUser}
+                                disabled={isSelf}
+                                onChange={() => handleToggleStatus(user)}
+                                color="success"
+                              />
+                              <Chip
+                                label={isActiveUser ? 'Active' : 'Inactive'}
+                                size="small"
+                                color={isActiveUser ? 'success' : 'error'}
+                                variant="outlined"
+                                sx={{ fontWeight: 700, fontSize: '0.675rem', height: 20 }}
+                              />
+                            </Box>
+                          </Tooltip>
+                        </TableCell>
+                        <TableCell align="right" sx={{ pr: 2, whiteSpace: 'nowrap' }}>
+                          <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+                            <Tooltip title="Edit user profile">
+                              <IconButton
+                                size="small"
+                                onClick={() => handleEdit(user)}
+                                sx={{
+                                  color: THEME.primary,
+                                  '&:hover': { bgcolor: `${THEME.primary}10` }
+                                }}
+                              >
+                                <Edit fontSize="small" />
+                              </IconButton>
                             </Tooltip>
-                          </TableCell>
-                          <TableCell align="right" sx={{ pr: 2, whiteSpace: 'nowrap' }}>
-                            <Stack direction="row" spacing={0.5} justifyContent="flex-end">
-                              <Tooltip title="Edit user profile">
+                            {!isSelf && (
+                              <Tooltip title="Delete user">
                                 <IconButton
                                   size="small"
-                                  onClick={() => handleEdit(user)}
+                                  onClick={() => handleDelete(user)}
                                   sx={{
-                                    color: THEME.primary,
-                                    '&:hover': { bgcolor: `${THEME.primary}10` }
+                                    color: THEME.error,
+                                    '&:hover': { bgcolor: `${THEME.error}10` }
                                   }}
                                 >
-                                  <Edit fontSize="small" />
+                                  <Delete fontSize="small" />
                                 </IconButton>
                               </Tooltip>
-                            </Stack>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </TableContainer>
+                            )}
+                          </Stack>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </TableContainer>
 
             <TablePagination
               component="div"
@@ -719,6 +876,43 @@ export default function UserManagement() {
             <Stack spacing={2.5}>
               <TextField
                 fullWidth
+                select
+                label="Account Role"
+                value={form.role}
+                onChange={(e) => {
+                  const newRole = e.target.value;
+                  setForm({
+                    ...form,
+                    role: newRole,
+                    showroom_name: newRole === 'super_admin' ? (form.showroom_name || 'CitNow Headquarters') : form.showroom_name
+                  });
+                }}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      {form.role === 'super_admin' ? (
+                        <AdminPanelSettings sx={{ color: '#D97706' }} />
+                      ) : (
+                        <Security sx={{ color: THEME.textSecondary }} />
+                      )}
+                    </InputAdornment>
+                  )
+                }}
+                helperText={form.role === 'super_admin' ? "Super Admins have full access across all dealerships, users, and reports" : ""}
+                sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
+              >
+                {ROLE_OPTS.map(r => (
+                  <MenuItem key={r.value} value={r.value}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      {r.value === 'super_admin' ? <Security sx={{ fontSize: 16, color: '#D97706' }} /> : <Person sx={{ fontSize: 16, color: THEME.primary }} />}
+                      {r.label}
+                    </Box>
+                  </MenuItem>
+                ))}
+              </TextField>
+
+              <TextField
+                fullWidth
                 label="Username"
                 value={form.username}
                 onChange={(e) => setForm({ ...form, username: e.target.value })}
@@ -755,7 +949,7 @@ export default function UserManagement() {
                 label="Password"
                 value={form.password}
                 onChange={(e) => setForm({ ...form, password: e.target.value })}
-                helperText={isEditMode && !form.password ? "Leave blank to keep current password" : "Required for new users"}
+                helperText={isEditMode && !form.password ? "Leave blank to keep current password" : "Required for new users (min 6 characters)"}
                 required={!isEditMode && !form.password}
                 type={showPassword ? 'text' : 'password'}
                 InputProps={{
@@ -772,28 +966,6 @@ export default function UserManagement() {
                 }}
                 sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
               />
-
-              <TextField
-                fullWidth
-                select
-                label="Role"
-                value={form.role}
-                onChange={(e) => setForm({ ...form, role: e.target.value })}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <Security sx={{ color: THEME.textSecondary }} />
-                    </InputAdornment>
-                  )
-                }}
-                sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
-              >
-                {ROLE_OPTS.map(r => (
-                  <MenuItem key={r.value} value={r.value}>
-                    {r.label}
-                  </MenuItem>
-                ))}
-              </TextField>
 
               <Autocomplete
                 freeSolo
@@ -821,9 +993,9 @@ export default function UserManagement() {
                 renderInput={(params) => (
                   <TextField
                     {...params}
-                    label="Dealer ID"
+                    label={form.role === 'super_admin' ? "Dealer ID (Optional)" : "Dealer ID"}
                     required={form.role === 'dealer_admin'}
-                    helperText={form.role === 'dealer_admin' ? "Select existing dealer or type a new ID to create one" : "Optional: Assign to specific dealership"}
+                    helperText={form.role === 'super_admin' ? "Optional: Leave blank for global Super Admin access" : form.role === 'dealer_admin' ? "Select existing dealer or type a new ID" : "Optional: Assign to specific dealership"}
                     InputProps={{
                       ...params.InputProps,
                       startAdornment: (
@@ -839,13 +1011,14 @@ export default function UserManagement() {
                   />
                 )}
               />
+
               <TextField
                 fullWidth
-                label="Showroom Name"
+                label={form.role === 'super_admin' ? "Showroom / Organization Name (Optional)" : "Showroom Name"}
                 value={form.showroom_name}
                 onChange={(e) => setForm({ ...form, showroom_name: e.target.value })}
-                required
-                helperText="Enter the dealership/showroom name"
+                required={form.role !== 'super_admin'}
+                helperText={form.role === 'super_admin' ? "Defaults to 'CitNow Headquarters' if left empty" : "Enter the dealership/showroom name"}
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
@@ -863,7 +1036,7 @@ export default function UserManagement() {
                 backgroundColor: THEME.surface,
                 display: 'flex',
                 alignItems: 'center',
-                justify: 'space-between'
+                justifyContent: 'space-between'
               }}>
                 <FormControlLabel
                   control={
@@ -879,7 +1052,7 @@ export default function UserManagement() {
                         Account Status: {form.is_active !== false ? 'ACTIVE' : 'INACTIVE'}
                       </Typography>
                       <Typography variant="caption" sx={{ color: THEME.textSecondary, display: 'block' }}>
-                        {form.is_active !== false ? 'User can log in and perform dealer tasks' : 'Login disabled for this user under dealership'}
+                        {form.is_active !== false ? 'User can log in and access system functions' : 'Login disabled for this account'}
                       </Typography>
                     </Box>
                   }
@@ -905,7 +1078,7 @@ export default function UserManagement() {
               variant="contained"
               onClick={handleSubmit}
               sx={{
-                background: THEME.gradientPrimary,
+                background: form.role === 'super_admin' ? THEME.gradientSuperAdmin : THEME.gradientPrimary,
                 '&:hover': { opacity: 0.9 },
                 textTransform: 'none',
                 fontWeight: 600,
