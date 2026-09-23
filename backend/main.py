@@ -233,15 +233,15 @@ class UserUpdate(BaseModel):
     status: Optional[str] = None
 
 class UserInDB(UserBase):
-    id: str = Field(alias="_id")  # This should accept ObjectId converted to string
-    hashed_password: str
-    role: str
+    id: Optional[str] = Field(default=None, alias="_id")  # This should accept ObjectId converted to string
+    hashed_password: Optional[str] = ""
+    role: str = "dealer_user"
     dealer_id: Optional[str] = None
     is_active: bool = True
     status: Optional[str] = "active"
     created_by_user_id: Optional[str] = None  # who created this user
-    created_at: dt
-    updated_at: dt
+    created_at: Optional[Any] = None
+    updated_at: Optional[Any] = None
 
     class Config:
         populate_by_name = True  # Allow both alias and field name
@@ -1116,32 +1116,62 @@ async def read_users(
     Dealer Admin → users belonging to their own dealer_id
     Dealer User → forbidden
     """
-    if current_user.role == "super_admin":
-        if dealer_id:
-            users_cursor = users_collection.find({"dealer_id": dealer_id})
+    try:
+        if current_user.role == "super_admin":
+            if dealer_id:
+                users_cursor = users_collection.find({"dealer_id": dealer_id})
+            else:
+                users_cursor = users_collection.find()
+        elif current_user.role == "dealer_admin":
+            if not current_user.dealer_id:
+                raise HTTPException(403, detail="Dealer Admin has no assigned dealer_id.")
+            # DA sees ALL users in their dealership (including all branches)
+            users_cursor = users_collection.find({"dealer_id": current_user.dealer_id})
+        elif current_user.role == "branch_admin":
+            if not current_user.dealer_id or not current_user.branch_id:
+                 raise HTTPException(403, detail="Branch Admin missing dealer_id or branch_id.")
+            # BA sees ONLY users in their specific branch
+            users_cursor = users_collection.find({
+                "dealer_id": current_user.dealer_id,
+                "branch_id": current_user.branch_id
+            })
         else:
-            users_cursor = users_collection.find()
-    elif current_user.role == "dealer_admin":
-        if not current_user.dealer_id:
-            raise HTTPException(403, detail="Dealer Admin has no assigned dealer_id.")
-        # DA sees ALL users in their dealership (including all branches)
-        users_cursor = users_collection.find({"dealer_id": current_user.dealer_id})
-    elif current_user.role == "branch_admin":
-        if not current_user.dealer_id or not current_user.branch_id:
-             raise HTTPException(403, detail="Branch Admin missing dealer_id or branch_id.")
-        # BA sees ONLY users in their specific branch
-        users_cursor = users_collection.find({
-            "dealer_id": current_user.dealer_id,
-            "branch_id": current_user.branch_id
-        })
-    else:
-        raise HTTPException(403, detail="Not authorized to view users.")
+            raise HTTPException(403, detail="Not authorized to view users.")
 
-    users_list = await users_cursor.to_list(None)
+        users_list = await users_cursor.to_list(None)
 
-    for user_doc in users_list:
-        user_doc["_id"] = str(user_doc["_id"])
-    return [UserInDB(**u) for u in users_list]
+        results = []
+        for user_doc in users_list:
+            user_doc["_id"] = str(user_doc["_id"])
+            if "hashed_password" not in user_doc:
+                user_doc["hashed_password"] = ""
+            if "role" not in user_doc:
+                user_doc["role"] = "dealer_user"
+            try:
+                results.append(UserInDB(**user_doc))
+            except Exception as e:
+                logger.warning(f"Error parsing user {user_doc.get('_id')}: {e}")
+                results.append(UserInDB(
+                    _id=str(user_doc["_id"]),
+                    username=user_doc.get("username", "Unknown"),
+                    email=user_doc.get("email"),
+                    role=user_doc.get("role", "dealer_user"),
+                    dealer_id=user_doc.get("dealer_id"),
+                    showroom_name=user_doc.get("showroom_name"),
+                    job_title=user_doc.get("job_title"),
+                    phone_number=user_doc.get("phone_number"),
+                    branch_id=user_doc.get("branch_id"),
+                    branch_name=user_doc.get("branch_name"),
+                    is_active=user_doc.get("is_active", True),
+                    status=user_doc.get("status", "active"),
+                    hashed_password=user_doc.get("hashed_password", "")
+                ))
+        return results
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching users: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to fetch users: {str(e)}")
 
 
 @app.post("/users/", response_model=UserInDB, status_code=status.HTTP_201_CREATED)
@@ -1158,7 +1188,7 @@ async def create_user(user: UserCreate, current_user: UserInDB = Depends(get_cur
     if current_user.role == "super_admin":
         allowed_role = user.role  # super_admin can create any role
         allowed_dealer = user.dealer_id
-        allowed_showroom = user.showroom_name
+        allowed_showroom = user.showroom_name or ("CitNow Headquarters" if user.role == "super_admin" else "")
         allowed_branch_id = user.branch_id
         allowed_branch_name = user.branch_name
 
@@ -1216,7 +1246,7 @@ async def create_user(user: UserCreate, current_user: UserInDB = Depends(get_cur
         "branch_name": allowed_branch_name,
         "job_title": user.job_title,
         "phone_number": user.phone_number,
-        "created_by_user_id": str(current_user.id),  # track who created this user
+        "created_by_user_id": str(getattr(current_user, 'id', None) or getattr(current_user, '_id', '')),  # track who created this user
         "created_at": dt.utcnow(),
         "updated_at": dt.utcnow()
     }
