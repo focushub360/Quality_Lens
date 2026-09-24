@@ -2982,33 +2982,48 @@ export default function SuperAdminDashboard() {
       const res = await api.get(endpoint, { headers });
       const data = res.data;
 
-      // Map dealer summaries
+      // Map dealer summaries and deduplicate by normalized ID
       const ACTIVE_DEALER_IDS = ['BIRD', 'BMW-KUN', 'DEUTSCHEMOTOREN', 'EMINENT', 'EVMAUTOKRAFT', 'GALLOP'];
       
-      let dealerPerformance = (data.dealers_summary || [])
-        .map(d => ({
-          id: normalizeDealerId(d.dealer_id),
-          name: getDealerDisplayName(d.dealer_id),
-          videos: d.total_videos,
-          overall: d.avg_overall_quality || 0,
-          video: d.avg_video_quality || 0,
-          audio: d.avg_audio_quality || 0,
-          users: 0
-        }))
-        .filter(d => ACTIVE_DEALER_IDS.includes(d.id))
-        .sort((a, b) => b.overall - a.overall);
-
-      // Add missing active dealers with 0s
-      ACTIVE_DEALER_IDS.forEach(id => {
-          if (!dealerPerformance.find(d => d.id === id)) {
-              dealerPerformance.push({
-                  id,
-                  name: getDealerDisplayName(id),
-                  videos: 0, overall: 0, video: 0, audio: 0, users: 0
-              });
+      const dealerMap = {};
+      (data.dealers_summary || []).forEach(d => {
+        const normId = normalizeDealerId(d.dealer_id);
+        if (ACTIVE_DEALER_IDS.includes(normId)) {
+          if (!dealerMap[normId]) {
+            dealerMap[normId] = {
+              id: normId,
+              name: getDealerDisplayName(normId),
+              videos: d.total_videos || 0,
+              overall: d.avg_overall_quality || 0,
+              video: d.avg_video_quality || 0,
+              audio: d.avg_audio_quality || 0,
+              users: 0
+            };
+          } else {
+            const existing = dealerMap[normId];
+            const totalV = existing.videos + (d.total_videos || 0);
+            if (totalV > 0) {
+              existing.overall = ((existing.overall * existing.videos) + ((d.avg_overall_quality || 0) * (d.total_videos || 0))) / totalV;
+              existing.video = ((existing.video * existing.videos) + ((d.avg_video_quality || 0) * (d.total_videos || 0))) / totalV;
+              existing.audio = ((existing.audio * existing.videos) + ((d.avg_audio_quality || 0) * (d.total_videos || 0))) / totalV;
+            }
+            existing.videos = totalV;
           }
+        }
       });
-      dealerPerformance.sort((a, b) => b.overall - a.overall);
+
+      // Ensure all active dealers are present
+      ACTIVE_DEALER_IDS.forEach(id => {
+        if (!dealerMap[id]) {
+          dealerMap[id] = {
+            id,
+            name: getDealerDisplayName(id),
+            videos: 0, overall: 0, video: 0, audio: 0, users: 0
+          };
+        }
+      });
+
+      const dealerPerformance = Object.values(dealerMap).sort((a, b) => b.overall - a.overall);
 
       // Map quality distribution
       const qualityDist = Object.entries(data.quality_distribution || {}).map(([name, value]) => ({ name, value }));

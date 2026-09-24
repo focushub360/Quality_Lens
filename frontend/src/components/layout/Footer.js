@@ -64,10 +64,9 @@ export default function Footer() {
       }}
     >
       <Container maxWidth="xl">
-        {/* Main Footer Content - More Compact */}
-        <Grid container spacing={3}> {/* Reduced from spacing={4} */}
-          {/* Brand Section - More Compact */}
-          <Grid item xs={12} md={4}>
+        <Grid container spacing={3}>
+          {/* Brand Section */}
+          <Grid size={{ xs: 12, md: 4 }}>
             <Box sx={{ mb: 2 }}> {/* Reduced from mb: 3 */}
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1.5 }}>
                 <Box sx={{ height: 90, display: 'flex', alignItems: 'center', justifyContent: 'flex-start' }}>
@@ -135,8 +134,8 @@ export default function Footer() {
 
 
 
-          {/* Contact Information - More Compact */}
-          <Grid item xs={12} sm={6} md={4}>
+          {/* Contact Information */}
+          <Grid size={{ xs: 12, sm: 6, md: 4 }}>
             <Typography variant="subtitle2" sx={{ // Changed from h6 to subtitle2
               fontWeight: 600,
               color: THEME.textPrimary,
