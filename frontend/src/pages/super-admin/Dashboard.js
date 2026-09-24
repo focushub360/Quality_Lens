@@ -2962,12 +2962,15 @@ export default function SuperAdminDashboard() {
 
     try {
       const token = localStorage.getItem('auth_token');
-      const headers = token ? { Authorization: `Bearer ${token}` } : {};
-
-      // 1. Fetch Users
-      const usersRes = await api.get('/users/', { headers });
-      const usersArray = Array.isArray(usersRes.data) ? usersRes.data : [];
-      setUsers(usersArray);
+      // 1. Fetch Users (safe)
+      let usersArray = [];
+      try {
+        const usersRes = await api.get('/users/', { headers });
+        usersArray = Array.isArray(usersRes.data) ? usersRes.data : [];
+        setUsers(usersArray);
+      } catch (userErr) {
+        console.warn('Could not fetch user list for dashboard count:', userErr);
+      }
 
       // 2. Fetch Server-Side Dashboard Overview (Lightning Fast)
       let endpoint = '/dashboard/super-admin/overview';
