@@ -2962,6 +2962,7 @@ export default function SuperAdminDashboard() {
 
     try {
       const token = localStorage.getItem('auth_token');
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
       // 1. Fetch Users (safe)
       let usersArray = [];
       try {
