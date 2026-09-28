@@ -621,7 +621,12 @@ export default function DealerAdminDashboard() {
           serviceAdvisors: (data.serviceAdvisors || []).length,
           completionRate: completionRate
         },
-        dailyPerformance: data.dailyPerformance || [],
+        dailyPerformance: (data.dailyPerformance || []).map(d => ({
+          ...d,
+          videos: typeof d.videos === 'number' && !isNaN(d.videos)
+            ? d.videos
+            : (typeof d.count === 'number' && !isNaN(d.count) ? d.count : 0)
+        })),
         serviceAdvisors: data.serviceAdvisors || [],
         qualityBreakdown: qualityBreakdown,
         recentVideos: recentRaw.map((video, index) => ({
@@ -1299,7 +1304,11 @@ export default function DealerAdminDashboard() {
                         <Box>
                           <Typography variant="caption" sx={{ color: THEME.textTertiary, fontWeight: 600 }}>Busiest Day</Typography>
                           <Typography variant="h5" sx={{ color: CN.navy, fontWeight: 800, lineHeight: 1.2 }}>
-                            {Math.max(...(dashboardData.dailyPerformance.map(d => d.videos) || [0]), 0)}
+                            {(() => {
+                              const list = dashboardData.dailyPerformance || [];
+                              const counts = list.map(d => (typeof d.videos === 'number' && !isNaN(d.videos) ? d.videos : (Number(d.count) || 0)));
+                              return counts.length > 0 ? Math.max(...counts, 0) : 0;
+                            })()}
                           </Typography>
                         </Box>
                       </Box>

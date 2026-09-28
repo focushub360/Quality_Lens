@@ -343,6 +343,7 @@ class DailyPerformance(BaseModel):
     score: float
     video: float
     audio: float
+    videos: int = 0
 
 class DealerAdminDashboardOverview(BaseModel):
     dealer_id: str
@@ -547,6 +548,38 @@ async def get_current_admin_or_dealer_admin(current_user: UserInDB = Depends(get
         logger.warning(f"User {current_user.username} attempted unauthorized access (requires super_admin or dealer_admin).")
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized: Super Admin or Service Manager role required.")
     return current_user
+
+def get_dealer_id_filter(dealer_id: Optional[str]) -> Dict[str, Any]:
+    """
+    Builds a flexible MongoDB query filter for a dealer_id that handles case-insensitivity
+    and matches known aliases (e.g., GALLOP, EVMAUTOKRAFT, BIRD, DEUTSCHEMOTOREN, EMINENT, BMW-KUN).
+    """
+    if not dealer_id:
+        return {}
+    
+    did_clean = str(dealer_id).strip()
+    did_lower = did_clean.lower()
+    
+    aliases = [did_clean]
+    if did_lower in ('bmw-kun', 'bmw kun', 'kun', 'bmw'):
+        aliases.extend(['BMW-KUN', 'bmw-kun', 'BMW KUN', 'kun', 'BMW KUN EXCLUSIVE', 'BMW Kun Exclusive'])
+    elif did_lower in ('evmautokraft', 'evm autokraft', 'evm'):
+        aliases.extend(['evmautokraft', 'EVM AUTOKRAFT', 'EVM Autokraft', 'evm'])
+    elif did_lower in ('bird', 'bird automotive'):
+        aliases.extend(['bird', 'BIRD', 'BIRD AUTOMOTIVE PRIVATE LIMITED', 'Bird Automotive Private Limited'])
+    elif did_lower in ('deutschemotoren', 'deutsche motoren', 'deutsche'):
+        aliases.extend(['deutschemotoren', 'DEUTSCHEMOTOREN', 'Deutsche Cars Private Limited', 'DEUTSCHE CARS PRIVATE LIMITED'])
+    elif did_lower in ('eminent', 'eminent cars'):
+        aliases.extend(['eminent', 'EMINENT', 'EMINENT CARS PRIVATE LIMITED', 'Eminent Cars Private Limited'])
+    elif did_lower in ('gallop', 'gallops'):
+        aliases.extend(['gallop', 'GALLOP', 'gallops', 'GALLOPS'])
+    
+    escaped_patterns = [f"^{re.escape(a)}$" for a in set(aliases)]
+    flexible = re.escape(did_clean).replace('\\ ', '[\\s_-]?').replace('\\-', '[\\s_-]?').replace('\\_', '[\\s_-]?')
+    escaped_patterns.append(f"^{flexible}$")
+    combined_pattern = "|".join(set(escaped_patterns))
+    
+    return {"$regex": combined_pattern, "$options": "i"}
 
 # -----------------------------
 # Initial Super Admin Creation
@@ -3151,7 +3184,7 @@ async def list_all_batches(limit: int = 50, status_filter: Optional[str] = None,
         pass  # No additional filter — see everything
     elif current_user.role == "dealer_admin":
         if current_user.dealer_id:
-            query["dealer_id"] = current_user.dealer_id  # All batches for the dealership
+            query["dealer_id"] = get_dealer_id_filter(current_user.dealer_id)  # All batches for the dealership
         else:
             query["submitted_by_user_id"] = str(current_user.id)  # Fallback if no dealer_id
     else:
@@ -3494,13 +3527,13 @@ async def get_summary_stats(
     query: Dict[str, Any] = {}
     if current_user.role == "super_admin":
         if dealer_id:
-            query["dealer_id"] = dealer_id
+            query["dealer_id"] = get_dealer_id_filter(dealer_id)
     elif current_user.role == "dealer_admin":
         if current_user.dealer_id:
-            query["dealer_id"] = current_user.dealer_id
+            query["dealer_id"] = get_dealer_id_filter(current_user.dealer_id)
     elif current_user.role in ("branch_admin", "dealer_user"):
         if current_user.dealer_id:
-            query["dealer_id"] = current_user.dealer_id
+            query["dealer_id"] = get_dealer_id_filter(current_user.dealer_id)
         query["submitted_by_user_id"] = str(current_user.id)
 
     if start_date or end_date:
@@ -3645,16 +3678,16 @@ async def get_all_results(
     # RBAC scoping
     if current_user.role == "super_admin":
         if dealer_id:
-            query["dealer_id"] = dealer_id
+            query["dealer_id"] = get_dealer_id_filter(dealer_id)
         # Removed active_dealers restriction: super admin should see ALL data even without users
     elif current_user.role == "dealer_admin":
         if not current_user.dealer_id:
             raise HTTPException(status_code=403, detail="User has no assigned dealer_id.")
-        query["dealer_id"] = current_user.dealer_id
+        query["dealer_id"] = get_dealer_id_filter(current_user.dealer_id)
     elif current_user.role in ("branch_admin", "dealer_user"):
         if not current_user.dealer_id:
             raise HTTPException(status_code=403, detail="User has no assigned dealer_id.")
-        query["dealer_id"] = current_user.dealer_id
+        query["dealer_id"] = get_dealer_id_filter(current_user.dealer_id)
         query["submitted_by_user_id"] = str(current_user.id)
     else:
         raise HTTPException(status_code=403, detail="Not authorized to view results")
@@ -3835,7 +3868,7 @@ async def get_dealer_dashboard_overview(
     # Base match
     dealer_status_match = {}
     if target_dealer_id:
-        dealer_status_match["dealer_id"] = target_dealer_id
+        dealer_status_match["dealer_id"] = get_dealer_id_filter(target_dealer_id)
     
     # Dealer Admin sees all dealership uploads to monitor team performance across advisors.
     # Only branch_admin / dealer_user are scoped to their individual uploads.
@@ -3978,7 +4011,8 @@ async def get_dealer_dashboard_overview(
         if r["_parsed_date"] > dt.min:
             date_str = r["_parsed_date"].strftime("%d %b")
             if date_str not in daily_map:
-                daily_map[date_str] = {"scores": [], "v_scores": [], "a_scores": []}
+                daily_map[date_str] = {"scores": [], "v_scores": [], "a_scores": [], "videos": 0}
+            daily_map[date_str]["videos"] = daily_map[date_str].get("videos", 0) + 1
             if r.get("overall_quality_score") is not None:
                 daily_map[date_str]["scores"].append(r["overall_quality_score"])
             if r.get("video_quality_score") is not None:
@@ -4017,8 +4051,9 @@ async def get_dealer_dashboard_overview(
         avg_score = sum(v["scores"])/len(v["scores"]) if v["scores"] else 0
         avg_v = sum(v["v_scores"])/len(v["v_scores"]) if v["v_scores"] else 0
         avg_a = sum(v["a_scores"])/len(v["a_scores"]) if v["a_scores"] else 0
+        video_count = v.get("videos", len(v["scores"]))
         dailyPerformance.append(DailyPerformance(
-            name=k, score=round(avg_score, 1), video=round(avg_v, 1), audio=round(avg_a, 1)
+            name=k, score=round(avg_score, 1), video=round(avg_v, 1), audio=round(avg_a, 1), videos=video_count
         ))
 
     # Recent videos
@@ -4064,18 +4099,18 @@ async def get_dealer_user_stats(
     Get video analysis statistics for all users in a dealer
     """
     # Authorization check
-    # Authorization check
+    dealer_filter = get_dealer_id_filter(dealer_id)
     if current_user.role == "super_admin":
         # Super admin can view any dealer's stats
-        query = {"dealer_id": dealer_id}
+        query = {"dealer_id": dealer_filter}
     elif current_user.role == "dealer_admin":
-        if current_user.dealer_id != dealer_id:
+        if (current_user.dealer_id or "").lower() != dealer_id.lower():
              raise HTTPException(status_code=403, detail="Not authorized to view this dealer's user stats")
-        query = {"dealer_id": dealer_id}
+        query = {"dealer_id": dealer_filter}
     elif current_user.role == "branch_admin":
-        if current_user.dealer_id != dealer_id:
+        if (current_user.dealer_id or "").lower() != dealer_id.lower():
              raise HTTPException(status_code=403, detail="Not authorized to view this dealer's user stats")
-        query = {"dealer_id": dealer_id}
+        query = {"dealer_id": dealer_filter}
         if current_user.branch_id:
             query["branch_id"] = current_user.branch_id
     else:
@@ -4093,7 +4128,7 @@ async def get_dealer_user_stats(
         # Include results with completed status OR no status field (older data)
         video_count = await results_collection.count_documents({
             "submitted_by_user_id": user_id,
-            "dealer_id": dealer_id,
+            "dealer_id": dealer_filter,
             "$or": [
                 {"status": BatchStatus.COMPLETED},
                 {"status": {"$exists": False}}
@@ -4128,10 +4163,10 @@ async def get_users_by_dealer(
         raise HTTPException(status_code=403, detail="Not authorized to view dealer users.")
 
     # Dealer admin is scoped to their own dealership only
-    if current_user.role == "dealer_admin" and current_user.dealer_id != dealer_id:
+    if current_user.role == "dealer_admin" and (current_user.dealer_id or "").lower() != dealer_id.lower():
         raise HTTPException(status_code=403, detail="Not authorized to view users for this dealer.")
 
-    users_cursor = users_collection.find({"dealer_id": dealer_id})
+    users_cursor = users_collection.find({"dealer_id": get_dealer_id_filter(dealer_id)})
     users_list = await users_cursor.to_list(None)
 
     for user_doc in users_list:

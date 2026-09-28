@@ -2207,7 +2207,7 @@ const DealerDetailDialog = ({ open, onClose, dealer }) => {
       // Load dealer results
       const dealerId = normalizeId(dealer.id);
       console.log('Loading dealer data for ID:', dealerId, 'Dealer object:', dealer);
-      const res = await api.get(`/results?dealer_id=${encodeURIComponent(dealerId)}&minimal=true`);
+      const res = await api.get(`/results?dealer_id=${encodeURIComponent(dealerId)}&limit=1000&minimal=true`);
       const resData = res.data;
       // Normalize: API may return array or { results: [...] }
       const results = Array.isArray(resData) ? resData : (resData?.results || []);
@@ -2224,14 +2224,14 @@ const DealerDetailDialog = ({ open, onClose, dealer }) => {
       const avgAudio = results.reduce((sum, r) => sum + (r.audio_analysis?.score || r.audio_quality_score || 0), 0) / (results.length || 1);
       const avgOverall = results.reduce((sum, r) => sum + (r.overall_quality?.overall_score || r.overall_quality_score || 0), 0) / (results.length || 1);
 
-      console.log('Computed averages:', { avgVideo, avgAudio, avgOverall, totalVideos: results.length });
+      console.log('Computed averages:', { avgVideo, avgAudio, avgOverall, totalVideos: resData?.total ?? results.length });
 
       setDashboardData({
         qualityDistribution,
         scoreTrend,
         serviceAdvisorRankings,
         averageScores: { video: avgVideo, audio: avgAudio, overall: avgOverall },
-        totalVideos: results.length
+        totalVideos: resData?.total ?? results.length
       });
     } catch (error) {
       console.error('Error loading dealer data:', error);

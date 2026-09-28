@@ -867,8 +867,13 @@ export default function DealerManagement() {
     setPage(0);
     setUserPage(0);
 
+    const preUsers = (users || []).filter(u => normalizeId(u.dealer_id) === did);
+    if (preUsers.length > 0) {
+      setDealerUsers(preUsers);
+    }
+
     try {
-      const res = await api.get(`/results?dealer_id=${encodeURIComponent(did)}`);
+      const res = await api.get(`/results?dealer_id=${encodeURIComponent(did)}&limit=1000`);
       const resData = res.data;
       // Normalize: API may return array or { results: [...] }
       const results = Array.isArray(resData) ? resData : (resData?.results || []);
@@ -887,12 +892,17 @@ export default function DealerManagement() {
       setDashboardData({
         qualityDistribution, scoreTrend, serviceAdvisorRankings,
         averageScores: { video: avgVideo, audio: avgAudio, overall: avgOverall },
-        totalVideos: results.length
+        totalVideos: resData?.total ?? results.length
       });
 
-      // Fetch dealer users and their stats
-      const dealerUsersData = await listDealerUsers(did);
-      setDealerUsers(dealerUsersData);
+      // Fetch dealer users and their stats with local fallback
+      try {
+        const dealerUsersData = await listDealerUsers(did);
+        setDealerUsers(Array.isArray(dealerUsersData) && dealerUsersData.length > 0 ? dealerUsersData : preUsers);
+      } catch (userErr) {
+        console.warn('Could not fetch dealer users via API, using fallback:', userErr);
+        if (preUsers.length > 0) setDealerUsers(preUsers);
+      }
 
       // Fetch video counts for each user
       await fetchUserStats(did);
@@ -900,7 +910,8 @@ export default function DealerManagement() {
     } catch (error) {
       console.error('Error loading dealer data:', error);
       setDealerResults([]);
-      setDealerUsers([]);
+      if (preUsers.length > 0) setDealerUsers(preUsers);
+      else setDealerUsers([]);
     } finally {
       setLoadingResults(false);
     }
