@@ -407,6 +407,22 @@ export default function Results() {
     };
   }, [page, rowsPerPage, searchTerm, dateRange, dealershipFilter, refreshCounter]);
 
+  // Auto-open target result modal if navigated from completion notification (?id=...)
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const targetId = urlParams.get('id');
+    if (targetId) {
+      api.get(`/results/${targetId}`)
+        .then(res => {
+          if (res.data) {
+            setSelectedResult(res.data);
+            setDialogOpen(true);
+          }
+        })
+        .catch(err => console.warn('Could not auto-open target result:', err));
+    }
+  }, []);
+
 
   const handleViewDetails = (result) => {
     setSelectedResult(result);

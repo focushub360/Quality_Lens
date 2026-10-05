@@ -1,11 +1,17 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import api from '../services/api';
+import {
+    playCompletionChime,
+    triggerDesktopNotification,
+    requestBrowserNotificationPermission
+} from '../utils/notificationSound';
 
 const TaskContext = createContext();
 
 export function TaskProvider({ children }) {
     const [tasks, setTasks] = useState([]);
     const [isPolling, setIsPolling] = useState(false);
+    const [completionAlert, setCompletionAlert] = useState(null);
 
     // Load tasks from localStorage on mount (optional persistence)
     useEffect(() => {
@@ -29,6 +35,9 @@ export function TaskProvider({ children }) {
     }, [tasks]);
 
     const addTask = useCallback((task) => {
+        // Request desktop notification permission when user starts a task
+        requestBrowserNotificationPermission();
+
         setTasks(prev => {
             // Avoid duplicates
             if (prev.find(t => t.task_id === task.task_id)) return prev;
@@ -44,6 +53,10 @@ export function TaskProvider({ children }) {
 
     const removeTask = useCallback((taskId) => {
         setTasks(prev => prev.filter(t => t.task_id !== taskId));
+    }, []);
+
+    const dismissCompletionAlert = useCallback(() => {
+        setCompletionAlert(null);
     }, []);
 
     // Polling logic
@@ -66,6 +79,48 @@ export function TaskProvider({ children }) {
 
                     const res = await api.get(endpoint);
                     const data = res.data;
+
+                    // Detect completion transition
+                    if (data.status === 'completed' && task.status !== 'completed') {
+                        // Play gentle audio chime
+                        playCompletionChime();
+
+                        // Fire native desktop browser notification
+                        triggerDesktopNotification('QualityLens: Optimization Completed! 🎉', {
+                            body: task.type === 'bulk'
+                                ? 'Your bulk video batch has finished analyzing. Click to view results.'
+                                : 'Your video analysis is complete. Click to return and view results.',
+                            onClick: () => {
+                                window.focus();
+                                const url = data.result_id ? `/dealer/results?id=${data.result_id}` : '/dealer/results';
+                                if (window.location.pathname !== url) {
+                                    window.location.href = url;
+                                }
+                            }
+                        });
+
+                        // Set in-app floating pop-up
+                        setCompletionAlert({
+                            taskId: task.task_id,
+                            resultId: data.result_id,
+                            type: task.type || 'analysis',
+                            title: task.type === 'bulk' ? 'Bulk Optimization Completed!' : 'Video Optimization Completed!',
+                            message: task.type === 'bulk'
+                                ? 'All videos in your bulk batch have been analyzed and scored.'
+                                : 'Quality assessment, audio clarity, and transcriptions are ready.',
+                            status: 'completed',
+                            timestamp: Date.now()
+                        });
+                    } else if (data.status === 'failed' && task.status !== 'failed') {
+                        setCompletionAlert({
+                            taskId: task.task_id,
+                            type: task.type || 'analysis',
+                            title: 'Analysis Could Not Be Completed',
+                            message: data.error_message || data.message || 'The video link failed to process.',
+                            status: 'failed',
+                            timestamp: Date.now()
+                        });
+                    }
 
                     // Always update — don't wait just for status changes
                     updateTask(task.task_id, {
@@ -102,7 +157,14 @@ export function TaskProvider({ children }) {
     }, [tasks, updateTask]);
 
     return (
-        <TaskContext.Provider value={{ tasks, addTask, updateTask, removeTask }}>
+        <TaskContext.Provider value={{
+            tasks,
+            addTask,
+            updateTask,
+            removeTask,
+            completionAlert,
+            dismissCompletionAlert
+        }}>
             {children}
         </TaskContext.Provider>
     );

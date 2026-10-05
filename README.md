@@ -96,6 +96,8 @@ docker compose -f docker-compose.yml up --build
 - *Access: Dealership-specific performance analytics, team management, dealer Excel import, and configurations.*
 
 ### 👤 Service Advisor (Dealer User)
+- **Username:** `vicky` *(Password: `vicky2526`)*
+- **Dealership:** `EMINENT CARS PRIVATE LIMITED`
 - *Access: Video uploads, individual analysis results, and advisor performance tracking.*
 
 ---

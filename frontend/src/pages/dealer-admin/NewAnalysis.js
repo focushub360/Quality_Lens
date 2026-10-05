@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useTasks } from '../../contexts/TaskContext';
+import { useAuth } from '../../contexts/AuthContext';
 import {
   Card, CardContent, Grid, TextField, MenuItem, Button, Typography, Alert,
   Box, Chip, Paper, Tooltip, Container, CircularProgress
 } from '@mui/material';
 import {
   PlayArrow, Check, Error, Schedule, Refresh,
-  Language, Translate, Add, VideoCameraBack, HelpOutline
+  Language, Translate, Add, VideoCameraBack, HelpOutline, Business
 } from '@mui/icons-material';
 import api from '../../services/api';
 
@@ -103,6 +104,22 @@ export default function NewAnalysis() {
   const [currentTaskId, setCurrentTaskId] = useState(null);
   const [progressPct, setProgressPct] = useState(0);
   const [resultData, setResultData] = useState(null);
+  const { user, role } = useAuth();
+  const [dealersList, setDealersList] = useState([]);
+  const [selectedDealer, setSelectedDealer] = useState('');
+
+  // Super Admin: Fetch registered dealerships list
+  useEffect(() => {
+    if (role === 'super_admin') {
+      api.get('/dashboard/super-admin/overview')
+        .then(res => {
+          const rawDealers = res.data?.dealers_data || [];
+          const names = rawDealers.map(d => d.dealer_name || d.dealer_id).filter(Boolean);
+          setDealersList(Array.from(new Set(names)));
+        })
+        .catch(err => console.warn('Could not fetch dealers list for super admin:', err));
+    }
+  }, [role]);
 
   // Derived state: find the task in global context
   const currentTask = tasks.find(t => t.task_id === currentTaskId) || null;
@@ -150,11 +167,16 @@ export default function NewAnalysis() {
     setCurrentTaskId(null);
 
     try {
-      const res = await api.post('/analyze', {
-        citnow_url: url,
+      const payload = {
+        citnow_url: url.trim(),
         transcription_language: lang,
         target_language: target
-      });
+      };
+      if (role === 'super_admin' && selectedDealer) {
+        payload.dealer_id = selectedDealer;
+      }
+
+      const res = await api.post('/analyze', payload);
 
       const newTaskId = res.data.task_id;
       if (!newTaskId) {
@@ -260,6 +282,234 @@ export default function NewAnalysis() {
                 </Alert>
               )}
 
+              {/* ─── Video Submission Form (Top) ─── */}
+              <form onSubmit={submit}>
+                <Grid container spacing={2.5} sx={{ mb: currentTask || resultData ? 4 : 0 }}>
+                  <Grid item xs={12}>
+                    <TextField
+                      fullWidth
+                      label={
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <VideoCameraBack sx={{ color: THEME.textSecondary, fontSize: 20 }} />
+                          <span>QualityLens Video URL</span>
+                        </Box>
+                      }
+                      value={url}
+                      onChange={(e) => setUrl(e.target.value)}
+                      required
+                      disabled={localLoading || (currentTask && ['pending', 'processing'].includes(currentTask.status))}
+                      placeholder="e.g. https://southasia.citnow.com/..."
+                      helperText="Enter the full URL of your video for analysis"
+                      sx={{
+                        '& .MuiOutlinedInput-root': {
+                          borderRadius: 2,
+                          backgroundColor: THEME.surface,
+                          transition: 'all 0.2s ease',
+                          '& fieldset': { borderColor: THEME.border },
+                          '&:hover fieldset': { borderColor: THEME.primaryLight },
+                          '&.Mui-focused fieldset': {
+                            borderColor: THEME.primary,
+                            borderWidth: '2px'
+                          },
+                          '&.Mui-focused': {
+                            backgroundColor: '#fff',
+                            boxShadow: '0 4px 12px rgba(28, 63, 170, 0.08)'
+                          }
+                        }
+                      }}
+                    />
+                  </Grid>
+
+                  {role === 'super_admin' && (
+                    <Grid item xs={12}>
+                      <TextField
+                        fullWidth
+                        select
+                        label={
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Business sx={{ color: THEME.primary, fontSize: 20 }} />
+                            <span>Target Dealership (Super Admin Multi-Dealer Optimization)</span>
+                          </Box>
+                        }
+                        value={selectedDealer}
+                        onChange={(e) => setSelectedDealer(e.target.value)}
+                        disabled={localLoading || (currentTask && ['pending', 'processing'].includes(currentTask.status))}
+                        helperText="Assign this video to a specific dealership, or leave as Auto-Detect to read dealership from CitNow metadata"
+                        sx={{
+                          '& .MuiOutlinedInput-root': {
+                            borderRadius: 2,
+                            backgroundColor: THEME.surface,
+                            transition: 'all 0.2s ease',
+                            '& fieldset': { borderColor: THEME.border },
+                            '&:hover fieldset': { borderColor: THEME.primaryLight },
+                            '&.Mui-focused fieldset': {
+                              borderColor: THEME.primary,
+                              borderWidth: '2px'
+                            },
+                            '&.Mui-focused': {
+                              backgroundColor: '#fff',
+                              boxShadow: '0 4px 12px rgba(28, 63, 170, 0.08)'
+                            }
+                          }
+                        }}
+                      >
+                        <MenuItem value="">
+                          <em>Auto-Detect Dealership from Video URL (Recommended)</em>
+                        </MenuItem>
+                        {dealersList.map((d) => (
+                          <MenuItem key={d} value={d}>
+                            {d}
+                          </MenuItem>
+                        ))}
+                      </TextField>
+                    </Grid>
+                  )}
+
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      fullWidth
+                      select
+                      label={
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Language sx={{ color: THEME.textSecondary, fontSize: 20 }} />
+                          <span>Spoken Language</span>
+                        </Box>
+                      }
+                      value={lang}
+                      onChange={(e) => setLang(e.target.value)}
+                      disabled={localLoading || (currentTask && ['pending', 'processing'].includes(currentTask.status))}
+                      sx={{
+                        '& .MuiOutlinedInput-root': {
+                          borderRadius: 2,
+                          backgroundColor: THEME.surface,
+                          transition: 'all 0.2s ease',
+                          '& fieldset': { borderColor: THEME.border },
+                          '&:hover fieldset': { borderColor: THEME.primaryLight },
+                          '&.Mui-focused fieldset': {
+                            borderColor: THEME.primary,
+                            borderWidth: '2px'
+                          },
+                          '&.Mui-focused': {
+                            backgroundColor: '#fff',
+                            boxShadow: '0 4px 12px rgba(28, 63, 170, 0.08)'
+                          }
+                        }
+                      }}
+                    >
+                      {LANGS.map(l => (
+                        <MenuItem key={l.code} value={l.code}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                            <Typography variant="body1">{l.icon}</Typography>
+                            <Typography>{l.name}</Typography>
+                          </Box>
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                  </Grid>
+
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      fullWidth
+                      select
+                      label={
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Translate sx={{ color: THEME.textSecondary, fontSize: 20 }} />
+                          <span>Target Language</span>
+                        </Box>
+                      }
+                      value={target}
+                      onChange={(e) => setTarget(e.target.value)}
+                      disabled={localLoading || (currentTask && ['pending', 'processing'].includes(currentTask.status))}
+                      sx={{
+                        '& .MuiOutlinedInput-root': {
+                          borderRadius: 2,
+                          backgroundColor: THEME.surface,
+                          transition: 'all 0.2s ease',
+                          '& fieldset': { borderColor: THEME.border },
+                          '&:hover fieldset': { borderColor: THEME.primaryLight },
+                          '&.Mui-focused fieldset': {
+                            borderColor: THEME.primary,
+                            borderWidth: '2px'
+                          },
+                          '&.Mui-focused': {
+                            backgroundColor: '#fff',
+                            boxShadow: '0 4px 12px rgba(28, 63, 170, 0.08)'
+                          }
+                        }
+                      }}
+                    >
+                      {LANGS.filter(l => l.code !== 'auto').map(l => (
+                        <MenuItem key={l.code} value={l.code}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                            <Typography variant="body1">{l.icon}</Typography>
+                            <Typography>{l.name}</Typography>
+                          </Box>
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                  </Grid>
+
+                  <Grid item xs={12}>
+                    <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
+                      <Button
+                        type="submit"
+                        variant="contained"
+                        disabled={localLoading || (currentTask && ['pending', 'processing'].includes(currentTask.status))}
+                        startIcon={<PlayArrow />}
+                        sx={{
+                          background: THEME.gradientPrimary,
+                          borderRadius: 3,
+                          px: 5,
+                          py: 1.5,
+                          fontWeight: 700,
+                          textTransform: 'none',
+                          fontSize: '1rem',
+                          boxShadow: '0 8px 20px -6px rgba(28, 105, 212, 0.5)',
+                          '&:hover': {
+                            boxShadow: '0 12px 25px -6px rgba(28, 105, 212, 0.6)',
+                            transform: 'translateY(-2px)'
+                          },
+                          '&:disabled': {
+                            background: THEME.textTertiary,
+                            transform: 'none',
+                            boxShadow: 'none'
+                          },
+                          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                          minWidth: 160
+                        }}
+                      >
+                        {localLoading ? 'Starting Analysis...' : 'Start Analysis'}
+                      </Button>
+
+                      {(resultData || (currentTask && (currentTask.status === 'completed' || currentTask.status === 'failed'))) && (
+                        <Button
+                          variant="outlined"
+                          onClick={resetForm}
+                          startIcon={<Add />}
+                          sx={{
+                            borderRadius: 3,
+                            px: 3.5,
+                            py: 1.4,
+                            fontWeight: 600,
+                            textTransform: 'none',
+                            fontSize: '0.95rem',
+                            borderColor: THEME.primary,
+                            color: THEME.primary,
+                            '&:hover': {
+                              backgroundColor: THEME.primaryUltraLight,
+                              borderColor: THEME.primaryDark
+                            }
+                          }}
+                        >
+                          New Analysis
+                        </Button>
+                      )}
+                    </Box>
+                  </Grid>
+                </Grid>
+              </form>
+
+              {/* ─── Task Status & Progress ─── */}
               {currentTask && (
                 <Paper
                   elevation={0}
@@ -314,28 +564,26 @@ export default function NewAnalysis() {
                       justifyContent: 'center',
                       py: 5, 
                       mb: 2,
-                      background: '#0a0a0a', // Deep black like the reference
+                      background: '#0a0a0a',
                       borderRadius: 4,
                       boxShadow: '0 10px 30px rgba(0,0,0,0.3)',
                       border: '1px solid #222'
                     }}>
                       <Box sx={{ position: 'relative', display: 'inline-flex', mb: 3 }}>
-                        {/* Background Circle */}
                         <CircularProgress
                           variant="determinate"
                           value={100}
                           size={130}
                           thickness={4}
-                          sx={{ color: '#222' }} // Dark track
+                          sx={{ color: '#222' }}
                         />
-                        {/* Progress Circle (Lime Green like reference) */}
                         <CircularProgress
                           variant="determinate"
                           value={progressPct}
                           size={130}
                           thickness={5}
                           sx={{
-                            color: '#A3E635', // Lime green
+                            color: '#A3E635',
                             position: 'absolute',
                             left: 0,
                             '& .MuiCircularProgress-circle': {
@@ -360,7 +608,7 @@ export default function NewAnalysis() {
                           <Typography variant="h3" component="div" fontWeight="800" sx={{ 
                             color: '#FFFFFF', 
                             letterSpacing: '-1px',
-                            fontFamily: '"Orbitron", "Roboto", sans-serif' // Futuristic font feel
+                            fontFamily: '"Orbitron", "Roboto", sans-serif'
                           }}>
                             {Math.round(progressPct)}<Box component="span" sx={{ fontSize: '1.5rem', ml: 0.5 }}>%</Box>
                           </Typography>
@@ -376,7 +624,6 @@ export default function NewAnalysis() {
                       }}>
                         {currentTask.message || "ANALYZING VIDEO CONTENT"}
                       </Typography>
-                      {/* Sub-text pulse animation hint */}
                       <Box sx={{ 
                         mt: 1, 
                         width: '40px', 
@@ -493,13 +740,39 @@ export default function NewAnalysis() {
 
               {/* ─── Inline Result Display ─── */}
               {resultData && (
-                <Box sx={{ mt: 3 }}>
-                  <Typography variant="h6" fontWeight="700" sx={{
-                    color: THEME.textPrimary, mb: 2,
-                    display: 'flex', alignItems: 'center', gap: 1
-                  }}>
-                    <Check sx={{ color: THEME.success }} /> Analysis Result
-                  </Typography>
+                <Box sx={{ mt: 3, pt: 3, borderTop: `1.5px dashed ${THEME.border}` }}>
+                  {/* Result Header with Badges */}
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1.5, mb: 2.5 }}>
+                    <Typography variant="h6" fontWeight="700" sx={{
+                      color: THEME.textPrimary,
+                      display: 'flex', alignItems: 'center', gap: 1
+                    }}>
+                      <Check sx={{ color: THEME.success }} /> Analysis Result
+                    </Typography>
+
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      {resultData.overall_quality?.overall_label && (
+                        <Chip
+                          label={`Quality: ${resultData.overall_quality.overall_label}`}
+                          size="small"
+                          sx={{
+                            fontWeight: 700,
+                            background: THEME.primaryUltraLight,
+                            color: THEME.primary,
+                            borderRadius: 1.5
+                          }}
+                        />
+                      )}
+                      {resultData.citnow_metadata?.service_advisor && (
+                        <Chip
+                          label={`Advisor: ${resultData.citnow_metadata.service_advisor}`}
+                          size="small"
+                          variant="outlined"
+                          sx={{ fontWeight: 600, borderRadius: 1.5 }}
+                        />
+                      )}
+                    </Box>
+                  </Box>
 
                   {/* Score Cards */}
                   <Grid container spacing={2} sx={{ mb: 3 }}>
@@ -609,9 +882,10 @@ export default function NewAnalysis() {
                   {/* Vehicle & Case Details */}
                   {resultData.citnow_metadata && (() => {
                     const m = resultData.citnow_metadata;
+                    const vehicleName = m.vehicle && m.vehicle !== m.registration ? m.vehicle : (m.brand ? `${m.brand} Vehicle` : null);
                     const details = [
-                      { label: '🚗 Vehicle', value: m.vehicle || m.registration || m.reg_no || m.vehicle_number || '—' },
-                      { label: '🔖 Registration', value: m.registration || m.reg_no || '—' },
+                      ...(vehicleName ? [{ label: '🚗 Vehicle', value: vehicleName }] : []),
+                      { label: '🔖 Registration', value: m.registration || m.reg_no || m.vehicle || '—' },
                       { label: '🔢 VIN', value: m.vin || '—' },
                       { label: '🏢 Dealership', value: m.dealership || '—' },
                       { label: '👤 Service Advisor', value: m.service_advisor || '—' },
@@ -688,8 +962,6 @@ export default function NewAnalysis() {
                     );
                   })()}
 
-
-
                   {/* Summary */}
                   {(() => {
                     const GARBAGE = ['the', 'a', ',', '.', '!', '?', '...', ',.']
@@ -700,8 +972,10 @@ export default function NewAnalysis() {
                     ]
                     const rawSummary = resultData.summarization?.summary || ''
                     const isHallucinated = GARBAGE_PHRASES.some(p => rawSummary.toLowerCase().includes(p))
-                    const txt = isHallucinated ? 'No verbal speech or audio narrative was identified in the recording, indicating a purely visual inspection walkaround.' : rawSummary
-                    const isValid = txt && txt.trim().length >= 10 && !GARBAGE.includes(txt.trim().toLowerCase())
+                    let txt = isHallucinated ? 'No verbal speech or audio narrative was identified in the recording, indicating a purely visual inspection walkaround.' : rawSummary
+                    // Sanitize any stray percentage artifacts (e.g. "0.0%")
+                    txt = txt.replace(/\s*\b\d+(\.\d+)?%\s*/g, ' ').replace(/\s{2,}/g, ' ').trim()
+                    const isValid = txt && txt.length >= 10 && !GARBAGE.includes(txt.toLowerCase())
 
                     return isValid ? (
                       <Paper elevation={0} sx={{
@@ -728,7 +1002,9 @@ export default function NewAnalysis() {
                       'it\'s not made because i hate it', 'thank you for watching', 'subtitles by'
                     ]
                     const rawText = resultData.transcription?.text || ''
-                    const isGarbage = GARBAGE.includes(rawText.trim().toLowerCase()) || GARBAGE_PHRASES.some(p => rawText.trim().toLowerCase().includes(p))
+                    // Check if repeating hallucination pattern
+                    const isRepeating = /(..+?)\1{4,}/.test(rawText)
+                    const isGarbage = isRepeating || GARBAGE.includes(rawText.trim().toLowerCase()) || GARBAGE_PHRASES.some(p => rawText.trim().toLowerCase().includes(p))
                     const hasSpeech = rawText.trim().length >= 5 && !isGarbage
                     const spokenLang = resultData.transcription?.language || resultData.transcription_language || 'Auto'
 
@@ -736,7 +1012,10 @@ export default function NewAnalysis() {
                       <Paper elevation={0} sx={{
                         p: 2.5, mb: 2, borderRadius: 2,
                         border: `1px solid ${THEME.border}`,
-                        background: THEME.surface
+                        background: THEME.surface,
+                        overflow: 'hidden',
+                        wordBreak: 'break-word',
+                        overflowWrap: 'anywhere'
                       }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
                           <Typography variant="subtitle2" fontWeight="700" sx={{ color: THEME.textPrimary, display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -755,13 +1034,18 @@ export default function NewAnalysis() {
                           />
                         </Box>
                         {hasSpeech ? (
-                          <Typography variant="body2" sx={{ color: THEME.textPrimary, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
+                          <Typography variant="body2" sx={{ color: THEME.textPrimary, lineHeight: 1.7, whiteSpace: 'pre-wrap', wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
                             {rawText}
                           </Typography>
                         ) : (
-                          <Typography variant="body2" sx={{ color: THEME.textTertiary, fontStyle: 'italic', lineHeight: 1.7 }}>
-                            No verbal speech detected in audio recording (purely visual inspection walkaround).
-                          </Typography>
+                          <Box sx={{ p: 2, background: '#F8FAFC', borderRadius: 2, border: `1px dashed ${THEME.border}` }}>
+                            <Typography variant="body2" sx={{ color: THEME.textSecondary, fontWeight: 600 }}>
+                              🔇 Silent Walkaround Inspection
+                            </Typography>
+                            <Typography variant="caption" sx={{ color: THEME.textTertiary, mt: 0.5, display: 'block', lineHeight: 1.5 }}>
+                              No technician speech or audio narrative was identified in this recording (purely visual walkaround). CitNow videos with verbal speech will transcribe automatically here.
+                            </Typography>
+                          </Box>
                         )}
                       </Paper>
                     );
@@ -776,8 +1060,9 @@ export default function NewAnalysis() {
                       'it\'s not made because i hate it', 'thank you for watching', 'subtitles by'
                     ]
                     const rawTranslation = resultData.translation?.translated_text || ''
+                    const isRepeating = /(..+?)\1{4,}/.test(rawTranslation)
                     const isVisualSummary = rawTranslation.includes('documents a walkaround') || rawTranslation.includes('visual inspection walkaround') || rawTranslation.includes('The lighting is clean')
-                    const isGarbage = GARBAGE.includes(rawTranslation.trim().toLowerCase()) || GARBAGE_PHRASES.some(p => rawTranslation.trim().toLowerCase().includes(p)) || isVisualSummary
+                    const isGarbage = isRepeating || GARBAGE.includes(rawTranslation.trim().toLowerCase()) || GARBAGE_PHRASES.some(p => rawTranslation.trim().toLowerCase().includes(p)) || isVisualSummary
                     const hasTranslation = rawTranslation.trim().length >= 3 && !isGarbage && resultData.translation?.status !== 'no_speech' && resultData.translation?.status !== 'visual_fallback'
                     const targetLang = resultData.translation?.target_language || resultData.target_language_used || 'EN'
 
@@ -785,7 +1070,10 @@ export default function NewAnalysis() {
                       <Paper elevation={0} sx={{
                         p: 2.5, mb: 2, borderRadius: 2,
                         border: `1px solid ${THEME.border}`,
-                        background: THEME.surface
+                        background: THEME.surface,
+                        overflow: 'hidden',
+                        wordBreak: 'break-word',
+                        overflowWrap: 'anywhere'
                       }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
                           <Typography variant="subtitle2" fontWeight="700" sx={{ color: THEME.textPrimary, display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -804,220 +1092,24 @@ export default function NewAnalysis() {
                           />
                         </Box>
                         {hasTranslation ? (
-                          <Typography variant="body2" sx={{ color: THEME.textPrimary, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
+                          <Typography variant="body2" sx={{ color: THEME.textPrimary, lineHeight: 1.7, whiteSpace: 'pre-wrap', wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
                             {rawTranslation}
                           </Typography>
                         ) : (
-                          <Typography variant="body2" sx={{ color: THEME.textTertiary, fontStyle: 'italic', lineHeight: 1.7 }}>
-                            No verbal speech in video to translate.
-                          </Typography>
+                          <Box sx={{ p: 2, background: '#F8FAFC', borderRadius: 2, border: `1px dashed ${THEME.border}` }}>
+                            <Typography variant="body2" sx={{ color: THEME.textSecondary, fontWeight: 600 }}>
+                              🌐 No Speech to Translate
+                            </Typography>
+                            <Typography variant="caption" sx={{ color: THEME.textTertiary, mt: 0.5, display: 'block', lineHeight: 1.5 }}>
+                              Since this is a visual inspection walkaround without spoken audio, translation is not required.
+                            </Typography>
+                          </Box>
                         )}
                       </Paper>
                     );
                   })()}
-
-                  {/* Overall Label / Quality */}
-                  {resultData.overall_quality?.overall_label && (
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-                      <Chip
-                        label={`Quality: ${resultData.overall_quality.overall_label}`}
-                        sx={{
-                          fontWeight: 700,
-                          background: THEME.primaryUltraLight,
-                          color: THEME.primary
-                        }}
-                      />
-                      {resultData.citnow_metadata?.service_advisor && (
-                        <Chip
-                          label={`Advisor: ${resultData.citnow_metadata.service_advisor}`}
-                          variant="outlined"
-                          sx={{ fontWeight: 600 }}
-                        />
-                      )}
-                    </Box>
-                  )}
                 </Box>
               )}
-
-              <form onSubmit={submit}>
-                <Grid container spacing={3}>
-                  <Grid item xs={12}>
-                    <TextField
-                      fullWidth
-                      label={
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <VideoCameraBack sx={{ color: THEME.textSecondary, fontSize: 20 }} />
-                          <span>QualityLens Video URL</span>
-                        </Box>
-                      }
-                      value={url}
-                      onChange={(e) => setUrl(e.target.value)}
-                      required
-                      disabled={localLoading || (currentTask && ['pending', 'processing'].includes(currentTask.status))}
-                      helperText="Enter the full URL of your video for analysis"
-                      sx={{
-                        '& .MuiOutlinedInput-root': {
-                          borderRadius: 2,
-                          backgroundColor: THEME.surface,
-                          transition: 'all 0.2s ease',
-                          '& fieldset': { borderColor: THEME.border },
-                          '&:hover fieldset': { borderColor: THEME.primaryLight },
-                          '&.Mui-focused fieldset': {
-                            borderColor: THEME.primary,
-                            borderWidth: '2px'
-                          },
-                          '&.Mui-focused': {
-                            backgroundColor: '#fff',
-                            boxShadow: '0 4px 12px rgba(28, 63, 170, 0.08)'
-                          }
-                        }
-                      }}
-                    />
-                  </Grid>
-
-                  <Grid item xs={12} md={6}>
-                    <TextField
-                      fullWidth
-                      select
-                      label={
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Language sx={{ color: THEME.textSecondary, fontSize: 20 }} />
-                          <span>Spoken Language</span>
-                        </Box>
-                      }
-                      value={lang}
-                      onChange={(e) => setLang(e.target.value)}
-                      disabled={localLoading || (currentTask && ['pending', 'processing'].includes(currentTask.status))}
-                      sx={{
-                        '& .MuiOutlinedInput-root': {
-                          borderRadius: 2,
-                          backgroundColor: THEME.surface,
-                          transition: 'all 0.2s ease',
-                          '& fieldset': { borderColor: THEME.border },
-                          '&:hover fieldset': { borderColor: THEME.primaryLight },
-                          '&.Mui-focused fieldset': {
-                            borderColor: THEME.primary,
-                            borderWidth: '2px'
-                          },
-                          '&.Mui-focused': {
-                            backgroundColor: '#fff',
-                            boxShadow: '0 4px 12px rgba(28, 63, 170, 0.08)'
-                          }
-                        }
-                      }}
-                    >
-                      {LANGS.map(l => (
-                        <MenuItem key={l.code} value={l.code}>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                            <Typography variant="body1">{l.icon}</Typography>
-                            <Typography>{l.name}</Typography>
-                          </Box>
-                        </MenuItem>
-                      ))}
-                    </TextField>
-                  </Grid>
-
-                  <Grid item xs={12} md={6}>
-                    <TextField
-                      fullWidth
-                      select
-                      label={
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Translate sx={{ color: THEME.textSecondary, fontSize: 20 }} />
-                          <span>Target Language</span>
-                        </Box>
-                      }
-                      value={target}
-                      onChange={(e) => setTarget(e.target.value)}
-                      disabled={localLoading || (currentTask && ['pending', 'processing'].includes(currentTask.status))}
-                      sx={{
-                        '& .MuiOutlinedInput-root': {
-                          borderRadius: 2,
-                          backgroundColor: THEME.surface,
-                          transition: 'all 0.2s ease',
-                          '& fieldset': { borderColor: THEME.border },
-                          '&:hover fieldset': { borderColor: THEME.primaryLight },
-                          '&.Mui-focused fieldset': {
-                            borderColor: THEME.primary,
-                            borderWidth: '2px'
-                          },
-                          '&.Mui-focused': {
-                            backgroundColor: '#fff',
-                            boxShadow: '0 4px 12px rgba(28, 63, 170, 0.08)'
-                          }
-                        }
-                      }}
-                    >
-                      {LANGS.filter(l => l.code !== 'auto').map(l => (
-                        <MenuItem key={l.code} value={l.code}>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                            <Typography variant="body1">{l.icon}</Typography>
-                            <Typography>{l.name}</Typography>
-                          </Box>
-                        </MenuItem>
-                      ))}
-                    </TextField>
-                  </Grid>
-
-                  <Grid item xs={12}>
-                    <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
-                      <Button
-                        type="submit"
-                        variant="contained"
-                        disabled={localLoading || (currentTask && ['pending', 'processing'].includes(currentTask.status))}
-                        startIcon={<PlayArrow />}
-                        sx={{
-                          background: THEME.gradientPrimary,
-                          borderRadius: 3,
-                          px: 6,
-                          py: 1.8,
-                          fontWeight: 700,
-                          textTransform: 'none',
-                          fontSize: '1.05rem',
-                          boxShadow: '0 8px 20px -6px rgba(28, 105, 212, 0.5)',
-                          '&:hover': {
-                            boxShadow: '0 12px 25px -6px rgba(28, 105, 212, 0.6)',
-                            transform: 'translateY(-2px)'
-                          },
-                          '&:disabled': {
-                            background: THEME.textTertiary,
-                            transform: 'none',
-                            boxShadow: 'none'
-                          },
-                          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                          minWidth: 160
-                        }}
-                      >
-                        {localLoading ? 'Starting Analysis...' : 'Start Analysis'}
-                      </Button>
-
-                      {(currentTask && (currentTask.status === 'completed' || currentTask.status === 'failed')) && (
-                        <Button
-                          variant="outlined"
-                          onClick={resetForm}
-                          startIcon={<Add />}
-                          sx={{
-                            borderRadius: 3,
-                            px: 4,
-                            py: 1.5,
-                            fontWeight: 600,
-                            textTransform: 'none',
-                            fontSize: '16px',
-                            borderColor: THEME.primary,
-                            color: THEME.primary,
-                            '&:hover': {
-                              backgroundColor: THEME.primaryUltraLight,
-                              borderColor: THEME.primaryDark
-                            }
-                          }}
-                        >
-                          New Analysis
-                        </Button>
-                      )}
-                    </Box>
-                  </Grid>
-                </Grid>
-              </form>
               {/* Help section */}
               {!currentTask && (
                 <Paper

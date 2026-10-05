@@ -1,5 +1,5 @@
 // src/components/layout/Navbar.jsx
-import React, { useState, useContext } from 'react';
+import React, { useState, useContext, useEffect } from 'react';
 import {
   AppBar,
   Toolbar,
@@ -26,7 +26,9 @@ import {
   CircularProgress,
   Paper,
   Fade,
-  InputAdornment
+  InputAdornment,
+  Badge,
+  Popover
 } from '@mui/material';
 import {
   Menu as MenuIcon,
@@ -50,11 +52,15 @@ import {
   UploadFile,
   Group,
   Settings,
-  ManageAccounts
+  ManageAccounts,
+  NotificationsActive,
+  DoneAll,
+  DeleteOutline
 } from '@mui/icons-material';
 import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../../contexts/AuthContext';
 import { useTasks } from '../../contexts/TaskContext';
+import api from '../../services/api';
 
 // QualityLens Branding Theme Colors
 const THEME = {
@@ -128,6 +134,56 @@ export default function Navbar() {
 
   const [userAnchor, setUserAnchor] = useState(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [notifAnchor, setNotifAnchor] = useState(null);
+
+  const fetchNotifications = async () => {
+    if (role !== 'super_admin') return;
+    try {
+      const res = await api.get('/admin/notifications?limit=25');
+      setNotifications(res.data.notifications || []);
+      setUnreadCount(res.data.unread_count || 0);
+    } catch (err) {
+      console.warn('Could not fetch notifications:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (role === 'super_admin') {
+      fetchNotifications();
+      const interval = setInterval(fetchNotifications, 12000);
+      return () => clearInterval(interval);
+    }
+  }, [role]);
+
+  const handleOpenNotifs = (e) => {
+    setNotifAnchor(e.currentTarget);
+    fetchNotifications();
+  };
+
+  const handleCloseNotifs = () => setNotifAnchor(null);
+
+  const handleMarkAllRead = async () => {
+    try {
+      await api.post('/admin/notifications/mark-all-read');
+      setUnreadCount(0);
+      setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+    } catch (err) {
+      console.warn('Failed to mark all read:', err);
+    }
+  };
+
+  const handleDeleteNotif = async (id, e) => {
+    if (e) e.stopPropagation();
+    try {
+      await api.delete(`/admin/notifications/${id}`);
+      setNotifications(prev => prev.filter(n => n.id !== id));
+      setUnreadCount(prev => Math.max(0, prev - 1));
+    } catch (err) {
+      console.warn('Failed to delete notification:', err);
+    }
+  };
 
   const toggleDrawer = () => setDrawerOpen(!drawerOpen);
   const openUserMenu = (e) => setUserAnchor(e.currentTarget);
@@ -295,6 +351,162 @@ export default function Navbar() {
                 }}
                 onClick={() => navigate((role === 'dealer_admin' || role === 'branch_admin') ? '/dealer/new' : '/dealer/dashboard')}
               />
+            )}
+
+            {/* Super Admin Invalid Link Notifications */}
+            {role === 'super_admin' && (
+              <>
+                <Tooltip title="Invalid Link Alerts & Notifications">
+                  <IconButton
+                    onClick={handleOpenNotifs}
+                    sx={{
+                      p: 1,
+                      color: unreadCount > 0 ? '#EF4444' : THEME.textSecondary,
+                      '&:hover': { background: THEME.surface }
+                    }}
+                  >
+                    <Badge badgeContent={unreadCount} color="error" max={99}>
+                      <NotificationsActive sx={{ fontSize: 22 }} />
+                    </Badge>
+                  </IconButton>
+                </Tooltip>
+
+                <Popover
+                  open={Boolean(notifAnchor)}
+                  anchorEl={notifAnchor}
+                  onClose={handleCloseNotifs}
+                  anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                  transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+                  PaperProps={{
+                    sx: {
+                      width: 420,
+                      maxWidth: '92vw',
+                      maxHeight: 520,
+                      borderRadius: 3,
+                      boxShadow: '0 16px 40px rgba(0,0,0,0.18)',
+                      border: `1px solid ${THEME.border}`,
+                      overflow: 'hidden'
+                    }
+                  }}
+                >
+                  <Box sx={{
+                    p: 2,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    borderBottom: `1px solid ${THEME.borderLight}`,
+                    background: THEME.surface
+                  }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Typography variant="subtitle1" fontWeight="700" sx={{ color: THEME.textPrimary }}>
+                        🚨 Invalid Link Alerts
+                      </Typography>
+                      {unreadCount > 0 && (
+                        <Chip
+                          label={`${unreadCount} New`}
+                          size="small"
+                          color="error"
+                          sx={{ height: 20, fontSize: '0.7rem', fontWeight: 700 }}
+                        />
+                      )}
+                    </Box>
+                    {notifications.length > 0 && (
+                      <Button
+                        size="small"
+                        onClick={handleMarkAllRead}
+                        startIcon={<DoneAll sx={{ fontSize: 16 }} />}
+                        sx={{ fontSize: '0.75rem', textTransform: 'none', fontWeight: 600, color: THEME.primary }}
+                      >
+                        Mark all read
+                      </Button>
+                    )}
+                  </Box>
+
+                  <Box sx={{ maxHeight: 420, overflowY: 'auto', p: 1.5 }}>
+                    {notifications.length === 0 ? (
+                      <Box sx={{ py: 5, textAlign: 'center' }}>
+                        <Typography variant="h5" sx={{ mb: 1 }}>✅</Typography>
+                        <Typography variant="body2" fontWeight="600" sx={{ color: THEME.textPrimary }}>
+                          No Invalid Link Alerts
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: THEME.textTertiary }}>
+                          All advisor and dealer video submissions are healthy.
+                        </Typography>
+                      </Box>
+                    ) : (
+                      notifications.map((n) => (
+                        <Paper
+                          key={n.id}
+                          elevation={0}
+                          sx={{
+                            p: 2,
+                            mb: 1.5,
+                            borderRadius: 2,
+                            background: n.is_read ? THEME.surface : '#FFFBEB',
+                            border: `1px solid ${n.is_read ? THEME.borderLight : '#FDE68A'}`,
+                            position: 'relative'
+                          }}
+                        >
+                          <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 1 }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                              <Chip
+                                label={n.dealer_id || 'Unknown Dealership'}
+                                size="small"
+                                sx={{
+                                  height: 22,
+                                  fontSize: '0.72rem',
+                                  fontWeight: 700,
+                                  background: '#EFF6FF',
+                                  color: '#1D4ED8'
+                                }}
+                              />
+                              <Typography variant="caption" sx={{ color: THEME.textSecondary, fontWeight: 600 }}>
+                                By: {n.submitted_by_username} {n.submitted_by_role === 'dealer_user' ? '(Advisor)' : '(Manager)'}
+                              </Typography>
+                            </Box>
+                            <IconButton
+                              size="small"
+                              onClick={(e) => handleDeleteNotif(n.id, e)}
+                              sx={{ p: 0.5, color: THEME.textTertiary, '&:hover': { color: '#EF4444' } }}
+                            >
+                              <DeleteOutline sx={{ fontSize: 16 }} />
+                            </IconButton>
+                          </Box>
+
+                          <Box sx={{ p: 1.2, mb: 1, background: '#FEF2F2', borderRadius: 1.5, borderLeft: '3px solid #EF4444' }}>
+                            <Typography variant="caption" sx={{ color: '#B91C1C', fontWeight: 600, display: 'block' }}>
+                              ⚠️ Failure Reason:
+                            </Typography>
+                            <Typography variant="caption" sx={{ color: '#991B1B', display: 'block', mt: 0.2 }}>
+                              {n.error_reason || 'Video not found or link expired'}
+                            </Typography>
+                          </Box>
+
+                          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <Typography
+                              variant="caption"
+                              sx={{
+                                color: THEME.textTertiary,
+                                maxWidth: '240px',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                                fontFamily: 'monospace'
+                              }}
+                              title={n.url}
+                            >
+                              {n.url}
+                            </Typography>
+                            <Typography variant="caption" sx={{ color: THEME.textTertiary, fontSize: '0.68rem' }}>
+                              {n.created_at ? new Date(n.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                            </Typography>
+                          </Box>
+                        </Paper>
+                      ))
+                    )}
+                  </Box>
+                </Popover>
+              </>
             )}
 
             {/* Username + Role Label */}

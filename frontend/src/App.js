@@ -22,6 +22,7 @@ import ChangePassword from './pages/dealer-admin/ChangePassword';
 import SupportPage from './pages/SupportPage';
 import ThemeSettings from './pages/config/ThemeSettings';
 import CitNowUpgrades from './pages/CitNowUpgrades';
+import GlobalTaskNotification from './components/common/GlobalTaskNotification';
 
 export default function App() {
   return (
@@ -46,11 +47,15 @@ export default function App() {
               <Route path="/super-admin/dealers" element={<Layout><DealerManagement /></Layout>} />
             </Route>
 
-            <Route element={<ProtectedRoute roles={["dealer_admin", "dealer_user", "branch_admin"]} />}>
-              <Route path="/dealer/dashboard" element={<Layout><DealerDashboard /></Layout>} />
+            {/* Link Analysis & Optimization (Accessible to Super Admin & Dealer roles) */}
+            <Route element={<ProtectedRoute roles={["super_admin", "dealer_admin", "dealer_user", "branch_admin"]} />}>
               <Route path="/dealer/new" element={<Layout><NewAnalysis /></Layout>} />
               <Route path="/dealer/bulk" element={<Layout><BulkUpload /></Layout>} />
               <Route path="/dealer/results" element={<Layout><Results /></Layout>} />
+            </Route>
+
+            <Route element={<ProtectedRoute roles={["dealer_admin", "dealer_user", "branch_admin"]} />}>
+              <Route path="/dealer/dashboard" element={<Layout><DealerDashboard /></Layout>} />
               <Route path="/dealer/users" element={<Layout><DealerUsers /></Layout>} />
               <Route path="/support" element={<Layout><SupportPage /></Layout>} />
             </Route>
@@ -65,6 +70,7 @@ export default function App() {
             <Route path="/" element={<Navigate to="/login" replace />} />
             <Route path="*" element={<Navigate to="/login" replace />} />
           </Routes>
+          <GlobalTaskNotification />
         </TaskProvider>
       </ThemeSettingsProvider>
     </AuthProvider>

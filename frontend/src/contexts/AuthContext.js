@@ -4,6 +4,7 @@ import { setAuthToken, API_BASE } from '../services/api';
 import { updateUserProfile } from '../services/users';
 
 export const AuthContext = createContext(null);
+export const useAuth = () => React.useContext(AuthContext);
 
 // Removed local API_BASE definition to use the centralized one from api.js
 

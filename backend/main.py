@@ -259,6 +259,7 @@ class AnalysisRequest(BaseModel):
     citnow_url: str
     transcription_language: str = "auto"
     target_language: str = "en"
+    dealer_id: Optional[str] = None
 
 class AnalysisResponse(BaseModel):
     success: bool
@@ -388,10 +389,11 @@ excel_data_collection = None
 users_collection = None
 analysis_tasks_collection = None
 dealer_settings_collection = None
+notifications_collection = None
 
 async def connect_to_mongo():
     """Establishes MongoDB connection and assigns collections to global variables."""
-    global client, db, results_collection, batch_collection, excel_data_collection, users_collection, analysis_tasks_collection, dealer_settings_collection
+    global client, db, results_collection, batch_collection, excel_data_collection, users_collection, analysis_tasks_collection, dealer_settings_collection, notifications_collection
     try:
         client = AsyncIOMotorClient(MONGODB_URI)
         db = client[MONGODB_DB_NAME]
@@ -401,6 +403,7 @@ async def connect_to_mongo():
         users_collection = db["users"]
         analysis_tasks_collection = db["analysis_tasks"]
         dealer_settings_collection = db["dealer_settings"]
+        notifications_collection = db["admin_notifications"]
         logger.info("MongoDB connection established.")
     except Exception as e:
         logger.error(f"Failed to connect to MongoDB: {e}")
@@ -2109,6 +2112,64 @@ async def update_analysis_task(task_id: str, updates: Dict):
         {"$set": updates}
     )
 
+async def record_invalid_link_notification(
+    url: str,
+    error_reason: str,
+    user_id: Optional[str] = None,
+    dealer_id: Optional[str] = None,
+    task_id: Optional[str] = None,
+    source: str = "single_analysis"
+):
+    """Save an invalid or failed link notification for Super Admin"""
+    try:
+        if db is None:
+            return
+            
+        user_doc = None
+        if user_id:
+            try:
+                user_doc = await users_collection.find_one({"_id": ObjectId(user_id)})
+            except Exception:
+                pass
+        
+        username = user_doc.get("username", "Unknown User") if user_doc else "Unknown User"
+        email = user_doc.get("email", "") if user_doc else ""
+        role = user_doc.get("role", "dealer_user") if user_doc else "dealer_user"
+        dealership = dealer_id or (user_doc.get("dealer_id") if user_doc else "Unknown Dealership")
+        
+        # Format a clean, human-readable reason
+        clean_reason = error_reason
+        err_lower = str(error_reason).lower()
+        if "video not found on the page" in err_lower or "expired" in err_lower or "404" in err_lower:
+            clean_reason = "Video not found on page (CitNow link expired, returned 404, or is invalid)"
+        elif "invalid url format" in err_lower:
+            clean_reason = "Invalid URL format (must begin with http:// or https://)"
+        elif "no video url found in metadata" in err_lower:
+            clean_reason = "No playable video stream found on the provided CitNow link"
+        elif "empty results" in err_lower:
+            clean_reason = "Analysis pipeline returned empty results for this video"
+        
+        notification = {
+            "type": "invalid_link",
+            "severity": "warning",
+            "url": str(url),
+            "error_reason": clean_reason,
+            "raw_error": str(error_reason),
+            "submitted_by_user_id": user_id,
+            "submitted_by_username": username,
+            "submitted_by_email": email,
+            "submitted_by_role": role,
+            "dealer_id": dealership,
+            "task_id": task_id,
+            "source": source,
+            "is_read": False,
+            "created_at": dt.utcnow()
+        }
+        await db["admin_notifications"].insert_one(notification)
+        logger.info(f"Recorded invalid link alert for super admin from {username} ({dealership}): {clean_reason}")
+    except Exception as ex:
+        logger.warning(f"Failed to record invalid link alert: {ex}")
+
 async def process_single_analysis_task(
     task_id: str,
     citnow_url: str,
@@ -2176,6 +2237,16 @@ async def process_single_analysis_task(
         })
         
         logger.error(f"Analysis task {task_id} failed: {error_msg}")
+
+        # Notify Super Admin of the invalid or failed link
+        await record_invalid_link_notification(
+            url=citnow_url,
+            error_reason=error_msg,
+            user_id=submitted_by_user_id,
+            dealer_id=dealer_id,
+            task_id=task_id,
+            source="single_analysis"
+        )
 
 # Also add these cleanup functions:
 async def cleanup_expired_tasks():
@@ -2418,10 +2489,24 @@ async def _process_single_batch_url_item(
 
         if error:
             logger.error(f"Error in batch item {order}: {error}")
+            await record_invalid_link_notification(
+                url=url,
+                error_reason=f"Batch Row #{order}: {error}",
+                user_id=submitted_by_user_id,
+                dealer_id=dealer_id,
+                source="bulk_upload"
+            )
             return False
 
         if not processed_results:
             logger.error(f"Empty results for batch item {order}")
+            await record_invalid_link_notification(
+                url=url,
+                error_reason=f"Batch Row #{order}: Empty analysis results",
+                user_id=submitted_by_user_id,
+                dealer_id=dealer_id,
+                source="bulk_upload"
+            )
             return False
         
         # Add batch identifiers and target language
@@ -2752,25 +2837,43 @@ async def analyze_video_background(
     current_user: UserInDB = Depends(get_current_user)
 ):
     """Start analysis as background task"""
+    url = request.citnow_url.strip() if request.citnow_url else ""
+    effective_dealer_id = request.dealer_id if (current_user.role == "super_admin" and request.dealer_id) else current_user.dealer_id
+
+    # Fast validation for URL format
+    if not (url.startswith("http://") or url.startswith("https://")):
+        err_msg = "Invalid URL format. Link must begin with http:// or https://"
+        await record_invalid_link_notification(
+            url=url or "(empty)",
+            error_reason=err_msg,
+            user_id=str(current_user.id),
+            dealer_id=effective_dealer_id,
+            source="single_analysis"
+        )
+        raise HTTPException(
+            status_code=400, 
+            detail=err_msg
+        )
+
     try:
         # Create task record in database
         task_id = await create_analysis_task(
-            citnow_url=request.citnow_url,
+            citnow_url=url,
             transcription_language=request.transcription_language,
             target_language=request.target_language,
             submitted_by_user_id=str(current_user.id),
-            dealer_id=current_user.dealer_id
+            dealer_id=effective_dealer_id
         )
         
         # Start background processing
         background_tasks.add_task(
             process_single_analysis_task,
             task_id,
-            request.citnow_url,
+            url,
             request.transcription_language,
             request.target_language,
             str(current_user.id),
-            current_user.dealer_id
+            effective_dealer_id
         )
         
         return {
@@ -3735,8 +3838,84 @@ async def get_result(result_id: str, current_user: UserInDB = Depends(get_curren
 
     return clean_results(result)
 
-# NOTE: The DELETE /results/{result_id} handler lives at L909 above with full RBAC.
-# The duplicate definition that was here has been removed to avoid confusion.
+# -----------------------------
+# Admin Notifications Endpoints (Invalid Link Alerts)
+# -----------------------------
+
+@app.get("/admin/notifications")
+async def get_admin_notifications(
+    limit: int = 50,
+    unread_only: bool = False,
+    current_user: UserInDB = Depends(get_current_super_admin)
+):
+    """Retrieve notifications/alerts for Super Admin (invalid links, etc.)"""
+    query = {}
+    if unread_only:
+        query["is_read"] = False
+        
+    cursor = db["admin_notifications"].find(query).sort("created_at", -1).limit(limit)
+    items = await cursor.to_list(length=limit)
+    
+    for item in items:
+        item["id"] = str(item["_id"])
+        item.pop("_id", None)
+        if "created_at" in item and hasattr(item["created_at"], "isoformat"):
+            item["created_at"] = item["created_at"].isoformat()
+            
+    unread_count = await db["admin_notifications"].count_documents({"is_read": False})
+    total_count = await db["admin_notifications"].count_documents({})
+    
+    return {
+        "notifications": items,
+        "unread_count": unread_count,
+        "total_count": total_count
+    }
+
+@app.patch("/admin/notifications/{notification_id}/read")
+async def mark_notification_read(
+    notification_id: str,
+    current_user: UserInDB = Depends(get_current_super_admin)
+):
+    """Mark a notification as read"""
+    try:
+        res = await db["admin_notifications"].update_one(
+            {"_id": ObjectId(notification_id)},
+            {"$set": {"is_read": True, "updated_at": dt.utcnow()}}
+        )
+        return {"success": True, "modified": res.modified_count}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/admin/notifications/mark-all-read")
+async def mark_all_notifications_read(
+    current_user: UserInDB = Depends(get_current_super_admin)
+):
+    """Mark all notifications as read"""
+    res = await db["admin_notifications"].update_many(
+        {"is_read": False},
+        {"$set": {"is_read": True, "updated_at": dt.utcnow()}}
+    )
+    return {"success": True, "modified": res.modified_count}
+
+@app.delete("/admin/notifications/{notification_id}")
+async def delete_notification(
+    notification_id: str,
+    current_user: UserInDB = Depends(get_current_super_admin)
+):
+    """Delete a single notification"""
+    try:
+        await db["admin_notifications"].delete_one({"_id": ObjectId(notification_id)})
+        return {"success": True}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.delete("/admin/notifications/clear-all")
+async def clear_all_notifications(
+    current_user: UserInDB = Depends(get_current_super_admin)
+):
+    """Clear all notifications"""
+    await db["admin_notifications"].delete_many({})
+    return {"success": True}
 
 # -----------------------------
 # Dashboard Endpoints (UPDATED for simplified dealer_id)

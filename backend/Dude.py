@@ -1388,7 +1388,11 @@ class UnifiedMediaAnalyzer:
             detailed = video.get("detailed_analysis") or {}
             lighting = detailed.get("lighting", "The lighting is clean and clearly illuminates the subject.")
             focus = detailed.get("focus", "The camera focus is stable and sharp.")
-            stability = detailed.get("stability", "The camera movements are stable and professional.")
+            stability_val = detailed.get("stability")
+            if isinstance(stability_val, str) and ("%" in stability_val or stability_val.replace('.', '').isdigit()):
+                stability = "The camera movements are stable and professional."
+            else:
+                stability = stability_val or "The camera movements are stable and professional."
 
             # 3. Audio parameters
             audio = results.get("audio_analysis") or {}
