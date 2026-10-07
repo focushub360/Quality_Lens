@@ -54,6 +54,20 @@ const theme = createTheme({
     MuiAppBar: { styleOverrides: { root: { backgroundColor: '#FFFFFF', color: BRAND_DARK, borderBottom: '1px solid #E2E8F0' } } },
     MuiCssBaseline: {
       styleOverrides: {
+        'html, body': {
+          width: '100%',
+          maxWidth: '100%',
+          overflowX: 'hidden',
+          margin: 0,
+          padding: 0,
+          boxSizing: 'border-box'
+        },
+        '#root': {
+          width: '100%',
+          minHeight: '100vh',
+          display: 'flex',
+          flexDirection: 'column'
+        },
         body: {
           background: 'linear-gradient(135deg, #FFFFFF 0%, #F8FAFC 100%)',
           backgroundAttachment: 'fixed',

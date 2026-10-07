@@ -11,6 +11,7 @@ import {
 } from '@mui/icons-material';
 import api from '../../services/api';
 
+
 // QualityLens Branding Theme
 const THEME = {
   primary: '#0DA1B8',
@@ -213,7 +214,7 @@ export default function NewAnalysis() {
 
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
-      <Box sx={{ textAlign: 'center', mb: 6 }}>
+            <Box sx={{ textAlign: 'center', mb: 6 }}>
         <Typography
           variant="h2" // Larger, bolder font
           sx={{

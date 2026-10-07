@@ -26,6 +26,7 @@ import {
   ExpandLess,
   ExpandMore,
   SpaceDashboard,
+  DesktopWindows,
   AddToQueue,
   UploadFile,
   Assessment,
@@ -62,32 +63,15 @@ const SIDEBAR_WIDTH = 280;
 // Sidebar now uses MUI theme palette dynamically
 
 const ROLE_ACCESS = {
-  super_admin: [
+    super_admin: [
     { text: 'Dashboard', path: '/super-admin/dashboard', icon: SpaceDashboard },
-    { text: 'Link Optimization', path: '/dealer/new', icon: AddToQueue },
-    { text: 'Bulk Upload', path: '/dealer/bulk', icon: UploadFile },
+    { text: 'Monitor', path: '/super-admin/monitor', icon: DesktopWindows },
+    { text: 'Uploads', path: '/super-admin/uploads', icon: AddToQueue },
     { text: 'Analysis Results', path: '/dealer/results', icon: Assessment },
     { text: 'User Management', path: '/super-admin/users', icon: Group },
     { text: 'Dealer Network', path: '/super-admin/dealers', icon: Business },
     { text: 'CitNow Upgrades', path: '/citnow-upgrades', icon: Timeline },
-    { 
-      text: 'Configuration', 
-      path: '/config', 
-      icon: Settings,
-      subItems: [
-        { text: 'Theme Settings', path: '/config/theme', icon: Palette }
-      ]
-    },
-    { 
-      text: 'Account', 
-      path: '/account', 
-      icon: Person,
-      subItems: [
-        { text: 'Edit Profile', path: '/account/profile', icon: Person },
-        { text: 'Change Password', path: '/account/password', icon: VpnKey },
-        { text: 'Logout', path: '/logout', icon: ExitToApp }
-      ]
-    }
+    { text: 'Configuration', path: '/super-admin/config', icon: Settings },
   ],
   dealer_admin: [
     { text: 'Top Dashboard', path: '/dealer/dashboard', icon: SpaceDashboard },

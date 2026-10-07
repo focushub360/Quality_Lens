@@ -14,6 +14,9 @@ import DealerDashboard from './pages/dealer-admin/Dashboard';
 import UserManagement from './pages/super-admin/UserManagement';
 import DealerManagement from './pages/super-admin/DealerManagement';
 import NewAnalysis from './pages/dealer-admin/NewAnalysis';
+import Uploads from './pages/super-admin/Uploads';
+import Monitor from './pages/super-admin/Monitor';
+
 import BulkUpload from './pages/dealer-admin/BulkUpload';
 import Results from './pages/dealer-admin/Results';
 import DealerUsers from './pages/dealer-admin/Users';
@@ -43,6 +46,8 @@ export default function App() {
 
             <Route element={<ProtectedRoute roles={["super_admin"]} />}>
               <Route path="/super-admin/dashboard" element={<Layout><SuperAdminDashboard /></Layout>} />
+              <Route path="/super-admin/monitor" element={<Layout><Monitor /></Layout>} />
+              <Route path="/super-admin/uploads" element={<Layout><Uploads /></Layout>} />
               <Route path="/super-admin/users" element={<Layout><UserManagement /></Layout>} />
               <Route path="/super-admin/dealers" element={<Layout><DealerManagement /></Layout>} />
             </Route>
