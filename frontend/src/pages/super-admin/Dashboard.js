@@ -971,26 +971,35 @@ const HEATMAP_LEGEND = [
 ];
 
 const CustomTreemapContent = (props) => {
-  const { x, y, width, height, name, overall, size, videos } = props;
+  const { x, y, width, height, name, overall, size, videos, id, payload, onSelectDealer } = props;
 
-  const scoreVal = typeof overall === 'number' ? overall : (props.payload?.overall || 0);
-  const videoCount = videos ?? props.payload?.videos ?? size ?? 0;
+  const itemPayload = payload || props;
+  const dealerId = id || itemPayload?.id;
+  const scoreVal = typeof overall === 'number' ? overall : (itemPayload?.overall || 0);
+  const videoCount = videos ?? itemPayload?.videos ?? size ?? 0;
   const bgColor = getHeatmapColor(scoreVal);
   // Dark text only on the salmon/light-red band, white elsewhere
   const textColor = scoreVal >= 5.5 && scoreVal < 6.5 ? 'rgba(0,0,0,0.85)' : '#FFFFFF';
 
-  const showText = width > 50 && height > 35;
-  const showSubtext = width > 110 && height > 75;
+  const showText = width > 36 && height > 22;
+  const showSubtext = width > 80 && height > 50;
 
   // Max characters depending on block size
-  const maxChars = Math.max(8, Math.floor(width / (showSubtext ? 11 : 8)));
+  const maxChars = Math.max(6, Math.floor(width / (showSubtext ? 10 : 7)));
   const displayName = name && name.length > maxChars ? name.substring(0, maxChars - 1) + '…' : (name || '');
 
-  const titleFontSize = Math.min(22, Math.max(12, Math.floor(width / 18)));
-  const subFontSize = Math.min(13, Math.max(10, Math.floor(titleFontSize * 0.72)));
+  const titleFontSize = Math.min(20, Math.max(11, Math.floor(width / 18)));
+  const subFontSize = Math.min(12, Math.max(9, Math.floor(titleFontSize * 0.75)));
 
   return (
-    <g>
+    <g
+      onClick={() => {
+        if (onSelectDealer && dealerId) {
+          onSelectDealer(dealerId);
+        }
+      }}
+      style={{ cursor: onSelectDealer ? 'pointer' : 'default' }}
+    >
       <rect
         x={x + 1}
         y={y + 1}
@@ -1003,6 +1012,7 @@ const CustomTreemapContent = (props) => {
           stroke: '#ffffff',
           strokeWidth: 2,
           strokeOpacity: 0.95,
+          transition: 'fill 0.2s ease, opacity 0.2s ease'
         }}
       />
       {showText && (
@@ -1010,14 +1020,14 @@ const CustomTreemapContent = (props) => {
           <>
             <text
               x={x + width / 2}
-              y={y + height / 2 - 10}
+              y={y + height / 2 - 9}
               textAnchor="middle"
               dominantBaseline="middle"
               style={{
                 fill: textColor,
                 fontSize: `${titleFontSize}px`,
                 fontWeight: 800,
-                letterSpacing: '0.4px',
+                letterSpacing: '0.3px',
                 fontFamily: 'Outfit, Inter, sans-serif',
                 pointerEvents: 'none',
                 filter: 'drop-shadow(0px 1px 2px rgba(0,0,0,0.35))'
@@ -1027,7 +1037,7 @@ const CustomTreemapContent = (props) => {
             </text>
             <text
               x={x + width / 2}
-              y={y + height / 2 + 12}
+              y={y + height / 2 + 11}
               textAnchor="middle"
               dominantBaseline="middle"
               style={{
@@ -1051,7 +1061,7 @@ const CustomTreemapContent = (props) => {
             dominantBaseline="middle"
             style={{
               fill: textColor,
-              fontSize: `${Math.min(16, Math.max(11, Math.floor(width / 10)))}px`,
+              fontSize: `${Math.min(14, Math.max(10, Math.floor(width / 9)))}px`,
               fontWeight: 700,
               fontFamily: 'Outfit, Inter, sans-serif',
               pointerEvents: 'none',
@@ -1421,7 +1431,7 @@ const EnhancedServiceAdvisorSection = ({ allResults = [], selectedFilterDealer =
   );
 };
 
-const DealerPerformanceHeatmap = ({ data, selectedFilterDealer, allResults, users }) => {
+const DealerPerformanceHeatmap = ({ data, selectedFilterDealer, allResults, users, onSelectDealer }) => {
 
   let rows = [];
   let title = "Dealership Performance Heatmap (Treemap)";
@@ -1455,7 +1465,7 @@ const DealerPerformanceHeatmap = ({ data, selectedFilterDealer, allResults, user
   };
 
   if (selectedFilterDealer === 'all') {
-    rows = data.map(d => {
+    rows = (data || []).map(d => {
       return {
         id: d.id,
         name: d.name,
@@ -1469,27 +1479,33 @@ const DealerPerformanceHeatmap = ({ data, selectedFilterDealer, allResults, user
     }).sort((a, b) => b.overall - a.overall);
   } else {
     const selectedNorm = normalizeDealerId(selectedFilterDealer);
-    const selectedDealerObj = data.find(d => normalizeDealerId(d.id) === selectedNorm);
-    const dealerName = selectedDealerObj ? selectedDealerObj.name : 'Selected Dealership';
-    title = `${dealerName} — User Performance Heatmap (Treemap)`;
+    const selectedDealerObj = (data || []).find(d => normalizeDealerId(d.id) === selectedNorm);
+    const dealerName = selectedDealerObj ? selectedDealerObj.name : getDealerDisplayName(selectedFilterDealer);
+    title = `${dealerName} — Advisor Performance Heatmap (Treemap)`;
 
-    const dealerResults = allResults.filter(r => normalizeDealerId(r.dealer_id || r.dealer) === selectedNorm);
-    const userMap = {};
-    dealerResults.forEach(r => {
-      const userId = r.submitted_by_user_id;
-      if (!userId) return;
-      if (!userMap[userId]) userMap[userId] = [];
-      userMap[userId].push(r);
+    const dealerResults = (allResults || []).filter(r => {
+      const rId = normalizeDealerId(r.dealer_id || r.dealer || r.citnow_dealership || r.citnow_metadata?.dealership || '');
+      return rId === selectedNorm;
     });
 
-    rows = Object.entries(userMap).map(([userId, results]) => {
-      const userObj = users.find(u => String(u._id || u.id) === userId);
-      const name = userObj ? userObj.username : `User ${userId.substring(0, 5)}`;
-      const metrics = computeMetrics(results);
+    const userMap = {};
+    dealerResults.forEach(r => {
+      const advisorName = r.citnow_service_advisor || r.citnow_metadata?.service_advisor || '';
+      const userKey = r.submitted_by_user_id || (advisorName ? `advisor_${advisorName}` : 'Unassigned');
+      if (!userMap[userKey]) {
+        userMap[userKey] = { results: [], advisorName, userId: r.submitted_by_user_id };
+      }
+      userMap[userKey].results.push(r);
+    });
+
+    rows = Object.entries(userMap).map(([userKey, item]) => {
+      const userObj = (users || []).find(u => String(u._id || u.id) === String(item.userId || userKey));
+      const displayName = userObj ? (userObj.full_name || userObj.username) : (item.advisorName || (userKey.startsWith('advisor_') ? userKey.replace('advisor_', '') : userKey));
+      const metrics = computeMetrics(item.results);
       return {
-        id: userId,
-        name: name,
-        size: metrics.videos || 1,
+        id: userKey,
+        name: displayName,
+        size: Math.max(1, metrics.videos),
         overall: metrics.overall,
         video: metrics.video,
         audio: metrics.audio,
@@ -1508,11 +1524,36 @@ const DealerPerformanceHeatmap = ({ data, selectedFilterDealer, allResults, user
       width: '100%'
     }}>
       <CardContent sx={{ p: 3 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-          <TableChart sx={{ color: THEME.primary, mr: 2, fontSize: 24 }} />
-          <Typography variant="h6" sx={{ color: THEME.textPrimary, fontWeight: 600 }}>
-            {title}
-          </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1.5, mb: 3 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <TableChart sx={{ color: THEME.primary, fontSize: 24 }} />
+            <Box>
+              <Typography variant="h6" sx={{ color: THEME.textPrimary, fontWeight: 600 }}>
+                {title}
+              </Typography>
+              <Typography variant="caption" sx={{ color: THEME.textTertiary, display: 'block' }}>
+                {selectedFilterDealer === 'all'
+                  ? 'Showing all active dealerships across network • Click any dealership to drill down'
+                  : 'Showing advisor performance breakdown for this dealership'}
+              </Typography>
+            </Box>
+          </Box>
+          {selectedFilterDealer !== 'all' && onSelectDealer && (
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={() => onSelectDealer('all')}
+              sx={{
+                borderRadius: 2,
+                textTransform: 'none',
+                borderColor: THEME.border,
+                color: THEME.textSecondary,
+                fontSize: '12px'
+              }}
+            >
+              ← Back to All Dealerships
+            </Button>
+          )}
         </Box>
         {rows.length > 0 ? (
           <>
@@ -1523,7 +1564,7 @@ const DealerPerformanceHeatmap = ({ data, selectedFilterDealer, allResults, user
                 dataKey="size"
                 stroke="#fff"
                 fill="#2da44e"
-                content={<CustomTreemapContent />}
+                content={<CustomTreemapContent onSelectDealer={selectedFilterDealer === 'all' ? onSelectDealer : null} />}
               >
                 <RechartsTooltip content={<CustomTreemapTooltip />} />
               </Treemap>
@@ -2919,7 +2960,7 @@ export default function SuperAdminDashboard() {
   const [selectedDealer, setSelectedDealer] = useState(null);
   const [dealerDetailOpen, setDealerDetailOpen] = useState(false);
   const [selectedFilterDealer, setSelectedFilterDealer] = useState('all');
-  const [rankingsLimit, setRankingsLimit] = useState(5); // Default to Top 5
+  const [rankingsLimit, setRankingsLimit] = useState(10); // Default to Top 10
   const [compareDealerA, setCompareDealerA] = useState('');
   const [compareDealerB, setCompareDealerB] = useState('');
   const [subTab, setSubTab] = useState(0); // 0: Performance Trend, 1: Dealer Performance Comparison
@@ -3162,7 +3203,7 @@ export default function SuperAdminDashboard() {
 
       setDashboardData({
         overview: {
-          totalDealers: Math.min(5, dealerPerformance.length),
+          totalDealers: dealerPerformance.length,
           totalVideos: totalServerVideos,
           totalUsers: usersArray.length,
           averageScore: Number((data.average_overall_quality || 7.0).toFixed(1)),
@@ -3966,7 +4007,11 @@ export default function SuperAdminDashboard() {
                   <DealerPerformanceChart 
                     data={
                       selectedFilterDealer === 'all'
-                        ? dashboardData.dealerRankings.slice(0, rankingsLimit)
+                        ? (rankingsLimit >= 50
+                            ? dashboardData.dealerRankings
+                            : [...dashboardData.dealerRankings].filter(d => d.videos >= 5).slice(0, rankingsLimit).length >= 2
+                              ? [...dashboardData.dealerRankings].filter(d => d.videos >= 5).slice(0, rankingsLimit)
+                              : dashboardData.dealerRankings.slice(0, rankingsLimit))
                         : dashboardData.dealerRankings.filter(d => d.id === selectedFilterDealer)
                     } 
                   />
@@ -3994,7 +4039,7 @@ export default function SuperAdminDashboard() {
                   <DealerSharePieChart
                     dealers={
                       selectedFilterDealer === 'all'
-                        ? dashboardData.dealerRankings.slice(0, rankingsLimit)
+                        ? [...dashboardData.dealerRankings].sort((a, b) => b.videos - a.videos).slice(0, Math.max(rankingsLimit, 8))
                         : dashboardData.dealerRankings.filter(d => d.id === selectedFilterDealer)
                     }
                     selectedDealerId={selectedFilterDealer}
@@ -4009,12 +4054,13 @@ export default function SuperAdminDashboard() {
           <DealerPerformanceHeatmap 
             data={
               selectedFilterDealer === 'all'
-                ? dashboardData.dealerRankings.slice(0, rankingsLimit)
+                ? dashboardData.dealerRankings
                 : dashboardData.dealerRankings.filter(d => d.id === selectedFilterDealer)
             } 
             selectedFilterDealer={selectedFilterDealer}
             allResults={allResults}
             users={users}
+            onSelectDealer={(dealerId) => setSelectedFilterDealer(dealerId)}
           />
 
           {/* Top Detected Issues */}
@@ -4022,7 +4068,7 @@ export default function SuperAdminDashboard() {
             <TopDetectedIssues
               allResults={selectedFilterDealer === 'all'
                 ? allResults
-                : allResults.filter(r => normalizeDealerId(r.dealer_id || r.dealer || '') === normalizeDealerId(selectedFilterDealer))
+                : allResults.filter(r => normalizeDealerId(r.dealer_id || r.dealer || r.citnow_dealership || r.citnow_metadata?.dealership || '') === normalizeDealerId(selectedFilterDealer))
               }
             />
           </Box>

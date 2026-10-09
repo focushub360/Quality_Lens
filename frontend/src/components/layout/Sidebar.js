@@ -65,12 +65,12 @@ const SIDEBAR_WIDTH = 280;
 const ROLE_ACCESS = {
     super_admin: [
     { text: 'Dashboard', path: '/super-admin/dashboard', icon: SpaceDashboard },
-    { text: 'Monitor', path: '/super-admin/monitor', icon: DesktopWindows },
     { text: 'Uploads', path: '/super-admin/uploads', icon: AddToQueue },
     { text: 'Analysis Results', path: '/dealer/results', icon: Assessment },
     { text: 'User Management', path: '/super-admin/users', icon: Group },
     { text: 'Dealer Network', path: '/super-admin/dealers', icon: Business },
     { text: 'CitNow Upgrades', path: '/citnow-upgrades', icon: Timeline },
+    { text: 'Monitor', path: '/super-admin/monitor', icon: DesktopWindows },
     { text: 'Configuration', path: '/super-admin/config', icon: Settings },
   ],
   dealer_admin: [
