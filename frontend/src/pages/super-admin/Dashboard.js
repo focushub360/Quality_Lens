@@ -404,17 +404,17 @@ const DealerPerformanceChart = ({ data }) => {
       </Box>
 
       {/* Radar / Spider Chart */}
-      <ResponsiveContainer width="100%" height={290}>
-        <RadarChart data={radarData} outerRadius="54%" margin={{ top: 10, right: 25, bottom: 10, left: 25 }}>
+      <ResponsiveContainer width="100%" height={380}>
+        <RadarChart data={radarData} outerRadius="76%" margin={{ top: 10, right: 30, bottom: 15, left: 30 }}>
           <PolarGrid stroke={THEME.border} />
           <PolarAngleAxis
             dataKey="metric"
-            tick={{ fontSize: 10.5, fontWeight: 600, fill: THEME.textSecondary }}
+            tick={{ fontSize: 11.5, fontWeight: 700, fill: THEME.textPrimary }}
           />
           <PolarRadiusAxis
             angle={90}
             domain={[0, 10]}
-            tick={{ fontSize: 9.5, fill: THEME.textTertiary }}
+            tick={{ fontSize: 10, fill: THEME.textTertiary }}
             axisLine={false}
           />
           {data.map((dealer, i) => (
@@ -424,16 +424,16 @@ const DealerPerformanceChart = ({ data }) => {
               dataKey={dealer.name}
               stroke={DEALER_COLORS[i % DEALER_COLORS.length]}
               fill={DEALER_COLORS[i % DEALER_COLORS.length]}
-              fillOpacity={0.15}
-              strokeWidth={2}
-              dot={{ r: 3.5, fill: DEALER_COLORS[i % DEALER_COLORS.length] }}
+              fillOpacity={0.18}
+              strokeWidth={2.5}
+              dot={{ r: 4, fill: DEALER_COLORS[i % DEALER_COLORS.length] }}
             />
           ))}
           <RechartsTooltip content={<CustomRadarTooltip />} />
           <Legend
-            wrapperStyle={{ fontSize: '11px', fontWeight: 600, paddingTop: '4px' }}
+            wrapperStyle={{ fontSize: '11.5px', fontWeight: 600, paddingTop: '10px' }}
             iconType="circle"
-            iconSize={7}
+            iconSize={8}
           />
         </RadarChart>
       </ResponsiveContainer>
@@ -1779,7 +1779,7 @@ const DealerSharePieChart = ({ dealers, selectedDealerId, allResults = [] }) => 
         fill="#ffffff"
         textAnchor="middle"
         dominantBaseline="central"
-        fontSize="11"
+        fontSize="13"
         fontWeight="700"
         style={{ filter: 'drop-shadow(0px 1px 2px rgba(0,0,0,0.6))' }}
       >
@@ -1847,18 +1847,18 @@ const DealerSharePieChart = ({ dealers, selectedDealerId, allResults = [] }) => 
         </Box>
       </Box>
 
-      <ResponsiveContainer width="100%" height={290}>
-        <RechartsPieChart margin={{ top: 10, right: 10, bottom: 10, left: 10 }}>
+      <ResponsiveContainer width="100%" height={380}>
+        <RechartsPieChart margin={{ top: 10, right: 10, bottom: 15, left: 10 }}>
           <Pie
             data={pieData}
             cx="50%"
-            cy="42%"
-            outerRadius={68}
-            innerRadius={34}
+            cy="46%"
+            outerRadius={115}
+            innerRadius={60}
             dataKey="value"
             paddingAngle={3}
             stroke="#ffffff"
-            strokeWidth={2}
+            strokeWidth={2.5}
             labelLine={false}
             label={renderPercentageLabel}
           >
@@ -1885,10 +1885,10 @@ const DealerSharePieChart = ({ dealers, selectedDealerId, allResults = [] }) => 
             verticalAlign="bottom"
             align="center"
             iconType="circle"
-            iconSize={7}
+            iconSize={8}
             wrapperStyle={{
-              paddingTop: '6px',
-              fontSize: '10.5px',
+              paddingTop: '10px',
+              fontSize: '11.5px',
               fontWeight: 600,
               color: THEME.textSecondary
             }}
