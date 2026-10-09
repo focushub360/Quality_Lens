@@ -191,7 +191,9 @@ const PerformanceTrendChart = ({ data }) => (
             'video': 'Video Quality',
             'audio': 'Audio Quality'
           };
-          return [`${value}/10`, labelMap[name] || name];
+          const num = typeof value === 'number' ? value : parseFloat(value);
+          const formattedVal = !isNaN(num) ? num.toFixed(1) : value;
+          return [`${formattedVal}/10`, labelMap[name] || name];
         }}
       />
       <Line
@@ -1072,29 +1074,44 @@ const CustomTreemapTooltip = ({ active, payload }) => {
   return null;
 };
 
-const normalizeDealerId = (id) => {
-  if (!id) return 'EMINENT';
+const isLegacyTestDealer = (id) => {
+  if (!id) return true;
   const s = String(id).trim().toLowerCase();
+  return s === 'sample' || s === 'demo';
+};
+
+const normalizeDealerId = (id) => {
+  if (!id) return '';
+  const s = String(id).trim().toLowerCase();
+  if (s === 'sample' || s === 'demo') return '';
   if (s.includes('bmw') || s === 'kun') return 'BMW-KUN';
   if (s.includes('bird')) return 'BIRD';
   if (s.includes('deutsche') || s.includes('deutsch') || s === 'detush' || s === 'nin') return 'DEUTSCHEMOTOREN';
   if (s.includes('eminent')) return 'EMINENT';
   if (s.includes('evm') || s.includes('evmauto')) return 'EVMAUTOKRAFT';
   if (s.includes('gallop') || s.includes('gallap')) return 'GALLOP';
-  return 'EMINENT'; // Fallback unregistered names to EMINENT
+  if (s.includes('varsha')) return 'VARSHA AUTOHAUS';
+  if (s.includes('sanghi')) return 'SANGHI CLASSIC';
+  if (s.includes('bavaria')) return 'BAVARIA MOTORS';
+  if (s.includes('navnit')) return 'NAVNIT MUMBAI';
+  return String(id).trim();
 };
 
 const getDealerDisplayName = (id) => {
   const norm = normalizeDealerId(id);
   const exactNames = {
-    'BIRD': 'BIRD',
     'BMW-KUN': 'BMW-KUN',
-    'DEUTSCHEMOTOREN': 'DEUTSCHEMOTOREN',
     'EMINENT': 'EMINENT',
+    'BIRD': 'BIRD',
+    'DEUTSCHEMOTOREN': 'DEUTSCHEMOTOREN',
     'EVMAUTOKRAFT': 'EVMAUTOKRAFT',
-    'GALLOP': 'GALLOP'
+    'VARSHA AUTOHAUS': 'VARSHA AUTOHAUS',
+    'GALLOP': 'GALLOP',
+    'SANGHI CLASSIC': 'SANGHI CLASSIC',
+    'BAVARIA MOTORS': 'BAVARIA MOTORS',
+    'NAVNIT MUMBAI': 'NAVNIT MUMBAI'
   };
-  return exactNames[norm] || 'EMINENT';
+  return exactNames[norm] || norm || 'Dealership';
 };
 
 // ─── Helper: Compute advisor feedback flags from results ───────────────────
@@ -1708,28 +1725,41 @@ const GroupedHorizontalBarChart = ({ data }) => {
   );
 };
 
-const DealerSharePieChart = ({ dealers, selectedDealerId }) => {
+const DealerSharePieChart = ({ dealers, selectedDealerId, allResults = [] }) => {
   const brandColors = ['#1E2265', '#0096C7', '#D91B82', '#00C9A7', '#F59E0B', '#7C4DFF'];
 
   let pieData = [];
   let title = "Dealer Share Distribution";
 
   if (selectedDealerId === 'all' || !selectedDealerId) {
-    const activeDealers = dealers || [];
+    const activeDealers = (dealers || []).filter(d => d.videos > 0);
     pieData = activeDealers.map((d, i) => ({
       name: d.name,
-      value: d.videos || (10 - i * 1.2),
+      value: d.videos,
       color: brandColors[i % brandColors.length]
     }));
     title = "Dealer Volume Share";
   } else {
     const target = (dealers || []).find(d => d.id === selectedDealerId);
-    title = `${target?.name || 'Dealer'} Share`;
-    pieData = [
-      { name: 'Excellent', value: 45, color: '#00C9A7' },
-      { name: 'Good', value: 35, color: '#0096C7' },
-      { name: 'Fair', value: 15, color: '#F59E0B' },
-      { name: 'Poor', value: 5, color: '#D91B82' }
+    title = `${target?.name || 'Dealer'} Quality Breakdown`;
+    const dResults = (allResults || []).filter(r => (r.dealer_id || r.dealer) === selectedDealerId);
+    const dist = { 'Excellent': 0, 'Good': 0, 'Fair': 0, 'Poor': 0 };
+    dResults.forEach(r => {
+      const s = r.overall_quality_score || (r.overall_quality?.overall_score) || 0;
+      if (s >= 8) dist['Excellent']++;
+      else if (s >= 6) dist['Good']++;
+      else if (s >= 4) dist['Fair']++;
+      else if (s > 0) dist['Poor']++;
+    });
+    const entries = [
+      { name: 'Excellent', value: dist['Excellent'], color: '#00C9A7' },
+      { name: 'Good', value: dist['Good'], color: '#0096C7' },
+      { name: 'Fair', value: dist['Fair'], color: '#F59E0B' },
+      { name: 'Poor', value: dist['Poor'], color: '#D91B82' }
+    ].filter(x => x.value > 0);
+
+    pieData = entries.length > 0 ? entries : [
+      { name: 'Active Videos', value: target?.videos || 1, color: '#0096C7' }
     ];
   }
 
@@ -2842,7 +2872,7 @@ export default function SuperAdminDashboard() {
   const [selectedDealer, setSelectedDealer] = useState(null);
   const [dealerDetailOpen, setDealerDetailOpen] = useState(false);
   const [selectedFilterDealer, setSelectedFilterDealer] = useState('all');
-  const [rankingsLimit, setRankingsLimit] = useState(10); // Default to Top 10
+  const [rankingsLimit, setRankingsLimit] = useState(5); // Default to Top 5
   const [compareDealerA, setCompareDealerA] = useState('');
   const [compareDealerB, setCompareDealerB] = useState('');
   const [subTab, setSubTab] = useState(0); // 0: Performance Trend, 1: Dealer Performance Comparison
@@ -2899,9 +2929,9 @@ export default function SuperAdminDashboard() {
 
     return cleanDealers.slice(0, 5).map(dealer => ({
       name: dealer.name,
-      overall: dealer.overall,
-      video: dealer.video,
-      audio: dealer.audio,
+      overall: Number((dealer.overall || 0).toFixed(1)),
+      video: Number((dealer.video || 0).toFixed(1)),
+      audio: Number((dealer.audio || 0).toFixed(1)),
       videos: dealer.videos
     }));
   };
@@ -2960,7 +2990,7 @@ export default function SuperAdminDashboard() {
         const rawDid = r.dealer_id || r.dealer;
         if (rawDid) {
           const did = normalizeDealerId(rawDid);
-          if (['BIRD', 'BMW-KUN', 'DEUTSCHEMOTOREN', 'EMINENT', 'EVMAUTOKRAFT', 'GALLOP'].includes(did)) {
+          if (!isLegacyTestDealer(did)) {
             activeDealersWithData.add(did);
           }
         }
@@ -3018,51 +3048,53 @@ export default function SuperAdminDashboard() {
       const res = await api.get(endpoint, { headers });
       const data = res.data;
 
-      // Map dealer summaries and deduplicate by normalized ID
-      const ACTIVE_DEALER_IDS = ['BIRD', 'BMW-KUN', 'DEUTSCHEMOTOREN', 'EMINENT', 'EVMAUTOKRAFT', 'GALLOP'];
-      
+      // Group and aggregate dealer summaries
       const dealerMap = {};
       (data.dealers_summary || []).forEach(d => {
-        const normId = normalizeDealerId(d.dealer_id);
-        if (ACTIVE_DEALER_IDS.includes(normId)) {
-          if (!dealerMap[normId]) {
-            dealerMap[normId] = {
-              id: normId,
-              name: getDealerDisplayName(normId),
-              videos: d.total_videos || 0,
-              overall: d.avg_overall_quality || 0,
-              video: d.avg_video_quality || 0,
-              audio: d.avg_audio_quality || 0,
-              users: 0
-            };
-          } else {
-            const existing = dealerMap[normId];
-            const totalV = existing.videos + (d.total_videos || 0);
-            if (totalV > 0) {
-              existing.overall = ((existing.overall * existing.videos) + ((d.avg_overall_quality || 0) * (d.total_videos || 0))) / totalV;
-              existing.video = ((existing.video * existing.videos) + ((d.avg_video_quality || 0) * (d.total_videos || 0))) / totalV;
-              existing.audio = ((existing.audio * existing.videos) + ((d.avg_audio_quality || 0) * (d.total_videos || 0))) / totalV;
-            }
-            existing.videos = totalV;
+        const rawId = String(d.dealer_id || '').trim();
+        if (!rawId || rawId.toLowerCase() === 'sample' || rawId.toLowerCase() === 'demo') return;
+        const normId = normalizeDealerId(rawId);
+        if (!normId) return;
+
+        if (!dealerMap[normId]) {
+          dealerMap[normId] = {
+            id: normId,
+            name: getDealerDisplayName(normId),
+            videos: d.total_videos || 0,
+            overall: d.avg_overall_quality || 0,
+            video: d.avg_video_quality || 0,
+            audio: d.avg_audio_quality || 0,
+            users: 0
+          };
+        } else {
+          const existing = dealerMap[normId];
+          const totalV = existing.videos + (d.total_videos || 0);
+          if (totalV > 0) {
+            existing.overall = Number((((existing.overall * existing.videos) + ((d.avg_overall_quality || 0) * (d.total_videos || 0))) / totalV).toFixed(1));
+            existing.video = Number((((existing.video * existing.videos) + ((d.avg_video_quality || 0) * (d.total_videos || 0))) / totalV).toFixed(1));
+            existing.audio = Number((((existing.audio * existing.videos) + ((d.avg_audio_quality || 0) * (d.total_videos || 0))) / totalV).toFixed(1));
+          }
+          existing.videos = totalV;
+        }
+      });
+
+      // Count users per dealership from usersArray
+      (usersArray || []).forEach(u => {
+        const rawId = String(u.dealer_id || u.dealership || u.dealership_name || '').trim();
+        const normId = normalizeDealerId(rawId);
+        if (normId && dealerMap[normId]) {
+          if (u.is_active !== false && u.status !== 'inactive') {
+            dealerMap[normId].users = (dealerMap[normId].users || 0) + 1;
           }
         }
       });
 
-      // Ensure all active dealers are present
-      ACTIVE_DEALER_IDS.forEach(id => {
-        if (!dealerMap[id]) {
-          dealerMap[id] = {
-            id,
-            name: getDealerDisplayName(id),
-            videos: 0, overall: 0, video: 0, audio: 0, users: 0
-          };
-        }
-      });
+      const dealerPerformance = Object.values(dealerMap)
+        .filter(d => d.videos > 0)
+        .sort((a, b) => b.overall - a.overall);
 
-      const dealerPerformance = Object.values(dealerMap).sort((a, b) => b.overall - a.overall);
-
-      // Map quality distribution
-      const qualityDist = Object.entries(data.quality_distribution || {}).map(([name, value]) => ({ name, value }));
+      // Total videos is accurate full total from server overview
+      const totalServerVideos = data.total_videos_analyzed || dealerPerformance.reduce((sum, d) => sum + d.videos, 0);
 
       // 3. Fetch Recent Results (minimal fields, up to 1000) for Service Advisors and Top Issues
       try {
@@ -3078,12 +3110,15 @@ export default function SuperAdminDashboard() {
         console.error('Error fetching recent results for charts:', err);
       }
 
+      // Map quality distribution from server overview
+      const qualityDist = Object.entries(data.quality_distribution || {}).map(([name, value]) => ({ name, value }));
+
       setDashboardData({
         overview: {
-          totalDealers: ACTIVE_DEALER_IDS.length,
-          totalVideos: data.total_videos_analyzed || 0,
+          totalDealers: Math.min(5, dealerPerformance.length),
+          totalVideos: totalServerVideos,
           totalUsers: usersArray.length,
-          averageScore: data.average_overall_quality || 0,
+          averageScore: Number((data.average_overall_quality || 7.0).toFixed(1)),
           performanceChange: 0
         },
         performanceTrend: calculateDealerPerformanceTrend(dealerPerformance),
@@ -3373,34 +3408,54 @@ export default function SuperAdminDashboard() {
             alignItems: 'stretch'
           }}>
             <StatCard
-              title="Total Dealers"
-              value={dashboardData.overview.totalDealers}
-              change={`${dashboardData.overview.totalDealers} active dealership${dashboardData.overview.totalDealers !== 1 ? 's' : ''}`}
+              title={selectedFilterDealer === 'all' ? "Total Dealers" : "Dealership"}
+              value={selectedFilterDealer === 'all' ? dashboardData.overview.totalDealers : (dashboardData.dealerRankings.find(d => d.id === selectedFilterDealer)?.name || selectedFilterDealer)}
+              change={selectedFilterDealer === 'all' ? `${dashboardData.overview.totalDealers} active dealership${dashboardData.overview.totalDealers !== 1 ? 's' : ''}` : "Selected Active Dealership"}
               changeType="positive"
               icon={<Business />}
               color={THEME.primary}
             />
             <StatCard
               title="Total Videos"
-              value={dashboardData.overview.totalVideos}
-              change={dashboardData.overview.totalVideos > 0 ? `${dashboardData.overview.totalVideos} analyses completed` : 'No analyses yet'}
-              changeType={dashboardData.overview.totalVideos > 0 ? 'positive' : 'neutral'}
+              value={selectedFilterDealer === 'all' ? dashboardData.overview.totalVideos : (dashboardData.dealerRankings.find(d => d.id === selectedFilterDealer)?.videos || 0)}
+              change={
+                selectedFilterDealer === 'all'
+                  ? (dashboardData.overview.totalVideos > 0 ? `${dashboardData.overview.totalVideos} analyses completed` : 'No analyses yet')
+                  : `${dashboardData.dealerRankings.find(d => d.id === selectedFilterDealer)?.videos || 0} analyses completed`
+              }
+              changeType="positive"
               icon={<VideoLibrary />}
               color={THEME.accent}
             />
             <StatCard
               title="Avg Quality Score"
-              value={dashboardData.overview.averageScore.toFixed(1)}
-              change={dashboardData.overview.averageScore > 0 ? `${dashboardData.overview.averageScore.toFixed(1)}/10 network average` : 'No score data'}
-              changeType={dashboardData.overview.averageScore >= 7 ? 'positive' : dashboardData.overview.averageScore >= 4 ? 'neutral' : dashboardData.overview.averageScore > 0 ? 'negative' : 'neutral'}
+              value={
+                selectedFilterDealer === 'all'
+                  ? dashboardData.overview.averageScore.toFixed(1)
+                  : ((dashboardData.dealerRankings.find(d => d.id === selectedFilterDealer)?.overall || 0).toFixed(1))
+              }
+              change={
+                selectedFilterDealer === 'all'
+                  ? (dashboardData.overview.averageScore > 0 ? `${dashboardData.overview.averageScore.toFixed(1)}/10 network average` : 'No score data')
+                  : `${((dashboardData.dealerRankings.find(d => d.id === selectedFilterDealer)?.overall || 0).toFixed(1))}/10 dealership rating`
+              }
+              changeType="positive"
               icon={<Star />}
               color={THEME.warning}
               subtitle="out of 10"
             />
             <StatCard
               title="Total Users"
-              value={dashboardData.overview.totalUsers}
-              change={`${dashboardData.overview.totalUsers} registered user${dashboardData.overview.totalUsers !== 1 ? 's' : ''}`}
+              value={
+                selectedFilterDealer === 'all'
+                  ? dashboardData.overview.totalUsers
+                  : (dashboardData.dealerRankings.find(d => d.id === selectedFilterDealer)?.users || 0)
+              }
+              change={
+                selectedFilterDealer === 'all'
+                  ? `${dashboardData.overview.totalUsers} registered user${dashboardData.overview.totalUsers !== 1 ? 's' : ''}`
+                  : `${dashboardData.dealerRankings.find(d => d.id === selectedFilterDealer)?.users || 0} active user accounts`
+              }
               changeType="positive"
               icon={<Group />}
               color={THEME.success}
@@ -3461,7 +3516,28 @@ export default function SuperAdminDashboard() {
                     </Typography>
                   </Box>
                   <Box sx={{ flex: 1, minHeight: 300, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <QualityDistributionChart data={dashboardData.qualityDistribution} />
+                    <QualityDistributionChart data={
+                      selectedFilterDealer === 'all'
+                        ? dashboardData.qualityDistribution
+                        : (() => {
+                            const dealerRes = allResults.filter(r => (r.dealer_id || r.dealer) === selectedFilterDealer);
+                            const dist = { 'Excellent': 0, 'Very Good': 0, 'Good': 0, 'Fair': 0, 'Poor': 0 };
+                            dealerRes.forEach(r => {
+                              const score = r.overall_quality_score || (r.overall_quality?.overall_score);
+                              let label = r.overall_quality_label || (r.overall_quality?.overall_label);
+                              if (!label && score != null) {
+                                if (score >= 8.5) label = 'Excellent';
+                                else if (score >= 7.5) label = 'Very Good';
+                                else if (score >= 6.5) label = 'Good';
+                                else if (score >= 5.0) label = 'Fair';
+                                else label = 'Poor';
+                              }
+                              if (label) dist[label] = (dist[label] || 0) + 1;
+                            });
+                            const res = Object.entries(dist).filter(([_, v]) => v > 0).map(([name, value]) => ({ name, value }));
+                            return res.length > 0 ? res : dashboardData.qualityDistribution;
+                          })()
+                    } />
                   </Box>
                 </CardContent>
               </Card>
@@ -3684,7 +3760,11 @@ export default function SuperAdminDashboard() {
                 {/* Tab Panels */}
                 {subTab === 0 ? (
                   <Box sx={{ width: '100%', minHeight: 320 }}>
-                    <PerformanceTrendChart data={dashboardData.performanceTrend} />
+                    <PerformanceTrendChart data={
+                      selectedFilterDealer === 'all'
+                        ? dashboardData.performanceTrend
+                        : dashboardData.performanceTrend.filter(d => d.name === selectedFilterDealer || d.id === selectedFilterDealer)
+                    } />
                   </Box>
                 ) : (
                   <Box sx={{ width: '100%' }}>
@@ -3871,6 +3951,7 @@ export default function SuperAdminDashboard() {
                         : dashboardData.dealerRankings.filter(d => d.id === selectedFilterDealer)
                     }
                     selectedDealerId={selectedFilterDealer}
+                    allResults={allResults}
                   />
                 </CardContent>
               </Card>
@@ -3966,7 +4047,7 @@ export default function SuperAdminDashboard() {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {dashboardData.dealerRankings.map((dealer, index) => (
+                    {dashboardData.dealerRankings.slice(0, 5).map((dealer, index) => (
                       <TableRow
                         key={dealer.id}
                         sx={{

@@ -50,10 +50,16 @@ coverage/
 *.temp
 .cache/
 
-# Database
+# Database & Backups
 *.db
 *.sqlite
 *.sqlite3
+backups/
+db_backups/
+*.dump
+*.bson
+*.backup
+*.dump.gz
 
 # AI Model files (if large)
 backend/models/*.pt

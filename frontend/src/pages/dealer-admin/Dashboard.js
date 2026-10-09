@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useContext } from 'react';
+﻿import React, { useEffect, useState, useContext } from 'react';
 import { useTheme } from '@mui/material/styles';
 import {
   Grid,
@@ -23,7 +23,9 @@ import {
   Snackbar,
   ContentCopy,
   Link,
-  Divider
+  Divider,
+  Menu,
+  MenuItem
 } from '@mui/material';
 import {
   TrendingUp,
@@ -43,7 +45,12 @@ import {
   Videocam,
   Assessment,
   Schedule,
-  Person
+  Person,
+  KeyboardArrowDown,
+  CalendarMonth,
+  CalendarToday,
+  DateRange,
+  AllInclusive
 } from '@mui/icons-material';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart as RechartsBarChart, Bar, PieChart as RechartsPieChart, Pie, Cell, Legend, ComposedChart, LabelList, ReferenceLine } from 'recharts';
 import { dashboardApi } from '../../services/dashboardapi';
@@ -67,7 +74,14 @@ export default function DealerAdminDashboard() {
   });
   const [allResults, setAllResults] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [timeRange, setTimeRange] = useState('all');
+  const [timeRange, setTimeRange] = useState('year');
+  const toggleTimeRange = () => {
+    setTimeRange(prev => prev === 'month' ? 'year' : 'month');
+  };
+
+  const getRangeLabel = (range) => {
+    return range === 'month' ? 'This Month' : 'This Year';
+  };
   const [refreshCounter, setRefreshCounter] = useState(0);
   const [error, setError] = useState(null);
   const { user: authUser } = useContext(AuthContext);
@@ -614,19 +628,50 @@ export default function DealerAdminDashboard() {
       const recentRaw = data.recent_analyses || [];
       setAllResults(recentRaw);
 
+      const rawDaily = (data.dailyPerformance || []).map(d => ({
+        ...d,
+        videos: typeof d.videos === 'number' && !isNaN(d.videos)
+          ? d.videos
+          : (typeof d.count === 'number' && !isNaN(d.count) ? d.count : 0)
+      }));
+
+      // Filter daily data based on selected timeRange
+      const now = new Date();
+      const currentMonthShort = now.toLocaleString('en-US', { month: 'short' }).toLowerCase(); // "oct"
+
+      let activeDaily = rawDaily;
+      if (timeRange === 'month') {
+        // Keep only records from THIS MONTH (e.g. "03 Oct", "05 Oct")
+        activeDaily = rawDaily.filter(d => {
+          const parts = (d.name || '').trim().split(' ');
+          const monthStr = parts.length > 1 ? parts[1].toLowerCase() : parts[0].toLowerCase();
+          return monthStr === currentMonthShort || (d.name || '').toLowerCase().includes(currentMonthShort);
+        });
+        if (activeDaily.length === 0 && rawDaily.length > 0) {
+          const lastEntry = rawDaily[rawDaily.length - 1];
+          const lastMonth = (lastEntry.name || '').trim().split(' ')[1]?.toLowerCase();
+          if (lastMonth) {
+            activeDaily = rawDaily.filter(d => (d.name || '').toLowerCase().includes(lastMonth));
+          }
+        }
+      }
+
+      const activeTotalVideos = timeRange === 'month' && activeDaily.length > 0
+        ? activeDaily.reduce((sum, d) => sum + (d.videos || 0), 0)
+        : (data.total_videos_analyzed || 0);
+
+      const activeAvgScore = timeRange === 'month' && activeDaily.length > 0
+        ? Number((activeDaily.reduce((sum, d) => sum + (d.score || 0), 0) / activeDaily.length).toFixed(1))
+        : (data.average_overall_quality || 0);
+
       setDashboardData({
         overview: {
-          totalVideos: data.total_videos_analyzed || 0,
-          averageScore: data.average_overall_quality || 0,
+          totalVideos: activeTotalVideos,
+          averageScore: activeAvgScore,
           serviceAdvisors: (data.serviceAdvisors || []).length,
           completionRate: completionRate
         },
-        dailyPerformance: (data.dailyPerformance || []).map(d => ({
-          ...d,
-          videos: typeof d.videos === 'number' && !isNaN(d.videos)
-            ? d.videos
-            : (typeof d.count === 'number' && !isNaN(d.count) ? d.count : 0)
-        })),
+        dailyPerformance: activeDaily,
         serviceAdvisors: data.serviceAdvisors || [],
         qualityBreakdown: qualityBreakdown,
         recentVideos: recentRaw.map((video, index) => ({
@@ -1235,7 +1280,32 @@ export default function DealerAdminDashboard() {
                       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 1, position: 'relative', minHeight: 32 }}>
                         <Box sx={{ width: 5, height: 28, borderRadius: 2, bgcolor: CN.navy, position: 'absolute', left: 0 }} />
                         <Typography variant="h6" sx={{ color: CN.navy, fontWeight: 700, textAlign: 'center' }}>Quality Score Trend</Typography>
-                        <Chip label={timeRange} size="small" sx={{ position: 'absolute', right: 0, bgcolor: CN.navyLight, color: CN.navy, fontWeight: 700, textTransform: 'capitalize', border: `1px solid ${CN.navy}30` }} />
+                        <Tooltip title="Click to toggle between This Month & This Year" arrow>
+                          <Chip
+                            label={getRangeLabel(timeRange)}
+                            onClick={toggleTimeRange}
+                            size="small"
+                            sx={{
+                              position: 'absolute',
+                              right: 0,
+                              bgcolor: CN.navyLight,
+                              color: CN.navy,
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              userSelect: 'none',
+                              border: `1.5px solid ${CN.navy}40`,
+                              transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                              '&:hover': {
+                                bgcolor: `${CN.navy}25`,
+                                transform: 'scale(1.05)',
+                                boxShadow: '0 4px 12px rgba(28,63,170,0.2)'
+                              },
+                              '&:active': {
+                                transform: 'scale(0.96)'
+                              }
+                            }}
+                          />
+                        </Tooltip>
                       </Box>
                       <Typography variant="body2" sx={{ color: THEME.textSecondary, mb: 2.5, textAlign: 'center' }}>
                         Daily average quality ratings for overall, video, and audio (out of 10)
@@ -1269,7 +1339,7 @@ export default function DealerAdminDashboard() {
                           <YAxis domain={[0, 10]} stroke={THEME.textTertiary} fontSize={11} tickLine={false} axisLine={false} />
                           <RechartsTooltip 
                             contentStyle={{ borderRadius: 10, border: `1px solid ${CN.navy}30`, boxShadow: '0 8px 24px rgba(28,63,170,0.12)' }} 
-                            formatter={(v, n) => [`${v}/10`, n === 'score' ? 'Overall Quality' : n === 'video' ? 'Video Quality' : 'Audio Quality']} 
+                            formatter={(v, n) => [`${v}/10`, n]} 
                           />
                           <Legend iconType="circle" verticalAlign="top" height={36}/>
                           <Line type="monotone" dataKey="score" name="Overall Quality" stroke={CN.navy} strokeWidth={3} dot={{ r: 4, fill: CN.navy, stroke: '#fff', strokeWidth: 2 }} activeDot={{ r: 6, fill: CN.orange }} />
@@ -1288,7 +1358,32 @@ export default function DealerAdminDashboard() {
                       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 1, position: 'relative', minHeight: 32 }}>
                         <Box sx={{ width: 5, height: 28, borderRadius: 2, bgcolor: CN.gold, position: 'absolute', left: 0 }} />
                         <Typography variant="h6" sx={{ color: '#7A5A00', fontWeight: 700, textAlign: 'center' }}>Videos Uploaded Trend</Typography>
-                        <Chip label={timeRange} size="small" sx={{ position: 'absolute', right: 0, bgcolor: CN.goldLight, color: '#7A5A00', fontWeight: 700, textTransform: 'capitalize', border: `1px solid ${CN.gold}60` }} />
+                        <Tooltip title="Click to toggle between This Month & This Year" arrow>
+                          <Chip
+                            label={getRangeLabel(timeRange)}
+                            onClick={toggleTimeRange}
+                            size="small"
+                            sx={{
+                              position: 'absolute',
+                              right: 0,
+                              bgcolor: CN.goldLight,
+                              color: '#7A5A00',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              userSelect: 'none',
+                              border: `1.5px solid ${CN.gold}60`,
+                              transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                              '&:hover': {
+                                bgcolor: `${CN.gold}35`,
+                                transform: 'scale(1.05)',
+                                boxShadow: '0 4px 12px rgba(245,184,0,0.25)'
+                              },
+                              '&:active': {
+                                transform: 'scale(0.96)'
+                              }
+                            }}
+                          />
+                        </Tooltip>
                       </Box>
                       <Typography variant="body2" sx={{ color: THEME.textSecondary, mb: 2.5, textAlign: 'center' }}>
                         Number of videos submitted for analysis per day
@@ -1332,7 +1427,32 @@ export default function DealerAdminDashboard() {
                       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 1, position: 'relative', minHeight: 32 }}>
                         <Box sx={{ width: 5, height: 28, borderRadius: 2, bgcolor: CN.orange, position: 'absolute', left: 0 }} />
                         <Typography variant="h6" sx={{ color: '#7A2E00', fontWeight: 700, textAlign: 'center' }}>Advisor Performance Trend</Typography>
-                        <Chip label="Top 6" size="small" sx={{ position: 'absolute', right: 0, bgcolor: CN.orangeLight, color: '#7A2E00', fontWeight: 700, border: `1px solid ${CN.orange}50` }} />
+                        <Tooltip title="Click to toggle between This Month & This Year" arrow>
+                          <Chip
+                            label={getRangeLabel(timeRange)}
+                            onClick={toggleTimeRange}
+                            size="small"
+                            sx={{
+                              position: 'absolute',
+                              right: 0,
+                              bgcolor: CN.orangeLight,
+                              color: '#7A2E00',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              userSelect: 'none',
+                              border: `1.5px solid ${CN.orange}50`,
+                              transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                              '&:hover': {
+                                bgcolor: `${CN.orange}35`,
+                                transform: 'scale(1.05)',
+                                boxShadow: '0 4px 12px rgba(255,102,0,0.25)'
+                              },
+                              '&:active': {
+                                transform: 'scale(0.96)'
+                              }
+                            }}
+                          />
+                        </Tooltip>
                       </Box>
                       <Typography variant="body2" sx={{ color: THEME.textSecondary, mb: 2.5, textAlign: 'center' }}>
                         Overall quality score per service advisor (top 6 by rank)
@@ -1377,7 +1497,32 @@ export default function DealerAdminDashboard() {
                       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 1, position: 'relative', minHeight: 32 }}>
                         <Box sx={{ width: 5, height: 28, borderRadius: 2, background: `linear-gradient(180deg, ${CN.gold} 0%, ${CN.orange} 100%)`, position: 'absolute', left: 0 }} />
                         <Typography variant="h6" sx={{ color: CN.navy, fontWeight: 700, textAlign: 'center' }}>Audio / Video Improvement</Typography>
-                        <Chip label={timeRange} size="small" sx={{ position: 'absolute', right: 0, bgcolor: CN.navyLight, color: CN.navy, fontWeight: 700, textTransform: 'capitalize', border: `1px solid ${CN.navy}30` }} />
+                        <Tooltip title="Click to toggle between This Month & This Year" arrow>
+                          <Chip
+                            label={getRangeLabel(timeRange)}
+                            onClick={toggleTimeRange}
+                            size="small"
+                            sx={{
+                              position: 'absolute',
+                              right: 0,
+                              bgcolor: CN.navyLight,
+                              color: CN.navy,
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              userSelect: 'none',
+                              border: `1.5px solid ${CN.navy}40`,
+                              transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                              '&:hover': {
+                                bgcolor: `${CN.navy}25`,
+                                transform: 'scale(1.05)',
+                                boxShadow: '0 4px 12px rgba(28,63,170,0.2)'
+                              },
+                              '&:active': {
+                                transform: 'scale(0.96)'
+                              }
+                            }}
+                          />
+                        </Tooltip>
                       </Box>
                       <Typography variant="body2" sx={{ color: THEME.textSecondary, mb: 2.5, textAlign: 'center' }}>
                         Compare audio quality vs video quality over each day
@@ -1411,6 +1556,8 @@ export default function DealerAdminDashboard() {
                     </CardContent>
                   </Card>
                 </Grid>
+
+
 
               </Grid>
             );

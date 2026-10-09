@@ -663,7 +663,7 @@ export default function Results() {
       minHeight: '100vh',
       py: 4
     }}>
-      <Container maxWidth="xl">
+      <Box sx={{ width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}>
         {/* Modern Header */}
         <Box sx={{ mb: 6, textAlign: 'center' }}>
           <Typography
@@ -1411,7 +1411,7 @@ export default function Results() {
         <Dialog
           open={dialogOpen}
           onClose={handleCloseDialog}
-          maxWidth="lg"
+          maxWidth="xl"
           fullWidth
           PaperProps={{
             sx: {
@@ -1476,7 +1476,7 @@ export default function Results() {
             overflow: 'auto'
           }}>
             {selectedResult && (
-              <Box sx={{ maxWidth: 1200, mx: 'auto', p: 4 }}>
+              <Box sx={{ width: '100%', maxWidth: '100%', p: 4 }}>
                 {/* Service Information Cards */}
                 <Grid container spacing={3} sx={{ mb: 4 }}>
                   <Grid item xs={12}>
@@ -2536,7 +2536,7 @@ export default function Results() {
             100% { transform: rotate(360deg); }
           }
         `}</style>
-      </Container>
+      </Box>
     </Box>
   );
 }

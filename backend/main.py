@@ -1,4 +1,4 @@
-# main.py - Comprehensive Backend with RBAC, Dashboards, and Analysis Features
+﻿# main.py - Comprehensive Backend with RBAC, Dashboards, and Analysis Features
 
 import os
 import sys
@@ -4136,7 +4136,8 @@ async def get_dealer_dashboard_overview(
     advisor_map = {}
     daily_map = {}
 
-    for r in results:
+    target_results = overview_results if (timeRange and timeRange.lower() != 'all') else results
+    for r in target_results:
         # Resolve vehicle name fallback
         vehicle = r.get("citnow_vehicle") or r.get("citnow_metadata", {}).get("vehicle")
         if not vehicle or vehicle == "NA" or vehicle == "Unknown Vehicle":
