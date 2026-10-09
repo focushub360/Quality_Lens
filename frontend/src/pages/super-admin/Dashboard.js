@@ -971,17 +971,23 @@ const HEATMAP_LEGEND = [
 ];
 
 const CustomTreemapContent = (props) => {
-  const { x, y, width, height, name, overall, size } = props;
+  const { x, y, width, height, name, overall, size, videos } = props;
 
-  const bgColor = getHeatmapColor(overall || 0);
+  const scoreVal = typeof overall === 'number' ? overall : (props.payload?.overall || 0);
+  const videoCount = videos ?? props.payload?.videos ?? size ?? 0;
+  const bgColor = getHeatmapColor(scoreVal);
   // Dark text only on the salmon/light-red band, white elsewhere
-  const textColor = (overall || 0) >= 5.5 && (overall || 0) < 6.5 ? 'rgba(0,0,0,0.82)' : '#FFFFFF';
+  const textColor = scoreVal >= 5.5 && scoreVal < 6.5 ? 'rgba(0,0,0,0.85)' : '#FFFFFF';
 
-  const showText = width > 55 && height > 38;
+  const showText = width > 50 && height > 35;
+  const showSubtext = width > 110 && height > 75;
 
-  // Truncate long names to fit the block
-  const maxChars = Math.max(6, Math.floor(width / 9));
-  const displayName = name && name.length > maxChars ? name.substring(0, maxChars - 1) + '…' : name;
+  // Max characters depending on block size
+  const maxChars = Math.max(8, Math.floor(width / (showSubtext ? 11 : 8)));
+  const displayName = name && name.length > maxChars ? name.substring(0, maxChars - 1) + '…' : (name || '');
+
+  const titleFontSize = Math.min(22, Math.max(12, Math.floor(width / 18)));
+  const subFontSize = Math.min(13, Math.max(10, Math.floor(titleFontSize * 0.72)));
 
   return (
     <g>
@@ -990,30 +996,71 @@ const CustomTreemapContent = (props) => {
         y={y + 1}
         width={Math.max(0, width - 2)}
         height={Math.max(0, height - 2)}
+        rx={4}
+        ry={4}
         style={{
           fill: bgColor,
           stroke: '#ffffff',
           strokeWidth: 2,
-          strokeOpacity: 1,
+          strokeOpacity: 0.95,
         }}
       />
-      {/* Name only — score & videos shown on hover via tooltip */}
       {showText && (
-        <text
-          x={x + width / 2}
-          y={y + height / 2}
-          textAnchor="middle"
-          dominantBaseline="middle"
-          style={{
-            fill: textColor,
-            fontSize: Math.min(16, Math.max(10, width / 8)) + 'px',
-            fontWeight: 700,
-            fontFamily: 'Outfit, Inter, sans-serif',
-            pointerEvents: 'none',
-          }}
-        >
-          {displayName}
-        </text>
+        showSubtext ? (
+          <>
+            <text
+              x={x + width / 2}
+              y={y + height / 2 - 10}
+              textAnchor="middle"
+              dominantBaseline="middle"
+              style={{
+                fill: textColor,
+                fontSize: `${titleFontSize}px`,
+                fontWeight: 800,
+                letterSpacing: '0.4px',
+                fontFamily: 'Outfit, Inter, sans-serif',
+                pointerEvents: 'none',
+                filter: 'drop-shadow(0px 1px 2px rgba(0,0,0,0.35))'
+              }}
+            >
+              {displayName}
+            </text>
+            <text
+              x={x + width / 2}
+              y={y + height / 2 + 12}
+              textAnchor="middle"
+              dominantBaseline="middle"
+              style={{
+                fill: textColor,
+                fontSize: `${subFontSize}px`,
+                fontWeight: 600,
+                opacity: 0.92,
+                fontFamily: 'Outfit, Inter, sans-serif',
+                pointerEvents: 'none',
+                filter: 'drop-shadow(0px 1px 2px rgba(0,0,0,0.35))'
+              }}
+            >
+              ★ {scoreVal.toFixed(1)}/10 • {videoCount} {videoCount === 1 ? 'Video' : 'Videos'}
+            </text>
+          </>
+        ) : (
+          <text
+            x={x + width / 2}
+            y={y + height / 2}
+            textAnchor="middle"
+            dominantBaseline="middle"
+            style={{
+              fill: textColor,
+              fontSize: `${Math.min(16, Math.max(11, Math.floor(width / 10)))}px`,
+              fontWeight: 700,
+              fontFamily: 'Outfit, Inter, sans-serif',
+              pointerEvents: 'none',
+              filter: 'drop-shadow(0px 1px 2px rgba(0,0,0,0.35))'
+            }}
+          >
+            {displayName}
+          </text>
+        )
       )}
     </g>
   );

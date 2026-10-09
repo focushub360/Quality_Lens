@@ -166,7 +166,7 @@ export default function Footer() {
                   fontSize: 18 // Smaller icon
                 }} />
                 <Link
-                  href="mailto:support@qualitylens.co.uk"
+                  href="mailto:info@focusengineering.in"
                   variant="body2"
                   sx={{
                     color: THEME.textSecondary,
