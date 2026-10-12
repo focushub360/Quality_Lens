@@ -944,14 +944,13 @@ export default function BulkUpload() {
   const canDownloadResults = (batchStatus) => ['completed', 'processing', 'failed', 'cancelled', 'stopping'].includes(batchStatus);
 
   return (
-    <Container maxWidth="xl" sx={{
-    py: 4,
-    textAlign: "center",
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-  }}>
+    <Container maxWidth={false} sx={{
+      py: 4,
+      px: { xs: 2, sm: 3, md: 5 },
+      width: '100%',
+      maxWidth: '1440px',
+      mx: 'auto'
+    }}>
       {/* Header Section */}
       <Box sx={{ textAlign: 'center', mb: 6 }}>
         <Typography
@@ -1032,7 +1031,7 @@ export default function BulkUpload() {
 
       <Box sx={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', mt: 2 }}>
         {!status ? (
-          <Box sx={{ width: '100%', maxWidth: 800, display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <Box sx={{ width: '100%', maxWidth: '1440px', display: 'flex', flexDirection: 'column', gap: 3.5 }}>
           {/* Daily Quota Pill & Exceeded Banner */}
           {quotaInfo && quotaInfo.daily_limit && (
             <Card sx={{
@@ -1088,15 +1087,15 @@ export default function BulkUpload() {
                 <Table size="small">
                   <TableHead>
                     <TableRow sx={{ backgroundColor: THEME.surface }}>
-                      <TableCell sx={{ fontWeight: 600, color: THEME.textPrimary }}>Video ID</TableCell>
-                      <TableCell sx={{ fontWeight: 600, color: THEME.textPrimary }}>Location Name</TableCell>
-                      <TableCell sx={{ fontWeight: 600, color: THEME.textPrimary }}>Vehicle ID</TableCell>
-                      <TableCell sx={{ fontWeight: 600, color: THEME.textPrimary }}>VIN</TableCell>
-                      <TableCell sx={{ fontWeight: 600, color: THEME.textPrimary }}>VP Display Name</TableCell>
-                      <TableCell sx={{ fontWeight: 600, color: THEME.textPrimary }}>Excluded from Stats</TableCell>
-                      <TableCell sx={{ fontWeight: 600, color: THEME.textPrimary }}>Vehicle Make</TableCell>
-                      <TableCell sx={{ fontWeight: 600, color: THEME.textPrimary }}>New/Used</TableCell>
-                      <TableCell sx={{ fontWeight: 600, color: THEME.textPrimary }}>date</TableCell>
+                      <TableCell sx={{ fontWeight: 700, color: THEME.textPrimary, whiteSpace: 'nowrap' }}>Video ID</TableCell>
+                      <TableCell sx={{ fontWeight: 700, color: THEME.textPrimary, whiteSpace: 'nowrap' }}>Location Name</TableCell>
+                      <TableCell sx={{ fontWeight: 700, color: THEME.textPrimary, whiteSpace: 'nowrap' }}>Vehicle ID</TableCell>
+                      <TableCell sx={{ fontWeight: 700, color: THEME.textPrimary, whiteSpace: 'nowrap' }}>VIN</TableCell>
+                      <TableCell sx={{ fontWeight: 700, color: THEME.textPrimary, whiteSpace: 'nowrap' }}>VP Display Name</TableCell>
+                      <TableCell sx={{ fontWeight: 700, color: THEME.textPrimary, whiteSpace: 'nowrap' }}>Excluded from Stats</TableCell>
+                      <TableCell sx={{ fontWeight: 700, color: THEME.textPrimary, whiteSpace: 'nowrap' }}>Vehicle Make</TableCell>
+                      <TableCell sx={{ fontWeight: 700, color: THEME.textPrimary, whiteSpace: 'nowrap' }}>New/Used</TableCell>
+                      <TableCell sx={{ fontWeight: 700, color: THEME.textPrimary, whiteSpace: 'nowrap' }}>Date</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -1372,36 +1371,46 @@ export default function BulkUpload() {
                   mb: 4,
                   backgroundColor: THEME.surface,
                   border: `1px solid ${THEME.borderLight}`,
-                  borderRadius: 2
+                  borderRadius: 2.5
                 }}
               >
-                <Typography variant="h6" gutterBottom sx={{ color: THEME.textPrimary, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Translate sx={{ color: THEME.primary }} />
-                  Translation Settings
-                </Typography>
-                
-                <TextField 
-                  fullWidth 
-                  select 
-                  label="Target Language" 
-                  value={targetLanguage}
-                  onChange={(e) => setTargetLanguage(e.target.value)}
-                  sx={{
-                    '& .MuiOutlinedInput-root': {
-                      borderRadius: 2,
-                      backgroundColor: THEME.background,
-                    }
-                  }}
-                >
-                  {LANGS.filter(l => l.code !== 'auto').map(lang => (
-                    <MenuItem key={lang.code} value={lang.code}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                        <Typography variant="body1">{lang.icon}</Typography>
-                        <Typography>{lang.name}</Typography>
-                      </Box>
-                    </MenuItem>
-                  ))}
-                </TextField>
+                <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, alignItems: { xs: 'flex-start', md: 'center' }, justifyContent: 'space-between', gap: 2 }}>
+                  <Box>
+                    <Typography variant="h6" sx={{ color: THEME.textPrimary, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Translate sx={{ color: THEME.primary }} />
+                      Translation Settings
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: THEME.textSecondary, mt: 0.5 }}>
+                      Select the target language for speech translation, captions, and AI quality evaluation.
+                    </Typography>
+                  </Box>
+                  
+                  <Box sx={{ width: { xs: '100%', md: 320 } }}>
+                    <TextField 
+                      fullWidth 
+                      select 
+                      size="small"
+                      label="Target Language" 
+                      value={targetLanguage}
+                      onChange={(e) => setTargetLanguage(e.target.value)}
+                      sx={{
+                        '& .MuiOutlinedInput-root': {
+                          borderRadius: 2,
+                          backgroundColor: THEME.background,
+                        }
+                      }}
+                    >
+                      {LANGS.filter(l => l.code !== 'auto').map(lang => (
+                        <MenuItem key={lang.code} value={lang.code}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                            <Typography variant="body1">{lang.icon}</Typography>
+                            <Typography>{lang.name}</Typography>
+                          </Box>
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                  </Box>
+                </Box>
               </Paper>
 
               {/* Action Button */}
@@ -1486,7 +1495,7 @@ export default function BulkUpload() {
           </Card>
         </Box>
         ) : (
-          <Box sx={{ width: '100%', maxWidth: 650 }}>
+          <Box sx={{ width: '100%', maxWidth: '1440px' }}>
             <Card sx={{
               background: THEME.surfaceElevated,
               border: `1px solid ${THEME.border}`,
@@ -1868,7 +1877,7 @@ export default function BulkUpload() {
       </Box>
 
       {/* History Dialog */}
-      <Dialog open={showHistory} onClose={() => setShowHistory(false)} maxWidth="md" fullWidth>
+      <Dialog open={showHistory} onClose={() => setShowHistory(false)} maxWidth="lg" fullWidth>
         <DialogTitle>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Typography variant="h6" sx={{ color: THEME.textPrimary, fontWeight: 600 }}>
@@ -2257,11 +2266,7 @@ export default function BulkUpload() {
         </DialogActions>
       </Dialog>
       {/* Rejected Invalid Links Dialog */}
-      <Dialog 
-        open={invalidLinksDialogOpen} 
-        onClose={() => setInvalidLinksDialogOpen(false)} 
-        maxWidth="md" 
-        fullWidth
+      <Dialog open={invalidLinksDialogOpen} onClose={() => setInvalidLinksDialogOpen(false)} maxWidth="lg" fullWidth
         PaperProps={{ sx: { borderRadius: 3, p: 1 } }}
       >
         <DialogTitle sx={{ fontWeight: 800, color: '#B91C1C', display: 'flex', alignItems: 'center', gap: 1 }}>
