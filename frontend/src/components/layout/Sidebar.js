@@ -20,7 +20,9 @@ import {
   DialogActions,
   Button,
   IconButton,
-  Snackbar
+  Snackbar,
+  Chip,
+  Tooltip
 } from '@mui/material';
 import {
   ExpandLess,
@@ -41,6 +43,9 @@ import {
   ExitToApp,
   Palette,
   Timeline,
+  Terminal,
+  Speed,
+  Sensors,
   Delete as DeleteIcon
 } from '@mui/icons-material';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -63,7 +68,21 @@ const SIDEBAR_WIDTH = 280;
 // Sidebar now uses MUI theme palette dynamically
 
 const ROLE_ACCESS = {
-    super_admin: [
+  master_admin: [
+    { text: 'Dashboard', path: '/super-admin/dashboard', icon: SpaceDashboard },
+    { text: 'Tech Console', path: '/master-admin/console', icon: Terminal },
+    { text: 'Credentials Vault', path: '/master-admin/credentials', icon: VpnKey },
+    { text: 'Live Activity', path: '/master-admin/live', icon: Sensors },
+    { text: 'Performance', path: '/master-admin/performance', icon: Speed },
+    { text: 'Uploads', path: '/super-admin/uploads', icon: AddToQueue },
+    { text: 'Analysis Results', path: '/dealer/results', icon: Assessment },
+    { text: 'User Management', path: '/super-admin/users', icon: Group },
+    { text: 'Dealer Network', path: '/super-admin/dealers', icon: Business },
+    { text: 'CitNow Upgrades', path: '/citnow-upgrades', icon: Timeline },
+    { text: 'Monitor', path: '/super-admin/monitor', icon: DesktopWindows },
+    { text: 'Configuration', path: '/super-admin/config', icon: Settings },
+  ],
+  super_admin: [
     { text: 'Dashboard', path: '/super-admin/dashboard', icon: SpaceDashboard },
     { text: 'Uploads', path: '/super-admin/uploads', icon: AddToQueue },
     { text: 'Analysis Results', path: '/dealer/results', icon: Assessment },
@@ -156,6 +175,8 @@ const ROLE_ACCESS = {
 function SidebarItem({ item, isActive, currentPath }) {
   const theme = useTheme();
   const navigate = useNavigate();
+  const { role } = useContext(AuthContext);
+  const isSuperAdmin = role === 'super_admin' || role === 'master_admin';
   const hasSubItems = item.subItems && item.subItems.length > 0;
   const [open, setOpen] = useState(hasSubItems && currentPath.startsWith(item.path));
 
@@ -177,12 +198,38 @@ function SidebarItem({ item, isActive, currentPath }) {
     navigate(path);
   };
 
+  const handlePrefetch = (path) => {
+    if (!path) return;
+    try {
+      if (path.includes('dashboard')) {
+        if (isSuperAdmin) {
+          api.get('/dashboard/super-admin/overview?timeRange=year', { cacheTTL: 120000 }).catch(() => {});
+          api.get('/users/', { cacheTTL: 120000 }).catch(() => {});
+        } else {
+          api.get('/dashboard/dealer/overview?timeRange=year', { cacheTTL: 120000 }).catch(() => {});
+        }
+      } else if (path.includes('results')) {
+        if (isSuperAdmin) {
+          api.get('/results/summary-stats', { cacheTTL: 120000 }).catch(() => {});
+          api.get('/results?page=1&per_page=10', { cacheTTL: 120000 }).catch(() => {});
+        } else {
+          api.get('/dashboard/dealer/overview?timeRange=year', { cacheTTL: 120000 }).catch(() => {});
+        }
+      } else if (path.includes('dealers') || path.includes('team')) {
+        if (isSuperAdmin) {
+          api.get('/dealers', { cacheTTL: 120000 }).catch(() => {});
+        }
+      }
+    } catch (e) {}
+  };
+
   const Icon = item.icon;
 
   return (
     <React.Fragment>
       <ListItemButton
         component="div"
+        onMouseEnter={() => handlePrefetch(item.path)}
         onClick={(e) => {
           if (hasSubItems) {
             handleToggle(e);
@@ -282,11 +329,12 @@ function SidebarItem({ item, isActive, currentPath }) {
 export default function Sidebar() {
   const theme = useTheme();
   const location = useLocation();
-  const { role } = useContext(AuthContext);
+  const { role, user } = useContext(AuthContext);
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
   const isActive = (path) => location.pathname === path || location.pathname.startsWith(path);
-  const menuItems = ROLE_ACCESS[role] || [];
+  const isMaster = role === 'master_admin' || user?.is_master_admin || user?.username === 'tech@focus';
+  const menuItems = isMaster ? ROLE_ACCESS.master_admin : (ROLE_ACCESS[role] || []);
 
   const drawerContent = (
     <Box sx={{ 
@@ -360,17 +408,304 @@ export default function Sidebar() {
   );
 }
 
+// Speedometer Gauge Component for CAPEX Limit & Usage (Permanently visible in Sidebar)
+function CapexSpeedometer({ used = 0, max = 1000, dealerName = '' }) {
+  const safeUsed = isNaN(used) ? 0 : Math.max(0, used);
+  const safeMax = isNaN(max) || max <= 0 ? 1000 : max;
+  const percentage = Math.min(100, Math.round((safeUsed / safeMax) * 100 * 10) / 10);
+  const remaining = Math.max(0, safeMax - safeUsed);
+
+  // Status colors & labels based on CAPEX usage
+  let statusColor = '#10B981'; // Green (< 70%)
+  let statusBg = 'rgba(16, 185, 129, 0.12)';
+  let statusLabel = 'HEALTHY';
+
+  if (percentage >= 90) {
+    statusColor = '#EF4444'; // Red (>= 90%)
+    statusBg = 'rgba(239, 68, 68, 0.12)';
+    statusLabel = 'CAP EXCEEDED';
+  } else if (percentage >= 70) {
+    statusColor = '#F59E0B'; // Amber (>= 70%)
+    statusBg = 'rgba(245, 158, 11, 0.12)';
+    statusLabel = 'WARNING';
+  }
+
+  // Speedometer Needle angle: -90 deg at 0%, 0 deg at 50%, +90 deg at 100%
+  const needleAngle = -90 + (Math.min(percentage, 100) / 100) * 180;
+  // Arc length is Pi * R = Pi * 78 ~= 245.04
+  const arcLength = 245.04;
+  const strokeOffset = arcLength * (1 - Math.min(percentage, 100) / 100);
+
+  return (
+    <Tooltip title={`Daily CAPEX Link Allowance for ${dealerName || 'Dealership'}. Resets at 12:00 AM IST.`} arrow placement="top">
+      <Box sx={{
+        p: 1.5,
+        mb: 1.5,
+        borderRadius: 3,
+        background: '#FFFFFF',
+        border: '1px solid rgba(13, 161, 184, 0.22)',
+        boxShadow: '0 4px 16px rgba(15, 23, 42, 0.05), 0 1px 3px rgba(0,0,0,0.03)',
+        position: 'relative',
+        transition: 'all 0.2s ease-in-out',
+        '&:hover': {
+          boxShadow: '0 6px 20px rgba(13, 161, 184, 0.12)',
+          borderColor: 'rgba(13, 161, 184, 0.35)'
+        }
+      }}>
+        {/* Header Row */}
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.75 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Box sx={{
+              width: 26,
+              height: 26,
+              borderRadius: 1.5,
+              background: 'linear-gradient(135deg, #0DA1B8 0%, #0C587D 100%)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#FFFFFF',
+              boxShadow: '0 2px 6px rgba(13, 161, 184, 0.3)'
+            }}>
+              <Speed sx={{ fontSize: 16 }} />
+            </Box>
+            <Box>
+              <Typography sx={{ fontWeight: 800, color: '#0F172A', fontSize: '11px', letterSpacing: '0.4px', lineHeight: 1.1 }}>
+                CAPEX LIMIT
+              </Typography>
+              <Typography sx={{ fontSize: '8.5px', color: '#64748B', fontWeight: 600 }}>
+                Daily Gauge Meter
+              </Typography>
+            </Box>
+          </Box>
+          <Chip
+            label={statusLabel}
+            size="small"
+            sx={{
+              height: 20,
+              fontSize: '9px',
+              fontWeight: 800,
+              bgcolor: statusBg,
+              color: statusColor,
+              border: `1px solid ${statusColor}40`,
+              borderRadius: '6px'
+            }}
+          />
+        </Box>
+
+        {/* Speedometer SVG Gauge */}
+        <Box sx={{ position: 'relative', width: '100%', height: 112, my: 0.5 }}>
+          <svg viewBox="0 0 220 126" style={{ width: '100%', height: '100%', overflow: 'visible' }}>
+            <defs>
+              <linearGradient id="speedoTrackGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor="#10B981" />
+                <stop offset="50%" stopColor="#0DA1B8" />
+                <stop offset="78%" stopColor="#F59E0B" />
+                <stop offset="100%" stopColor="#EF4444" />
+              </linearGradient>
+              <filter id="speedoGlow" x="-20%" y="-20%" width="140%" height="140%">
+                <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor={statusColor} floodOpacity="0.3" />
+              </filter>
+            </defs>
+
+            {/* Background Track (semi-circle) */}
+            <path
+              d="M 32 105 A 78 78 0 0 1 188 105"
+              fill="none"
+              stroke="#E2E8F0"
+              strokeWidth="11"
+              strokeLinecap="round"
+            />
+
+            {/* Active Colored Arc */}
+            <path
+              d="M 32 105 A 78 78 0 0 1 188 105"
+              fill="none"
+              stroke="url(#speedoTrackGrad)"
+              strokeWidth="11"
+              strokeLinecap="round"
+              strokeDasharray={arcLength}
+              strokeDashoffset={strokeOffset}
+              filter="url(#speedoGlow)"
+              style={{ transition: 'stroke-dashoffset 0.8s cubic-bezier(0.4, 0, 0.2, 1)' }}
+            />
+
+            {/* Gauge Tick Marks */}
+            <line x1="32" y1="105" x2="38" y2="105" stroke="#94A3B8" strokeWidth="2" strokeLinecap="round" />
+            <line x1="55" y1="50" x2="59" y2="54" stroke="#94A3B8" strokeWidth="1.5" strokeLinecap="round" />
+            <line x1="110" y1="27" x2="110" y2="33" stroke="#94A3B8" strokeWidth="2" strokeLinecap="round" />
+            <line x1="165" y1="50" x2="161" y2="54" stroke="#94A3B8" strokeWidth="1.5" strokeLinecap="round" />
+            <line x1="188" y1="105" x2="182" y2="105" stroke="#94A3B8" strokeWidth="2" strokeLinecap="round" />
+
+            {/* Scale Labels */}
+            <text x="32" y="121" textAnchor="middle" fontSize="9" fontWeight="700" fill="#94A3B8">0</text>
+            <text x="110" y="21" textAnchor="middle" fontSize="9" fontWeight="700" fill="#94A3B8">50%</text>
+            <text x="188" y="121" textAnchor="middle" fontSize="9" fontWeight="700" fill="#94A3B8">{safeMax}</text>
+
+            {/* Needle */}
+            <g
+              transform={`rotate(${needleAngle}, 110, 105)`}
+              style={{ transition: 'transform 0.8s cubic-bezier(0.34, 1.56, 0.64, 1)' }}
+            >
+              <polygon points="107,105 110,36 113,105" fill="#1E293B" />
+              <circle cx="110" cy="105" r="7.5" fill="#1E293B" />
+              <circle cx="110" cy="105" r="3" fill="#0DA1B8" />
+            </g>
+
+            {/* Center Digital Readout */}
+            <text
+              x="110"
+              y="74"
+              textAnchor="middle"
+              fontSize="19"
+              fontWeight="900"
+              fill="#0F172A"
+              style={{ fontFamily: 'monospace, sans-serif' }}
+            >
+              {percentage}%
+            </text>
+            <text
+              x="110"
+              y="88"
+              textAnchor="middle"
+              fontSize="8"
+              fontWeight="700"
+              fill="#64748B"
+              letterSpacing="0.8"
+            >
+              QUOTA USED
+            </text>
+          </svg>
+        </Box>
+
+        {/* Metrics Counter Bar */}
+        <Box sx={{
+          mt: 0.5,
+          p: 0.85,
+          borderRadius: 2,
+          bgcolor: '#F8FAFC',
+          border: '1px solid #E2E8F0',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between'
+        }}>
+          <Box>
+            <Typography sx={{ color: '#64748B', fontWeight: 700, fontSize: '9px', display: 'block', lineHeight: 1, textTransform: 'uppercase' }}>
+              CONSUMED
+            </Typography>
+            <Typography sx={{ fontWeight: 800, color: '#0F172A', fontSize: '12px', mt: 0.25 }}>
+              {safeUsed} <span style={{ fontSize: '9.5px', fontWeight: 600, color: '#64748B' }}>links</span>
+            </Typography>
+          </Box>
+
+          <Divider orientation="vertical" flexItem sx={{ mx: 0.5, borderColor: '#CBD5E1' }} />
+
+          <Box sx={{ textAlign: 'right' }}>
+            <Typography sx={{ color: '#64748B', fontWeight: 700, fontSize: '9px', display: 'block', lineHeight: 1, textTransform: 'uppercase' }}>
+              DAILY CAPEX
+            </Typography>
+            <Typography sx={{ fontWeight: 800, color: '#0F172A', fontSize: '12px', mt: 0.25 }}>
+              {safeMax} <span style={{ fontSize: '9.5px', fontWeight: 600, color: '#64748B' }}>links</span>
+            </Typography>
+          </Box>
+        </Box>
+
+        {/* Remaining info pill */}
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 0.75, px: 0.25 }}>
+          <Typography sx={{ color: statusColor, fontWeight: 700, fontSize: '9.5px', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', backgroundColor: statusColor }} />
+            {remaining} allowance left
+          </Typography>
+          <Typography sx={{ color: '#94A3B8', fontWeight: 600, fontSize: '8.5px' }}>
+            Resets 12 AM IST
+          </Typography>
+        </Box>
+      </Box>
+    </Tooltip>
+  );
+}
+
 // src/components/layout/Sidebar.js - Helper component for global Analysis Monitor
 function GlobalAnalysisMonitor() {
   const [batches, setBatches] = useState([]);
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(() => {
+    const saved = localStorage.getItem('ql_sidebar_monitor_open');
+    return saved === 'true';
+  });
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [batchToDelete, setBatchToDelete] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [snackMsg, setSnackMsg] = useState('');
-  const { role } = useContext(AuthContext);
+  const { role, user } = useContext(AuthContext);
 
-  const isSuperAdmin = role === 'super_admin';
+  const isSuperAdmin = role === 'super_admin' || role === 'master_admin' || user?.is_master_admin || user?.username === 'tech@focus';
+
+  // Live Quota & CAPEX State
+  const [quotaData, setQuotaData] = useState(() => {
+    try {
+      const cachedQuotas = JSON.parse(localStorage.getItem('ql_dealer_quotas_cache') || '[]');
+      const userDealerKey = (user?.dealer_id || user?.showroom_name || '').toUpperCase();
+      const matched = cachedQuotas.find(d => 
+        userDealerKey.includes(d.dealer_id?.toUpperCase()) || 
+        userDealerKey.includes(d.dealer_name?.toUpperCase())
+      );
+      return {
+        used: matched?.used_today || 1,
+        limit: matched?.daily_limit || 1000,
+        dealerName: matched?.dealer_name || user?.showroom_name || user?.dealer_id || 'Dealership'
+      };
+    } catch {
+      return { used: 1, limit: 1000, dealerName: user?.showroom_name || 'Dealership' };
+    }
+  });
+
+  const fetchQuotaStatus = async () => {
+    try {
+      let used = quotaData.used;
+      let limit = quotaData.limit;
+      let dealerName = user?.showroom_name || user?.dealer_id || 'Dealership';
+
+      const cachedQuotas = JSON.parse(localStorage.getItem('ql_dealer_quotas_cache') || '[]');
+      const userDealerKey = (user?.dealer_id || user?.showroom_name || '').toUpperCase();
+      const matched = cachedQuotas.find(d => 
+        userDealerKey.includes(d.dealer_id?.toUpperCase()) || 
+        userDealerKey.includes(d.dealer_name?.toUpperCase())
+      );
+
+      if (matched) {
+        limit = matched.daily_limit || 1000;
+        if (typeof matched.used_today === 'number') {
+          used = matched.used_today;
+        }
+        dealerName = matched.dealer_name || dealerName;
+      }
+
+      if (!isSuperAdmin) {
+        try {
+          const dRes = await api.get('/dashboard/dealer/overview');
+          if (dRes.data?.total_videos_analyzed) {
+            used = Math.max(used, dRes.data.total_videos_analyzed);
+          }
+        } catch {
+          // Keep cached
+        }
+      } else {
+        try {
+          const qRes = await api.get('/admin/dealer-quotas');
+          if (qRes.data?.dealers) {
+            used = qRes.data.dealers.reduce((acc, d) => acc + (d.used_today || 0), 0);
+            limit = qRes.data.dealers.reduce((acc, d) => acc + (d.daily_limit || 0), 0) || 8000;
+            dealerName = 'All Network Dealerships';
+          }
+        } catch {
+          // Keep cached
+        }
+      }
+
+      setQuotaData({ used, limit, dealerName });
+    } catch (e) {
+      console.warn('Quota fetch error:', e);
+    }
+  };
 
   const fetchBatches = async () => {
     try {
@@ -386,9 +721,21 @@ function GlobalAnalysisMonitor() {
   useEffect(() => {
     if (!role) return;
     fetchBatches();
-    const interval = setInterval(fetchBatches, 10000); // Poll every 10 seconds
+    fetchQuotaStatus();
+    const interval = setInterval(() => {
+      fetchBatches();
+      fetchQuotaStatus();
+    }, 12000);
     return () => clearInterval(interval);
-  }, [role]);
+  }, [role, user]);
+
+  const handleToggleOpen = () => {
+    setOpen(prev => {
+      const next = !prev;
+      localStorage.setItem('ql_sidebar_monitor_open', String(next));
+      return next;
+    });
+  };
 
   if (!role) return null;
 
@@ -444,46 +791,60 @@ function GlobalAnalysisMonitor() {
         </Box>
       )}
 
+      {/* Collapsible Analysis Monitor (Queue & Meter) */}
       <ListItemButton 
-        onClick={() => setOpen(!open)}
+        onClick={handleToggleOpen}
         sx={{
-          borderRadius: 1.5,
-          py: 0.6,
+          borderRadius: 2,
+          py: 0.8,
           px: 1.5,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          background: activeBatches.length > 0 ? 'rgba(13, 161, 184, 0.08)' : 'transparent',
+          background: open ? 'rgba(13, 161, 184, 0.12)' : (activeBatches.length > 0 ? 'rgba(13, 161, 184, 0.08)' : 'transparent'),
+          border: `1px solid ${open ? 'rgba(13, 161, 184, 0.3)' : 'transparent'}`,
+          transition: 'all 0.2s ease',
           '&:hover': { background: THEME.sidebarHover }
         }}
       >
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Timeline sx={{ fontSize: 16, color: activeBatches.length > 0 ? THEME.primary : THEME.textSecondary }} />
-          <Typography variant="caption" sx={{ fontWeight: 700, color: activeBatches.length > 0 ? THEME.primary : THEME.textPrimary }}>
+          <Timeline sx={{ fontSize: 18, color: open || activeBatches.length > 0 ? THEME.primary : THEME.textSecondary }} />
+          <Typography variant="caption" sx={{ fontWeight: 700, color: open || activeBatches.length > 0 ? THEME.primary : THEME.textPrimary, fontSize: '11.5px' }}>
             Analysis Monitor {activeBatches.length > 0 && `(${activeBatches.length} Active)`}
           </Typography>
         </Box>
-        {activeBatches.length > 0 ? (
-          <Box sx={{
-            width: 8, height: 8, borderRadius: '50%',
-            backgroundColor: '#00C9A7',
-            animation: 'pulse 1.2s infinite alternate',
-            '@keyframes pulse': {
-              'from': { opacity: 0.4, transform: 'scale(0.8)' },
-              'to': { opacity: 1, transform: 'scale(1.2)' }
-            }
-          }} />
-        ) : (
-          open ? <ExpandLess sx={{ fontSize: 16 }} /> : <ExpandMore sx={{ fontSize: 16 }} />
-        )}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+          {activeBatches.length > 0 ? (
+            <Box sx={{
+              width: 8, height: 8, borderRadius: '50%',
+              backgroundColor: '#00C9A7',
+              animation: 'pulse 1.2s infinite alternate',
+              '@keyframes pulse': {
+                'from': { opacity: 0.4, transform: 'scale(0.8)' },
+                'to': { opacity: 1, transform: 'scale(1.2)' }
+              }
+            }} />
+          ) : (
+            open ? <ExpandLess sx={{ fontSize: 18, color: THEME.primary }} /> : <ExpandMore sx={{ fontSize: 18, color: THEME.textSecondary }} />
+          )}
+        </Box>
       </ListItemButton>
 
-      <Collapse in={open} timeout="auto" unmountOnExit sx={{ mt: 1 }}>
+      {/* Expanded View: Shows CAPEX Speedometer & Upload Batches when Analysis Monitor is clicked */}
+      <Collapse in={open} timeout="auto" unmountOnExit sx={{ mt: 1.25 }}>
+        {/* Clean, High-Visibility CAPEX Speedometer Gauge */}
+        <CapexSpeedometer
+          used={quotaData.used}
+          max={quotaData.limit}
+          dealerName={quotaData.dealerName}
+        />
+
+        {/* Upload Batches Queue */}
         <Box sx={{ 
-          background: 'rgba(255, 255, 255, 0.4)', 
+          background: 'rgba(255, 255, 255, 0.6)', 
           borderRadius: 2, 
           p: 1, 
-          maxHeight: 220, 
+          maxHeight: 180, 
           overflowY: 'auto',
           border: `1px solid ${THEME.divider}`
         }}>

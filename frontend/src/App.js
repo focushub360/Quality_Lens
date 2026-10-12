@@ -16,6 +16,10 @@ import DealerManagement from './pages/super-admin/DealerManagement';
 import NewAnalysis from './pages/dealer-admin/NewAnalysis';
 import Uploads from './pages/super-admin/Uploads';
 import Monitor from './pages/super-admin/Monitor';
+import TechConsole from './pages/master-admin/TechConsole';
+import CredentialsVault from './pages/master-admin/CredentialsVault';
+import PerformanceDiagnostics from './pages/master-admin/PerformanceDiagnostics';
+import LiveActivityMonitor from './pages/master-admin/LiveActivityMonitor';
 
 import BulkUpload from './pages/dealer-admin/BulkUpload';
 import Results from './pages/dealer-admin/Results';
@@ -44,12 +48,23 @@ export default function App() {
               <Route path="/citnow-upgrades" element={<Layout><CitNowUpgrades /></Layout>} />
             </Route>
 
+            {/* Super Admin Routes */}
             <Route element={<ProtectedRoute roles={["super_admin"]} />}>
               <Route path="/super-admin/dashboard" element={<Layout><SuperAdminDashboard /></Layout>} />
               <Route path="/super-admin/monitor" element={<Layout><Monitor /></Layout>} />
               <Route path="/super-admin/uploads" element={<Layout><Uploads /></Layout>} />
               <Route path="/super-admin/users" element={<Layout><UserManagement /></Layout>} />
               <Route path="/super-admin/dealers" element={<Layout><DealerManagement /></Layout>} />
+            </Route>
+
+            {/* Master Admin Only Routes (Tech Console, Vault, Live Activity, Diagnostics) */}
+            <Route element={<ProtectedRoute roles={["master_admin"]} />}>
+              <Route path="/master-admin/console" element={<Layout><TechConsole /></Layout>} />
+              <Route path="/master-admin/credentials" element={<Layout><CredentialsVault /></Layout>} />
+              <Route path="/master-admin/performance" element={<Layout><PerformanceDiagnostics /></Layout>} />
+              <Route path="/super-admin/performance" element={<Layout><PerformanceDiagnostics /></Layout>} />
+              <Route path="/master-admin/live" element={<Layout><LiveActivityMonitor /></Layout>} />
+              <Route path="/super-admin/live" element={<Layout><LiveActivityMonitor /></Layout>} />
             </Route>
 
             {/* Link Analysis & Optimization (Accessible to Super Admin & Dealer roles) */}

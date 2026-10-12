@@ -78,6 +78,8 @@ import { listUsers, createUser, updateUser, deleteUser } from '../../services/us
 import { listDealerUsers, getDealerUserStats, deleteDealership, updateDealerStatus } from '../../services/dealer_user';
 
 import api from '../../services/api';
+import { formatExecutiveSummary } from '../../utils/summaryFormatter';
+import { formatDateTime } from '../../utils/dateFormatter';
 import {
   BarChart,
   Bar,
@@ -1113,7 +1115,7 @@ export default function DealerManagement() {
       const transcription = r.transcription?.text || '';
       const summary = r.summarization?.summary || '';
       const translation = r.translation?.translated_text || '';
-      const uploadedDate = r.created_at ? new Date(r.created_at).toLocaleString() : '';
+      const uploadedDate = r.created_at ? formatDateTime(r.created_at) : '';
       const videoLink = m.page_url || '';
       const id = r._id;
 
@@ -3977,24 +3979,67 @@ export default function DealerManagement() {
                                 Summary
                               </Typography>
                             </Box>
-                            <Paper sx={{
-                              p: 2,
-                              background: THEME.surface,
-                              border: `1px solid ${THEME.borderLight}`,
-                              borderRadius: 2,
-                              flex: 1,
-                              overflow: 'auto',
-                              maxHeight: 300
-                            }}>
-                              <Typography variant="body2" sx={{
-                                color: THEME.textPrimary,
-                                whiteSpace: 'pre-wrap',
-                                lineHeight: 1.6,
-                                fontSize: '0.875rem'
-                              }}>
-                                {selectedResult.summarization?.summary || 'No summary available'}
-                              </Typography>
-                            </Paper>
+                            {(() => {
+                              const summaryData = formatExecutiveSummary(selectedResult.summarization?.summary, selectedResult);
+                              return (
+                                <Paper sx={{
+                                  p: 2,
+                                  background: THEME.surface,
+                                  border: `1px solid ${THEME.borderLight}`,
+                                  borderRadius: 2,
+                                  flex: 1,
+                                  overflow: 'auto',
+                                  maxHeight: 340
+                                }}>
+                                  <Box sx={{ mb: 1.5, p: 1.5, bgcolor: '#FFFFFF', borderRadius: 1.5, borderLeft: `3px solid ${THEME.primary}` }}>
+                                    <Typography variant="caption" sx={{ fontWeight: 800, color: THEME.primaryDark, textTransform: 'uppercase', display: 'block', mb: 0.5 }}>
+                                      Executive Overview
+                                    </Typography>
+                                    <Typography variant="body2" sx={{ color: THEME.textPrimary, lineHeight: 1.6, fontSize: '0.84rem' }}>
+                                      {summaryData.executiveText}
+                                    </Typography>
+                                  </Box>
+
+                                  <Box sx={{ mb: 1.5, p: 1.5, bgcolor: '#FFFFFF', borderRadius: 1.5, border: `1px solid ${THEME.borderLight}` }}>
+                                    <Typography variant="caption" sx={{ fontWeight: 800, color: THEME.textPrimary, display: 'block', mb: 0.5 }}>
+                                      🎥 Visual Performance ({summaryData.videoScore}/10 • {summaryData.videoLabel})
+                                    </Typography>
+                                    <Typography variant="body2" sx={{ color: THEME.textSecondary, lineHeight: 1.55, fontSize: '0.82rem' }}>
+                                      {summaryData.visualText}
+                                    </Typography>
+                                  </Box>
+
+                                  <Box sx={{ mb: 1.5, p: 1.5, bgcolor: '#FFFFFF', borderRadius: 1.5, border: `1px solid ${THEME.borderLight}` }}>
+                                    <Typography variant="caption" sx={{ fontWeight: 800, color: THEME.textPrimary, display: 'block', mb: 0.5 }}>
+                                      🎙️ Acoustic Profile ({summaryData.audioScore}/10 • {summaryData.audioLabel})
+                                    </Typography>
+                                    <Typography variant="body2" sx={{ color: THEME.textSecondary, lineHeight: 1.55, fontSize: '0.82rem' }}>
+                                      {summaryData.acousticText}
+                                    </Typography>
+                                  </Box>
+
+                                  {summaryData.spokenFindings && (
+                                    <Box sx={{ mb: 1.5, p: 1.5, bgcolor: 'rgba(124, 58, 237, 0.04)', borderRadius: 1.5, border: '1px solid rgba(124, 58, 237, 0.15)' }}>
+                                      <Typography variant="caption" sx={{ fontWeight: 800, color: '#7C3AED', display: 'block', mb: 0.5 }}>
+                                        🎙️ Spoken Observations
+                                      </Typography>
+                                      <Typography variant="body2" sx={{ color: THEME.textPrimary, lineHeight: 1.55, fontSize: '0.82rem' }}>
+                                        {summaryData.spokenFindings}
+                                      </Typography>
+                                    </Box>
+                                  )}
+
+                                  <Box sx={{ p: 1.5, bgcolor: '#F0FDF4', borderRadius: 1.5, border: '1px dashed #A7F3D0' }}>
+                                    <Typography variant="caption" sx={{ fontWeight: 800, color: '#065F46', display: 'block', mb: 0.25 }}>
+                                      ✨ Best Practice Takeaway
+                                    </Typography>
+                                    <Typography variant="caption" sx={{ color: '#065F46', lineHeight: 1.45, display: 'block' }}>
+                                      {summaryData.recommendation}
+                                    </Typography>
+                                  </Box>
+                                </Paper>
+                              );
+                            })()}
                           </CardContent>
                         </Card>
                       </Grid>

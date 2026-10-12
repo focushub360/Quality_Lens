@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 Database Restore and Migration Script for QualityLens (citnow_analyzer)
 Restores backup data from compressed ZIP archive (BSON/JSON format) to a target MongoDB database.
@@ -11,8 +11,11 @@ import zipfile
 import tempfile
 import argparse
 from datetime import datetime
-from pymongo import MongoClient
+import certifi
+from pymongo import MongoClient, ReplaceOne, InsertOne
 import bson.json_util
+
+
 
 def load_env():
     env_path = os.path.join(os.path.dirname(__file__), ".env")
@@ -47,7 +50,7 @@ def restore_backup(backup_zip_path, target_uri, db_name="citnow_analyzer", batch
         raise FileNotFoundError(f"Backup file not found: {backup_zip_path}")
 
     print("[*] Connecting to target MongoDB...")
-    client = MongoClient(target_uri, serverSelectionTimeoutMS=10000)
+    client = MongoClient(target_uri, serverSelectionTimeoutMS=10000, tlsCAFile=certifi.where())
     client.admin.command("ping")
     print("[+] Successfully connected to target MongoDB server!")
 
@@ -87,31 +90,30 @@ def restore_backup(backup_zip_path, target_uri, db_name="citnow_analyzer", batch
             total_docs = len(docs)
             print(f"       Loaded {total_docs} document(s) from backup.")
 
-            inserted = 0
+            processed = 0
             for i in range(0, total_docs, batch_size):
                 chunk = docs[i : i + batch_size]
-                try:
-                    result = col.insert_many(chunk, ordered=False)
-                    inserted += len(result.inserted_ids)
-                except Exception as e:
-                    for doc in chunk:
-                        try:
-                            if "_id" in doc:
-                                col.replace_one({"_id": doc["_id"]}, doc, upsert=True)
-                            else:
-                                col.insert_one(doc)
-                            inserted += 1
-                        except Exception:
-                            pass
+                requests = []
+                for doc in chunk:
+                    if "_id" in doc:
+                        requests.append(ReplaceOne({"_id": doc["_id"]}, doc, upsert=True))
+                    else:
+                        requests.append(InsertOne(doc))
+                if requests:
+                    col.bulk_write(requests, ordered=False)
+                    processed += len(chunk)
+                    print(f"       Upserted batch {processed}/{total_docs} docs...")
 
             final_count = col.count_documents({})
-            print(f"       Done. Processed: {inserted}/{total_docs} docs. Total in collection now: {final_count}")
-            migration_summary[col_name] = {"inserted": inserted, "total_target": final_count}
+            print(f"       Done. Processed: {processed}/{total_docs} docs. Total in collection now: {final_count}")
+            migration_summary[col_name] = {"processed": processed, "total_target": final_count}
+
 
     print("\n[+] Migration completed successfully!")
     print("================ Migration Summary ================")
     for col, stat in migration_summary.items():
-        print(f"  - {col}: {stat['inserted']} restored (Total in DB: {stat['total_target']})")
+        print(f"  - {col}: {stat.get('processed', 0)} restored/synced (Total in DB: {stat['total_target']})")
+
     print("===================================================")
 
 def main():

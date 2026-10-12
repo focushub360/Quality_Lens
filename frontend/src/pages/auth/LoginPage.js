@@ -37,7 +37,7 @@ const THEME = {
 };
 
 export default function LoginPage() {
-  const { login, loading, role, isAuthenticated } = useContext(AuthContext);
+  const { login, loading, role, user, isAuthenticated } = useContext(AuthContext);
   const navigate = useNavigate();
   const location = useLocation();
   const usernameRef = useRef(null);
@@ -73,7 +73,9 @@ export default function LoginPage() {
   // Redirect on login success - FIXED
   useEffect(() => {
     if (isAuthenticated && role) {
+      const isMasterAdmin = role === 'master_admin' || user?.is_master_admin || user?.username === 'tech@focus';
       const roleLabels = {
+        master_admin: 'Master Admin (Tech)',
         super_admin: 'Super Admin',
         dealer_admin: 'Service Manager',
         branch_admin: 'Branch Admin',
@@ -82,24 +84,25 @@ export default function LoginPage() {
 
       setSnackbar({
         open: true,
-        message: `Logging in as ${roleLabels[role] || 'User'}...`,
+        message: `Logging in as ${isMasterAdmin ? 'Master Admin (Tech Team)' : (roleLabels[role] || 'User')}...`,
         severity: 'success'
       });
 
       // Small delay to show the success message before redirect
       const timer = setTimeout(() => {
         const roleRedirects = {
+          master_admin: '/super-admin/dashboard',
           super_admin: '/super-admin/dashboard',
           dealer_admin: '/dealer/dashboard',
           branch_admin: '/dealer/dashboard',
           dealer_user: '/dealer/new'
         };
-        navigate(roleRedirects[role] || '/');
+        navigate(roleRedirects[role] || (isMasterAdmin ? '/super-admin/dashboard' : '/'));
       }, 800);
 
       return () => clearTimeout(timer);
     }
-  }, [isAuthenticated, role, navigate]);
+  }, [isAuthenticated, role, user, navigate]);
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });

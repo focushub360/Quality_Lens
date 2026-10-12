@@ -1370,7 +1370,7 @@ class UnifiedMediaAnalyzer:
             return 50.0, f"Noise analysis error: {e}"
         
     def generate_visual_only_summary(self, results) -> str:
-        """Generates a professional, structured visual summary of the video report when speech is skipped."""
+        """Generates an executive, highly professional technical summary of the vehicle inspection video."""
         try:
             # 1. Base metadata details
             metadata = results.get("citnow_metadata") or {}
@@ -1379,45 +1379,102 @@ class UnifiedMediaAnalyzer:
             vehicle_desc = f"{make} ({vp})" if vp and vp != "NA" else make
 
             overall = results.get("overall_quality") or {}
-            overall_score = overall.get("overall_score", 7.0)
+            overall_score = float(overall.get("overall_score", 7.0))
             overall_label = overall.get("overall_label", "Good Quality")
 
             # 2. Video parameters
             video = results.get("video_analysis") or {}
-            video_score = video.get("quality_score", 7.0)
-            detailed = video.get("detailed_analysis") or {}
-            lighting = detailed.get("lighting", "The lighting is clean and clearly illuminates the subject.")
-            focus = detailed.get("focus", "The camera focus is stable and sharp.")
-            stability_val = detailed.get("stability")
-            if isinstance(stability_val, str) and ("%" in stability_val or stability_val.replace('.', '').isdigit()):
-                stability = "The camera movements are stable and professional."
-            else:
-                stability = stability_val or "The camera movements are stable and professional."
+            video_score = float(video.get("quality_score", 7.0))
+            video_label = video.get("quality_label") or ("Good" if video_score >= 7.0 else ("Fair" if video_score >= 5.0 else "Needs Attention"))
 
             # 3. Audio parameters
             audio = results.get("audio_analysis") or {}
-            audio_score = audio.get("score", 7.0)
+            audio_score = float(audio.get("score", 7.0))
+            audio_label = "Good" if audio_score >= 7.0 else ("Fair" if audio_score >= 5.0 else "Moderate")
 
-            # 4. Construct beautiful summary paragraphs
-            summary_parts = []
-            summary_parts.append(
-                f"This video report documents a walkaround and health check inspection of a {vehicle_desc} vehicle. "
-                f"The overall inspection report indicates {overall_label} with an overall score of {overall_score}/10."
-            )
-            
-            summary_parts.append(
-                f"Technical inspection details: The video quality is graded at {video_score}/10. "
-                f"{lighting} {focus} {stability}"
-            )
+            # 4. Construct professional, clear, and precise executive paragraphs
+            # Executive Overview
+            if overall_score >= 8.5:
+                exec_overview = (
+                    f"This technical inspection report provides a high-fidelity visual health check of the {vehicle_desc}. "
+                    f"The presentation achieves an exceptional overall quality index of {overall_score:.1f}/10 ({overall_label}), "
+                    f"demonstrating outstanding adherence to premium dealership presentation standards."
+                )
+            elif overall_score >= 7.0:
+                exec_overview = (
+                    f"This technical inspection report provides a verified vehicle health check and walkaround assessment of the {vehicle_desc}. "
+                    f"The recording achieves an overall quality index of {overall_score:.1f}/10 ({overall_label}), "
+                    f"confirming professional workshop presentation compliance and clear customer visibility."
+                )
+            elif overall_score >= 5.5:
+                exec_overview = (
+                    f"This technical inspection report documents a walkaround health check and condition assessment of the {vehicle_desc}. "
+                    f"The recording achieves an overall quality index of {overall_score:.1f}/10 ({overall_label}), "
+                    f"meeting baseline workshop documentation standards while highlighting targeted opportunities for camera handling refinement."
+                )
+            else:
+                exec_overview = (
+                    f"This technical inspection report documents a preliminary walkaround of the {vehicle_desc}. "
+                    f"The recording is indexed at {overall_score:.1f}/10 ({overall_label}), "
+                    f"indicating capture constraints that require operational review prior to customer delivery."
+                )
 
-            summary_parts.append(
-                f"The audio clarity is graded at {audio_score}/10. "
-                f"Note: No verbal speech or audio narrative was identified in the recording, indicating a purely visual inspection walkaround."
-            )
+            # Visual & Optical Quality Evaluation
+            if video_score >= 8.0:
+                visual_critique = (
+                    f"Visual & Optical Quality ({video_score:.1f}/10 • {video_label}): "
+                    f"The capture displays sharp focal precision, clean illumination across both exterior body panels and mechanical assemblies, "
+                    f"and disciplined camera tracking with smooth pan transitions."
+                )
+            elif video_score >= 6.5:
+                visual_critique = (
+                    f"Visual & Optical Quality ({video_score:.1f}/10 • {video_label}): "
+                    f"Subject illumination is balanced and key components remain clearly identifiable in the frame, "
+                    f"supported by steady camera tracking and consistent focal clarity."
+                )
+            elif video_score >= 5.0:
+                visual_critique = (
+                    f"Visual & Optical Quality ({video_score:.1f}/10 • {video_label}): "
+                    f"Workshop lighting adequately illuminates inspected areas, though noticeable handheld motion and minor focus hunting "
+                    f"were detected during transitional walkaround movements. Smoother panning will noticeably enhance visual stability."
+                )
+            else:
+                visual_critique = (
+                    f"Visual & Optical Quality ({video_score:.1f}/10 • {video_label}): "
+                    f"Visual clarity is impacted by rapid camera movement or uneven bay illumination, which obscures fine vehicle surface details."
+                )
 
-            return " ".join(summary_parts)
+            # Acoustic Environment & Narration Evaluation
+            if audio_score >= 7.0:
+                acoustic_critique = (
+                    f"Acoustic Environment ({audio_score:.1f}/10 • {audio_label}): "
+                    f"Ambient background noise remains low and well-controlled within the service bay. "
+                    f"Narration Note: No technician voiceover or verbal speech was detected, designating this as a silent visual walkaround."
+                )
+            else:
+                acoustic_critique = (
+                    f"Acoustic Environment ({audio_score:.1f}/10 • {audio_label}): "
+                    f"Ambient workshop acoustics were registered within acceptable operational parameters. "
+                    f"Narration Note: Conducted as a silent visual inspection without verbal technician commentary."
+                )
+
+            # Quality Recommendation / Operational Takeaway
+            if overall_score >= 7.5:
+                takeaway = "Takeaway: Customer-ready documentation meeting high dealership presentation criteria."
+            elif overall_score >= 5.5:
+                takeaway = (
+                    "Advisor Best Practice: Suitable for customer review. Elevating handheld camera stability and introducing a concise "
+                    "verbal walkthrough greeting will further reinforce customer confidence and dealer transparency."
+                )
+            else:
+                takeaway = "Recommendation: Retake or supplement with steady framing and verbal narration for elevated customer transparency."
+
+            return f"{exec_overview} {visual_critique} {acoustic_critique} {takeaway}"
         except Exception as e:
-            return "This video contains a visual walkaround inspection of the vehicle. No clear spoken narrative was identified in the audio tracks."
+            return (
+                "This technical inspection report documents a visual walkaround and health check inspection of the vehicle, "
+                "providing structured visual condition documentation."
+            )
 
     def calculate_overall_quality(self, audio_analysis, video_analysis, citnow_metadata=None):
         """Calculate overall quality out of 10 with equal importance for audio and video, blending with CitNow rating if available"""

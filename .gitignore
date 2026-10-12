@@ -73,3 +73,7 @@ backend/reports/
 aws-modern-key
 aws-modern-key.pub
 *.pem
+
+image*.png
+scratch/
+

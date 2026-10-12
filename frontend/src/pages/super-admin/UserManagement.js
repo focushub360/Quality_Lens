@@ -326,7 +326,16 @@ export default function UserManagement() {
     page * rowsPerPage + rowsPerPage
   );
 
-  const getRoleBadge = (role) => {
+  const getRoleBadge = (role, userObj = null) => {
+    if (role === 'master_admin' || userObj?.is_master_admin || userObj?.username === 'tech@focus') {
+      return {
+        label: 'Master Admin (Tech)',
+        color: '#6D28D9',
+        bg: '#EDE9FE',
+        border: '#DDD6FE',
+        icon: <Security sx={{ fontSize: '13px !important' }} />
+      };
+    }
     switch (role) {
       case 'super_admin':
         return {
@@ -683,7 +692,7 @@ export default function UserManagement() {
                     const isActiveUser = user.is_active !== false && user.status !== 'inactive';
                     const isSelf = isCurrentLoggedInUser(user);
                     const isSuperAdminRole = user.role === 'super_admin';
-                    const badge = getRoleBadge(user.role);
+                    const badge = getRoleBadge(user.role, user);
 
                     return (
                       <TableRow

@@ -11,6 +11,7 @@ import {
 import { listMyDealerUsers, createDealerUser, updateDealerUser, deleteDealerUser } from '../../services/dealer_user';
 import { AuthContext } from '../../contexts/AuthContext';
 import ImportUsersModal from '../../components/super-admin/ImportUsersModal';
+import { formatDate } from '../../utils/dateFormatter';
 
 // QualityLens Theme aligned colors
 const THEME = {
@@ -365,7 +366,7 @@ export default function DealerUsers() {
                           </Box>
                         </TableCell>
                         <TableCell sx={{ color: THEME.textSecondary, fontSize: '0.9rem' }}>
-                          {user.created_at ? new Date(user.created_at).toLocaleDateString() : 'N/A'}
+                          {user.created_at ? formatDate(user.created_at) : 'N/A'}
                         </TableCell>
                         <TableCell>
                           {(() => {
@@ -603,9 +604,9 @@ export default function DealerUsers() {
                     <Box component="ul" sx={{ color: THEME.textPrimary, m: 0, pl: 2, '& li': { mb: 1, fontSize: '0.9rem' } }}>
                       <li>This user is offline.</li>
                       {editingUser?.created_at && (
-                        <li>Created on {new Date(editingUser.created_at).toLocaleDateString()}.</li>
+                        <li>Created on {formatDate(editingUser.created_at)}.</li>
                       )}
-                      <li>Last logged in on {new Date().toLocaleDateString()}.</li>
+                      <li>Last logged in on {formatDate(new Date())}.</li>
                     </Box>
                   </Box>
                 </Box>

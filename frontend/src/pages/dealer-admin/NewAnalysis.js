@@ -10,6 +10,8 @@ import {
   Language, Translate, Add, VideoCameraBack, HelpOutline, Business
 } from '@mui/icons-material';
 import api from '../../services/api';
+import { formatExecutiveSummary } from '../../utils/summaryFormatter';
+import { formatDateTime } from '../../utils/dateFormatter';
 
 
 // QualityLens Branding Theme
@@ -108,6 +110,7 @@ export default function NewAnalysis() {
   const { user, role } = useAuth();
   const [dealersList, setDealersList] = useState([]);
   const [selectedDealer, setSelectedDealer] = useState('');
+  const [quotaInfo, setQuotaInfo] = useState(null);
 
   // Super Admin: Fetch registered dealerships list
   useEffect(() => {
@@ -121,6 +124,29 @@ export default function NewAnalysis() {
         .catch(err => console.warn('Could not fetch dealers list for super admin:', err));
     }
   }, [role]);
+
+  // Fetch today's dealer quota
+  useEffect(() => {
+    const fetchQuota = async () => {
+      try {
+        const cached = localStorage.getItem('ql_dealer_quotas_cache');
+        if (cached && user?.dealer_id) {
+          const list = JSON.parse(cached);
+          const found = list.find(d => d.dealer_id?.toLowerCase() === user.dealer_id?.toLowerCase());
+          if (found) {
+            setQuotaInfo(found);
+            return;
+          }
+        }
+      } catch {}
+
+      try {
+        const res = await api.get('/dealer/quota-status');
+        if (res.data) setQuotaInfo(res.data);
+      } catch (e) {}
+    };
+    fetchQuota();
+  }, [user]);
 
   // Derived state: find the task in global context
   const currentTask = tasks.find(t => t.task_id === currentTaskId) || null;
@@ -163,13 +189,28 @@ export default function NewAnalysis() {
 
   const submit = async (e) => {
     e.preventDefault();
-    setLocalLoading(true);
     setError('');
     setCurrentTaskId(null);
 
+    const cleanUrl = (url || '').trim();
+    if (!cleanUrl) {
+      setError('Please provide a valid CitNow video URL or token.');
+      return;
+    }
+
+    // Pre-flight validation for CitNow authenticity
+    const citnowDomainRegex = /citnow\.(com|co\.uk)/i;
+    const isTokenOnly = /^[a-zA-Z0-9_-]{6,30}$/.test(cleanUrl);
+    if (!citnowDomainRegex.test(cleanUrl) && !isTokenOnly) {
+      setError('Invalid link rejected: CitNow video links must be hosted on citnow.com (e.g. https://southasia.citnow.com/vpwz-HTyJ9t). Non-CitNow URLs, placeholder values, and unsupported links are not accepted.');
+      return;
+    }
+
+    setLocalLoading(true);
+
     try {
       const payload = {
-        citnow_url: url.trim(),
+        citnow_url: cleanUrl,
         transcription_language: lang,
         target_language: target
       };
@@ -257,6 +298,32 @@ export default function NewAnalysis() {
             position: 'relative'
           }}>
             <CardContent sx={{ p: 4 }}>
+              {/* Daily Quota Pill & Exceeded Banner */}
+              {quotaInfo && quotaInfo.daily_limit && (
+                <Box sx={{ mb: 2.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
+                  <Typography variant="caption" sx={{ color: THEME.textSecondary, fontWeight: 600 }}>
+                    Dealership Quota: <strong>{user?.showroom_name || user?.dealer_id || 'Active Account'}</strong>
+                  </Typography>
+                  <Chip
+                    size="small"
+                    label={`Daily Quota: ${quotaInfo.used_today || 0} / ${quotaInfo.daily_limit} links today`}
+                    sx={{
+                      fontWeight: 700,
+                      fontSize: '11px',
+                      bgcolor: ((quotaInfo.used_today || 0) >= quotaInfo.daily_limit) ? '#FEF2F2' : '#F0FDF4',
+                      color: ((quotaInfo.used_today || 0) >= quotaInfo.daily_limit) ? THEME.error : THEME.success,
+                      border: `1px solid ${((quotaInfo.used_today || 0) >= quotaInfo.daily_limit) ? THEME.error : THEME.success}40`
+                    }}
+                  />
+                </Box>
+              )}
+
+              {quotaInfo && (quotaInfo.used_today || 0) >= quotaInfo.daily_limit && quotaInfo.enforce_strict_stop && (
+                <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>
+                  <strong>Daily Link Quota Reached ({quotaInfo.daily_limit} / {quotaInfo.daily_limit}):</strong> Your dealership has processed its maximum allowed videos for today. Submissions are temporarily paused. Contact your administrator or Master Admin for quota expansion.
+                </Alert>
+              )}
+
               {error && (
                 <Alert
                   severity="error"
@@ -455,7 +522,7 @@ export default function NewAnalysis() {
                       <Button
                         type="submit"
                         variant="contained"
-                        disabled={localLoading || (currentTask && ['pending', 'processing'].includes(currentTask.status))}
+                        disabled={localLoading || (currentTask && ['pending', 'processing'].includes(currentTask.status)) || (quotaInfo && (quotaInfo.used_today || 0) >= quotaInfo.daily_limit && quotaInfo.enforce_strict_stop)}
                         startIcon={<PlayArrow />}
                         sx={{
                           background: THEME.gradientPrimary,
@@ -743,24 +810,26 @@ export default function NewAnalysis() {
               {resultData && (
                 <Box sx={{ mt: 3, pt: 3, borderTop: `1.5px dashed ${THEME.border}` }}>
                   {/* Result Header with Badges */}
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1.5, mb: 2.5 }}>
-                    <Typography variant="h6" fontWeight="700" sx={{
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap', mb: 2.5 }}>
+                    <Typography variant="h6" fontWeight="800" sx={{
                       color: THEME.textPrimary,
-                      display: 'flex', alignItems: 'center', gap: 1
+                      display: 'flex', alignItems: 'center', gap: 1, fontSize: '1.2rem'
                     }}>
-                      <Check sx={{ color: THEME.success }} /> Analysis Result
+                      <Check sx={{ color: THEME.success, fontSize: 26 }} /> Analysis Result
                     </Typography>
 
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                       {resultData.overall_quality?.overall_label && (
                         <Chip
                           label={`Quality: ${resultData.overall_quality.overall_label}`}
                           size="small"
                           sx={{
-                            fontWeight: 700,
+                            fontWeight: 800,
                             background: THEME.primaryUltraLight,
                             color: THEME.primary,
-                            borderRadius: 1.5
+                            border: `1px solid ${THEME.primary}30`,
+                            borderRadius: 1.5,
+                            fontSize: '0.78rem'
                           }}
                         />
                       )}
@@ -769,19 +838,29 @@ export default function NewAnalysis() {
                           label={`Advisor: ${resultData.citnow_metadata.service_advisor}`}
                           size="small"
                           variant="outlined"
-                          sx={{ fontWeight: 600, borderRadius: 1.5 }}
+                          sx={{ fontWeight: 700, borderRadius: 1.5, borderColor: THEME.border, color: THEME.textSecondary, fontSize: '0.78rem' }}
                         />
                       )}
                     </Box>
                   </Box>
 
-                  {/* Score Cards */}
-                  <Grid container spacing={2} sx={{ mb: 3 }}>
+                  {/* Full Cover Rating Score Cards */}
+                  <Box sx={{
+                    display: 'grid',
+                    gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, 1fr)' },
+                    gap: 2.5,
+                    width: '100%',
+                    mb: 3
+                  }}>
                     {[
                       {
                         label: 'Video Quality',
+                        subtitle: 'Visual & Camera Framing',
                         value: resultData.video_analysis?.quality_score ?? resultData.video_quality_score ?? 0,
                         color: THEME.primary,
+                        badgeColor: (resultData.video_analysis?.quality_score ?? resultData.video_quality_score ?? 0) >= 7 ? THEME.success : THEME.warning,
+                        badgeBg: (resultData.video_analysis?.quality_score ?? resultData.video_quality_score ?? 0) >= 7 ? 'rgba(16, 185, 129, 0.12)' : 'rgba(245, 158, 11, 0.12)',
+                        badgeText: (resultData.video_analysis?.quality_score ?? resultData.video_quality_score ?? 0) >= 7 ? 'GOOD' : 'FAIR',
                         issues: resultData.video_analysis?.issues || [],
                         tips: [
                           ...(resultData.video_analysis?.issues || []).map(i => `Fix: ${i}`),
@@ -793,8 +872,12 @@ export default function NewAnalysis() {
                       },
                       {
                         label: 'Audio Quality',
+                        subtitle: 'Service Bay Acoustics & Voice',
                         value: resultData.audio_analysis?.score ?? resultData.audio_quality_score ?? 0,
                         color: THEME.accent,
+                        badgeColor: (resultData.audio_analysis?.score ?? resultData.audio_quality_score ?? 0) >= 7 ? THEME.success : THEME.primary,
+                        badgeBg: (resultData.audio_analysis?.score ?? resultData.audio_quality_score ?? 0) >= 7 ? 'rgba(16, 185, 129, 0.12)' : 'rgba(13, 161, 184, 0.12)',
+                        badgeText: (resultData.audio_analysis?.score ?? resultData.audio_quality_score ?? 0) >= 7 ? 'GOOD' : 'FAIR',
                         issues: resultData.audio_analysis?.issues || [],
                         tips: [
                           ...(resultData.audio_analysis?.issues || []).map(i => `Fix: ${i}`),
@@ -806,8 +889,12 @@ export default function NewAnalysis() {
                       },
                       {
                         label: 'Overall Score',
+                        subtitle: 'Technical Quality Index',
                         value: resultData.overall_quality?.overall_score ?? resultData.overall_quality_score ?? 0,
                         color: THEME.success,
+                        badgeColor: (resultData.overall_quality?.overall_score ?? resultData.overall_quality_score ?? 0) >= 7 ? THEME.success : THEME.warning,
+                        badgeBg: (resultData.overall_quality?.overall_score ?? resultData.overall_quality_score ?? 0) >= 7 ? 'rgba(16, 185, 129, 0.12)' : 'rgba(245, 158, 11, 0.12)',
+                        badgeText: (resultData.overall_quality?.overall_score ?? resultData.overall_quality_score ?? 0) >= 7 ? 'GOOD QUALITY' : 'FAIR QUALITY',
                         issues: [
                           ...(resultData.video_analysis?.issues || []),
                           ...(resultData.audio_analysis?.issues || [])
@@ -819,7 +906,7 @@ export default function NewAnalysis() {
                           'Maintain professional camera framing throughout',
                         ]
                       },
-                    ].map(({ label, value, color, issues, tips }) => {
+                    ].map(({ label, subtitle, value, color, badgeColor, badgeBg, badgeText, issues, tips }) => {
                       const tooltipContent = (
                         <Box sx={{ p: 0.5, maxWidth: 280 }}>
                           {issues.length > 0 && (
@@ -846,44 +933,82 @@ export default function NewAnalysis() {
                         </Box>
                       );
                       return (
-                        <Grid item xs={4} key={label}>
-                          <Paper elevation={0} sx={{
-                            p: 2, borderRadius: 2, textAlign: 'center',
-                            border: `1px solid ${THEME.border}`,
-                            background: THEME.surface,
-                            position: 'relative'
-                          }}>
-                            <Tooltip
-                              title={tooltipContent}
-                              placement="top"
-                              arrow
-                              componentsProps={{ tooltip: { sx: { bgcolor: '#1a2a3a', maxWidth: 300, p: 1.5, borderRadius: 2, boxShadow: '0 8px 32px rgba(0,0,0,0.4)', border: '1px solid rgba(255,255,255,0.1)' } }, arrow: { sx: { color: '#1a2a3a' } } }}
-                            >
-                              <HelpOutline
-                                sx={{
-                                  position: 'absolute', top: 6, right: 6,
-                                  fontSize: 15, color: THEME.textSecondary,
-                                  cursor: 'help',
-                                  '&:hover': { color: THEME.primary }
-                                }}
-                              />
-                            </Tooltip>
-                            <Typography variant="h4" fontWeight="700" sx={{ color }}>
+                        <Paper
+                          elevation={0}
+                          key={label}
+                          sx={{
+                            p: 2.5,
+                            borderRadius: 3,
+                            textAlign: 'center',
+                            border: `1.5px solid ${THEME.border}`,
+                            background: 'linear-gradient(180deg, #FFFFFF 0%, #F8FAFC 100%)',
+                            boxShadow: '0 4px 14px rgba(0,0,0,0.03)',
+                            position: 'relative',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            minHeight: 130,
+                            transition: 'all 0.2s ease',
+                            '&:hover': {
+                              transform: 'translateY(-2px)',
+                              boxShadow: '0 8px 24px rgba(0,0,0,0.06)',
+                              borderColor: color
+                            }
+                          }}
+                        >
+                          <Tooltip
+                            title={tooltipContent}
+                            placement="top"
+                            arrow
+                            componentsProps={{ tooltip: { sx: { bgcolor: '#1a2a3a', maxWidth: 300, p: 1.5, borderRadius: 2, boxShadow: '0 8px 32px rgba(0,0,0,0.4)', border: '1px solid rgba(255,255,255,0.1)' } }, arrow: { sx: { color: '#1a2a3a' } } }}
+                          >
+                            <HelpOutline
+                              sx={{
+                                position: 'absolute', top: 10, right: 10,
+                                fontSize: 16, color: THEME.textTertiary,
+                                cursor: 'help',
+                                '&:hover': { color }
+                              }}
+                            />
+                          </Tooltip>
+
+                          <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 0.5, mb: 0.5 }}>
+                            <Typography variant="h3" fontWeight="800" sx={{ color, letterSpacing: '-0.5px', fontSize: { xs: '2.1rem', md: '2.5rem' } }}>
                               {Number(value).toFixed(1)}
                             </Typography>
-                            <Typography variant="caption" sx={{ color: THEME.textSecondary, fontWeight: 600 }}>
-                              {label}
+                            <Typography variant="body2" fontWeight="700" sx={{ color: THEME.textTertiary }}>
+                              / 10
                             </Typography>
-                          </Paper>
-                        </Grid>
+                          </Box>
+
+                          <Typography variant="subtitle2" fontWeight="800" sx={{ color: THEME.textPrimary, mb: 0.75, fontSize: '0.96rem' }}>
+                            {label}
+                          </Typography>
+
+                          <Chip
+                            label={`${badgeText} • ${Number(value).toFixed(1)}`}
+                            size="small"
+                            sx={{
+                              height: 22,
+                              fontWeight: 800,
+                              fontSize: '0.68rem',
+                              letterSpacing: '0.5px',
+                              bgcolor: badgeBg,
+                              color: badgeColor,
+                              borderRadius: 1.5
+                            }}
+                          />
+                        </Paper>
                       );
                     })}
-                  </Grid>
+                  </Box>
 
                   {/* Vehicle & Case Details */}
                   {resultData.citnow_metadata && (() => {
                     const m = resultData.citnow_metadata;
                     const vehicleName = m.vehicle && m.vehicle !== m.registration ? m.vehicle : (m.brand ? `${m.brand} Vehicle` : null);
+                    const completedDt = resultData.created_at || resultData.processing_timestamp || m.date || m.created_at;
                     const details = [
                       ...(vehicleName ? [{ label: '🚗 Vehicle', value: vehicleName }] : []),
                       { label: '🔖 Registration', value: m.registration || m.reg_no || m.vehicle || '—' },
@@ -892,6 +1017,7 @@ export default function NewAnalysis() {
                       { label: '👤 Service Advisor', value: m.service_advisor || '—' },
                       { label: '📧 Email', value: m.email || '—' },
                       { label: '📞 Phone', value: m.phone || '—' },
+                      ...(completedDt ? [{ label: '📅 Analyzed', value: formatDateTime(completedDt) }] : []),
                     ].filter(d => d.value && d.value !== '—');
 
                     return (
@@ -936,21 +1062,22 @@ export default function NewAnalysis() {
 
                         {details.length > 0 && (
                           <Paper elevation={0} sx={{
-                            p: 2.5, mb: 2, borderRadius: 2,
+                            p: 2.5, mb: 2.5, borderRadius: 2.5,
                             border: `1px solid ${THEME.border}`,
-                            background: THEME.surface
+                            background: '#FFFFFF',
+                            boxShadow: '0 2px 8px rgba(0,0,0,0.02)'
                           }}>
-                            <Typography variant="subtitle2" fontWeight="700" sx={{ color: THEME.textPrimary, mb: 1.5 }}>
+                            <Typography variant="subtitle2" fontWeight="800" sx={{ color: THEME.textPrimary, mb: 2, fontSize: '0.96rem' }}>
                               🚘 Vehicle & Case Details
                             </Typography>
-                            <Grid container spacing={1.5}>
+                            <Grid container spacing={2}>
                               {details.map(({ label, value }) => (
-                                <Grid item xs={12} sm={6} key={label}>
-                                  <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
-                                    <Typography variant="caption" sx={{ color: THEME.textTertiary, fontWeight: 600, minWidth: 120 }}>
+                                <Grid item xs={12} sm={6} md={4} key={label}>
+                                  <Box sx={{ p: 1.25, bgcolor: '#F8FAFC', borderRadius: 2, border: `1px solid ${THEME.borderLight}` }}>
+                                    <Typography variant="caption" sx={{ color: THEME.textSecondary, fontWeight: 700, display: 'block', mb: 0.25, fontSize: '0.75rem', textTransform: 'uppercase' }}>
                                       {label}
                                     </Typography>
-                                    <Typography variant="caption" sx={{ color: THEME.textPrimary, fontWeight: 500, wordBreak: 'break-word' }}>
+                                    <Typography variant="body2" sx={{ color: '#0F172A', fontWeight: 700, wordBreak: 'break-word', fontSize: '0.92rem' }}>
                                       {value}
                                     </Typography>
                                   </Box>
@@ -963,35 +1090,142 @@ export default function NewAnalysis() {
                     );
                   })()}
 
-                  {/* Summary */}
+                  {/* Executive Inspection Summary */}
                   {(() => {
-                    const GARBAGE = ['the', 'a', ',', '.', '!', '?', '...', ',.']
-                    const GARBAGE_PHRASES = [
-                      'no clear speech detected', 'transcription failed', 'translation failed', 
-                      'summarization failed', 'no meaningful summary', 'let me get out of here',
-                      'it\'s not made because i hate it', 'thank you for watching', 'subtitles by'
-                    ]
-                    const rawSummary = resultData.summarization?.summary || ''
-                    const isHallucinated = GARBAGE_PHRASES.some(p => rawSummary.toLowerCase().includes(p))
-                    let txt = isHallucinated ? 'No verbal speech or audio narrative was identified in the recording, indicating a purely visual inspection walkaround.' : rawSummary
-                    // Sanitize any stray percentage artifacts (e.g. "0.0%")
-                    txt = txt.replace(/\s*\b\d+(\.\d+)?%\s*/g, ' ').replace(/\s{2,}/g, ' ').trim()
-                    const isValid = txt && txt.length >= 10 && !GARBAGE.includes(txt.toLowerCase())
+                    const rawSummary = resultData.summarization?.summary || '';
+                    const summaryData = formatExecutiveSummary(rawSummary, resultData);
+                    const {
+                      overallScore, overallLabel,
+                      videoScore, videoLabel,
+                      audioScore, audioLabel,
+                      executiveText, visualText, acousticText,
+                      spokenFindings, recommendation
+                    } = summaryData;
 
-                    return isValid ? (
+                    return (
                       <Paper elevation={0} sx={{
-                        p: 2.5, mb: 2, borderRadius: 2,
+                        p: 3, mb: 3, borderRadius: 3,
                         border: `1px solid ${THEME.border}`,
-                        background: THEME.surface
+                        background: '#FFFFFF',
+                        boxShadow: '0 4px 16px rgba(0,0,0,0.03)'
                       }}>
-                        <Typography variant="subtitle2" fontWeight="700" sx={{ color: THEME.textPrimary, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
-                          💡 Summary
-                        </Typography>
-                        <Typography variant="body2" sx={{ color: THEME.textSecondary, lineHeight: 1.7 }}>
-                          {txt}
-                        </Typography>
+                        {/* Summary Header: Cohesive, Balanced Placement (NOT at far right edge) */}
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2.5, flexWrap: 'wrap' }}>
+                          <Typography variant="subtitle1" fontWeight="800" sx={{ color: THEME.textPrimary, display: 'flex', alignItems: 'center', gap: 1, fontSize: '1.05rem' }}>
+                            💡 Executive Inspection Summary
+                          </Typography>
+                          <Chip
+                            label={`${overallLabel} • ${overallScore} / 10`}
+                            size="small"
+                            sx={{
+                              fontWeight: 800,
+                              fontSize: '0.78rem',
+                              height: 26,
+                              px: 0.5,
+                              bgcolor: Number(overallScore) >= 7.0 ? 'rgba(16, 185, 129, 0.12)' : 'rgba(245, 158, 11, 0.12)',
+                              color: Number(overallScore) >= 7.0 ? THEME.success : THEME.warning,
+                              border: `1px solid ${Number(overallScore) >= 7.0 ? 'rgba(16, 185, 129, 0.3)' : 'rgba(245, 158, 11, 0.3)'}`
+                            }}
+                          />
+                        </Box>
+
+                        {/* Executive Assessment: High Contrast, Crisp Readability */}
+                        <Box sx={{ mb: 2.5, p: 2.5, bgcolor: '#F8FAFC', borderRadius: 2.5, borderLeft: `5px solid ${THEME.primary}`, border: `1px solid ${THEME.border}` }}>
+                          <Typography variant="caption" sx={{ fontWeight: 800, color: THEME.primaryDark, textTransform: 'uppercase', letterSpacing: '0.8px', display: 'block', mb: 1, fontSize: '0.8rem' }}>
+                            Executive Assessment
+                          </Typography>
+                          <Typography variant="body1" sx={{ color: '#0F172A', lineHeight: 1.75, fontSize: '0.96rem', fontWeight: 500 }}>
+                            {executiveText}
+                          </Typography>
+                        </Box>
+
+                        {/* Visual & Acoustic Quality Breakdown Grid: Full Cover */}
+                        <Grid container spacing={2.5} sx={{ mb: 2.5 }}>
+                          {/* Visual Performance */}
+                          <Grid item xs={12} md={6}>
+                            <Box sx={{ p: 2.5, bgcolor: '#FFFFFF', borderRadius: 2.5, height: '100%', border: `1.5px solid ${THEME.border}`, boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, mb: 1.5, flexWrap: 'wrap' }}>
+                                <Typography variant="subtitle2" sx={{ fontWeight: 800, color: THEME.textPrimary, fontSize: '0.94rem' }}>
+                                  🎥 Visual & Camera Quality
+                                </Typography>
+                                <Chip
+                                  label={`${videoScore} / 10 • ${videoLabel}`}
+                                  size="small"
+                                  sx={{
+                                    height: 22,
+                                    fontSize: '0.72rem',
+                                    fontWeight: 800,
+                                    bgcolor: Number(videoScore) >= 7.0 ? 'rgba(16, 185, 129, 0.12)' : 'rgba(245, 158, 11, 0.12)',
+                                    color: Number(videoScore) >= 7.0 ? THEME.success : THEME.warning
+                                  }}
+                                />
+                              </Box>
+                              <Typography variant="body2" sx={{ color: '#1E293B', lineHeight: 1.7, fontSize: '0.93rem' }}>
+                                {visualText}
+                              </Typography>
+                            </Box>
+                          </Grid>
+
+                          {/* Acoustic Quality */}
+                          <Grid item xs={12} md={6}>
+                            <Box sx={{ p: 2.5, bgcolor: '#FFFFFF', borderRadius: 2.5, height: '100%', border: `1.5px solid ${THEME.border}`, boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, mb: 1.5, flexWrap: 'wrap' }}>
+                                <Typography variant="subtitle2" sx={{ fontWeight: 800, color: THEME.textPrimary, fontSize: '0.94rem' }}>
+                                  🎙️ Acoustic Profile & Audio
+                                </Typography>
+                                <Chip
+                                  label={`${audioScore} / 10 • ${audioLabel}`}
+                                  size="small"
+                                  sx={{
+                                    height: 22,
+                                    fontSize: '0.72rem',
+                                    fontWeight: 800,
+                                    bgcolor: 'rgba(13, 161, 184, 0.12)',
+                                    color: THEME.primary
+                                  }}
+                                />
+                              </Box>
+                              <Typography variant="body2" sx={{ color: '#1E293B', lineHeight: 1.7, fontSize: '0.93rem' }}>
+                                {acousticText}
+                              </Typography>
+                            </Box>
+                          </Grid>
+                        </Grid>
+
+                        {/* Spoken Findings if Speech Was Present */}
+                        {spokenFindings && (
+                          <Box sx={{ mb: 2.5, p: 2.5, bgcolor: 'rgba(124, 58, 237, 0.04)', borderRadius: 2.5, border: '1.5px solid rgba(124, 58, 237, 0.2)' }}>
+                            <Typography variant="caption" sx={{ fontWeight: 800, color: '#7C3AED', textTransform: 'uppercase', letterSpacing: '0.8px', display: 'block', mb: 1, fontSize: '0.8rem' }}>
+                              🎙️ Spoken Technician Observations
+                            </Typography>
+                            <Typography variant="body1" sx={{ color: '#0F172A', lineHeight: 1.7, fontSize: '0.94rem' }}>
+                              {spokenFindings}
+                            </Typography>
+                          </Box>
+                        )}
+
+                        {/* Advisor Best Practice & Presentation Takeaway */}
+                        <Box sx={{
+                          p: 2.25,
+                          bgcolor: Number(overallScore) >= 7.0 ? '#F0FDF4' : '#FFFBE8',
+                          borderRadius: 2.5,
+                          border: `1.5px dashed ${Number(overallScore) >= 7.0 ? 'rgba(16, 185, 129, 0.4)' : 'rgba(245, 158, 11, 0.4)'}`,
+                          display: 'flex',
+                          alignItems: 'flex-start',
+                          gap: 1.5
+                        }}>
+                          <Typography variant="body1" sx={{ fontSize: '1.2rem', lineHeight: 1 }}>✨</Typography>
+                          <Box>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 800, color: Number(overallScore) >= 7.0 ? '#065F46' : '#92400E', display: 'block', mb: 0.5, fontSize: '0.92rem' }}>
+                              Advisor Presentation Best Practice
+                            </Typography>
+                            <Typography variant="body2" sx={{ color: Number(overallScore) >= 7.0 ? '#065F46' : '#92400E', lineHeight: 1.65, fontSize: '0.93rem', fontWeight: 500 }}>
+                              {recommendation}
+                            </Typography>
+                          </Box>
+                        </Box>
                       </Paper>
-                    ) : null
+                    );
                   })()}
 
                   {/* Transcription (Original Speech) */}

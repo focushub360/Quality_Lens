@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState, useContext } from 'react';
+import React, { useEffect, useState, useContext } from 'react';
 import { useTheme } from '@mui/material/styles';
 import {
   Grid,
@@ -56,24 +56,40 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsToolti
 import { dashboardApi } from '../../services/dashboardapi';
 import api from '../../services/api';
 import { AuthContext } from '../../contexts/AuthContext';
+import { formatDate } from '../../utils/dateFormatter';
 
+
+// Module-level and localStorage persistent cache for 0ms instant load and reload persistence
+const DEALER_CACHE_KEY = 'ql_dealer_dashboard_cache';
+let _globalDealerDashboardCache = null;
+try {
+  const _saved = typeof localStorage !== 'undefined' ? localStorage.getItem(DEALER_CACHE_KEY) : null;
+  if (_saved) {
+    _globalDealerDashboardCache = JSON.parse(_saved);
+  }
+} catch (e) {}
 
 export default function DealerAdminDashboard() {
-  const [dashboardData, setDashboardData] = useState({
-    overview: {
-      totalVideos: 0,
-      averageScore: 0,
-      serviceAdvisors: 0,
-      completionRate: 0
-    },
-    dailyPerformance: [],
-    serviceAdvisors: [],
-    qualityBreakdown: [],
-    recentVideos: [],
-    performanceTrend: []
+  const [dashboardData, setDashboardData] = useState(() => {
+    if (_globalDealerDashboardCache) return _globalDealerDashboardCache;
+    return {
+      overview: {
+        totalVideos: 0,
+        averageScore: 0,
+        serviceAdvisors: 0,
+        completionRate: 0
+      },
+      dailyPerformance: [],
+      serviceAdvisors: [],
+      qualityBreakdown: [],
+      recentVideos: [],
+      performanceTrend: []
+    };
   });
-  const [allResults, setAllResults] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [allResults, setAllResults] = useState(() => {
+    return _globalDealerDashboardCache?.recentVideos || [];
+  });
+  const [loading, setLoading] = useState(() => !_globalDealerDashboardCache);
   const [timeRange, setTimeRange] = useState('year');
   const toggleTimeRange = () => {
     setTimeRange(prev => prev === 'month' ? 'year' : 'month');
@@ -596,8 +612,10 @@ export default function DealerAdminDashboard() {
       </LineChart>
     </ResponsiveContainer>
   );
-    const loadDashboardData = async () => {
-    setLoading(true);
+    const loadDashboardData = async (isManualRefresh = false) => {
+    if (isManualRefresh || (!_globalDealerDashboardCache && !dashboardData.overview.totalVideos)) {
+      setLoading(true);
+    }
     setError(null);
     try {
       const token = localStorage.getItem('auth_token');
@@ -608,7 +626,17 @@ export default function DealerAdminDashboard() {
          endpoint += `?timeRange=${timeRange}`;
       }
 
-      const response = await api.get(endpoint, { headers });
+      let response;
+      try {
+        response = await api.get(endpoint, { headers, cacheTTL: 60000 });
+      } catch (reqErr) {
+        // If backend fails on empty range (500), gracefully fallback to year/all
+        if (timeRange !== 'all' && timeRange !== 'year') {
+          response = await api.get('/dashboard/dealer/overview?timeRange=year', { headers, cacheTTL: 60000 });
+        } else {
+          throw reqErr;
+        }
+      }
       const data = response.data;
 
       // Update dealer info
@@ -664,7 +692,7 @@ export default function DealerAdminDashboard() {
         ? Number((activeDaily.reduce((sum, d) => sum + (d.score || 0), 0) / activeDaily.length).toFixed(1))
         : (data.average_overall_quality || 0);
 
-      setDashboardData({
+      const freshDashboard = {
         overview: {
           totalVideos: activeTotalVideos,
           averageScore: activeAvgScore,
@@ -681,11 +709,17 @@ export default function DealerAdminDashboard() {
           score: typeof video.overall_quality_score === 'number'
             ? video.overall_quality_score.toFixed(1)
             : (typeof video.score === 'number' ? video.score.toFixed(1) : (video.score || '0.0')),
-          date: video.created_at ? new Date(video.created_at).toLocaleDateString() : (video.date || 'N/A'),
+          date: video.created_at ? formatDate(video.created_at) : (video.date || 'N/A'),
           status: video.status === 'completed' ? 'Completed' : (video.status || 'In Progress')
         })),
         performanceTrend: data.serviceAdvisors || []
-      });
+      };
+
+      _globalDealerDashboardCache = freshDashboard;
+      try {
+        localStorage.setItem(DEALER_CACHE_KEY, JSON.stringify(freshDashboard));
+      } catch (e) {}
+      setDashboardData(freshDashboard);
 
       setLoading(false);
     } catch (error) {
@@ -907,7 +941,7 @@ export default function DealerAdminDashboard() {
         vehicle: video.citnow_vehicle || 'Unknown Vehicle',
         advisor: video.citnow_service_advisor || 'Unknown Advisor',
         score: (video.overall_quality_score || 0).toFixed(1),
-        date: new Date(video.created_at).toLocaleDateString(),
+        date: formatDate(video.created_at),
         status: video.status === 'completed' ? 'Completed' : 'In Progress'
       })),
       performanceTrend: calculateDailyPerformance(filteredResults, timeRange)
@@ -940,9 +974,9 @@ export default function DealerAdminDashboard() {
   const calculateTrends = () => {
     if (!allResults || allResults.length === 0) {
       return {
-        totalVideosChange: 'Loading...',
+        totalVideosChange: 'Current period',
         totalVideosChangeType: 'neutral',
-        averageScoreChange: 'Loading...',
+        averageScoreChange: 'Current period',
         averageScoreChangeType: 'neutral'
       };
     }
@@ -1160,7 +1194,7 @@ export default function DealerAdminDashboard() {
               boxShadow: '0 8px 32px rgba(0,0,0,0.04)',
               gap: 0.5
             }}>
-              {['today', 'week', 'month', 'quarter', 'all'].map((range) => {
+              {['today', 'week', 'month', 'quarter', 'year', 'all'].map((range) => {
                 const isActive = timeRange === range;
                 return (
                   <Button

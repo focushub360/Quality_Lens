@@ -19,6 +19,7 @@ import {
   FiberManualRecord,
   Today as TodayIcon
 } from '@mui/icons-material';
+import { formatDate } from '../../utils/dateFormatter';
 
 const THEME = {
   primary: '#0DA1B8',
@@ -276,8 +277,8 @@ export default function CalendarDateRangePicker({
       return preset;
     }
     if (!s && !e) return 'All Time';
-    const sFormatted = s ? s.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '';
-    const eFormatted = e ? e.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+    const sFormatted = s ? formatDate(s) : '';
+    const eFormatted = e ? formatDate(e) : '';
     if (s && e && isSameDay(s, e)) return sFormatted;
     if (s && e) return `${sFormatted} – ${eFormatted}`;
     return sFormatted || eFormatted;
@@ -662,7 +663,7 @@ export default function CalendarDateRangePicker({
                 const tooltipTitle = (
                   <Box sx={{ p: 0.5, textAlign: 'center' }}>
                     <Typography variant="caption" fontWeight="700" sx={{ display: 'block', color: '#FFFFFF' }}>
-                      {date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+                      {formatDate(date)}
                     </Typography>
                     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5, mt: 0.3 }}>
                       <FiberManualRecord sx={{ fontSize: 10, color: activityColor }} />

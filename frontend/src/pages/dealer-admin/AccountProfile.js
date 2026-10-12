@@ -21,6 +21,7 @@ import {
   Delete
 } from '@mui/icons-material';
 import { AuthContext } from '../../contexts/AuthContext';
+import { formatDateTime } from '../../utils/dateFormatter';
 
 // Similar theme to the rest of the app
 const THEME = {
@@ -310,7 +311,7 @@ export default function AccountProfile() {
               name="timeZone"
               value={form.timeZone}
               onChange={handleChange}
-              helperText={`Local Time: ${new Date().toLocaleString()}`}
+              helperText={`Local Time: ${formatDateTime(new Date())}`}
             >
               <MenuItem value="Asia/Kolkata">Asia/Kolkata</MenuItem>
             </TextField>

@@ -9,9 +9,10 @@ import {
 import {
   Upload, PlayArrow, CheckCircle, Error, TableChart,
   Close, History, Refresh, Stop, Delete, Download, Translate,
-  CloudUpload, Archive, Description
+  CloudUpload, Archive, Description, Warning
 } from '@mui/icons-material';
 import api from '../../services/api';
+import { formatDate, formatDateTime } from '../../utils/dateFormatter';
 
 // QualityLens Branding Theme
 const THEME = {
@@ -85,6 +86,12 @@ export default function BulkUpload() {
   const [stopDialog, setStopDialog] = useState({ open: false, batchId: null });
   const [deleteDialog, setDeleteDialog] = useState({ open: false, batchId: null });
   const [isLoading, setIsLoading] = useState(false);
+
+  // Pre-upload validation & duplicate detection state
+  const [isValidating, setIsValidating] = useState(false);
+  const [validationData, setValidationData] = useState(null);
+  const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false);
+  const [invalidLinksDialogOpen, setInvalidLinksDialogOpen] = useState(false);
 
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [liveProgress, setLiveProgress] = useState(0);
@@ -195,9 +202,35 @@ export default function BulkUpload() {
   const [list, setList] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentUser, setCurrentUser] = useState(null);
+  const [quotaInfo, setQuotaInfo] = useState(null);
 
   const isMounted = useRef(true);
   const pollingIntervalRef = useRef(null);
+
+  // Fetch daily dealer quota
+  useEffect(() => {
+    const fetchQuota = async () => {
+      try {
+        const cached = localStorage.getItem('ql_dealer_quotas_cache');
+        if (cached && currentUser?.dealer_id) {
+          const list = JSON.parse(cached);
+          const found = list.find(d => d.dealer_id?.toLowerCase() === currentUser.dealer_id?.toLowerCase());
+          if (found) {
+            setQuotaInfo(found);
+            return;
+          }
+        }
+      } catch {}
+
+      try {
+        const res = await api.get('/dealer/quota-status');
+        if (res.data) setQuotaInfo(res.data);
+      } catch (e) {}
+    };
+    if (currentUser) {
+      fetchQuota();
+    }
+  }, [currentUser]);
 
   useEffect(() => {
     isMounted.current = true;
@@ -443,23 +476,80 @@ export default function BulkUpload() {
   // ---------------------------
   // File upload & start bulk
   // ---------------------------
-  const handleFileUpload = (event) => {
+  const runValidation = async (selectedFile) => {
+    setIsValidating(true);
+    setValidationData(null);
+    try {
+      const vFormData = new FormData();
+      vFormData.append('file', selectedFile);
+      const res = await api.post('/bulk-validate', vFormData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      if (res.data) {
+        setValidationData(res.data);
+        if (res.data.link_format_validation?.all_invalid || res.data.total_urls === 0) {
+          setError(res.data.link_format_validation?.error_message || 'Upload rejected: File contains no valid CitNow video links. Invalid links are not accepted.');
+        } else if (res.data.dealer_validation?.mismatch_detected) {
+          setError(res.data.dealer_validation.error_message);
+        } else {
+          setError('');
+        }
+      }
+    } catch (err) {
+      console.warn('Pre-validation check error:', err);
+    } finally {
+      setIsValidating(false);
+    }
+  };
+
+  const handleFileUpload = async (event) => {
     const selectedFile = event.target.files?.[0];
     if (!selectedFile) return;
     const nameLower = selectedFile.name.toLowerCase();
     if (nameLower.endsWith('.xlsx') || nameLower.endsWith('.xls')) {
       setFile(selectedFile);
       setError('');
+      setValidationData(null);
       setExcelPreview({
-        totalRows: 'Ready for processing',
+        totalRows: 'Checking...',
         message: `File selected: ${selectedFile.name}`
       });
+      await runValidation(selectedFile);
     } else {
       setError('Please upload an Excel file (.xlsx or .xls)');
     }
   };
 
-  const startBulkProcessing = async () => {
+  const handleStartClick = () => {
+    if (!file) {
+      setError('Please select a file first');
+      return;
+    }
+    // Block if no valid links found or all links are invalid
+    if (validationData?.link_format_validation?.all_invalid || (validationData && validationData.total_urls === 0)) {
+      const msg = 'Cannot proceed: Uploaded Excel file contains no valid CitNow video links. Invalid links are not accepted.';
+      setError(msg);
+      showSnackbarMessage(msg, 'error');
+      return;
+    }
+    // Block if dealer mismatch detected
+    if (validationData?.dealer_validation?.mismatch_detected) {
+      const msg = validationData.dealer_validation.error_message || 'Dealership mismatch detected.';
+      setError(msg);
+      showSnackbarMessage(msg, 'error');
+      return;
+    }
+    // If duplicates exist, open prompt dialog
+    if (validationData?.duplicate_validation?.has_duplicates) {
+      setDuplicateDialogOpen(true);
+      return;
+    }
+    // Otherwise start directly
+    executeBulkProcessing(false);
+  };
+
+  const executeBulkProcessing = async (skipAlreadyAnalyzed = false) => {
+    setDuplicateDialogOpen(false);
     if (!file) {
       setError('Please select a file first');
       return;
@@ -473,6 +563,7 @@ export default function BulkUpload() {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('target_language', targetLanguage);
+    formData.append('skip_already_analyzed', skipAlreadyAnalyzed ? 'true' : 'false');
 
     try {
       const response = await api.post('/bulk-analyze', formData, {
@@ -503,11 +594,16 @@ export default function BulkUpload() {
       setStatus(initialStatus);
       saveBatchToStorage(initialStatus);
 
-      // Refresh server list to get canonical saved batch (and enforce RBAC)
+      // Refresh server list to get canonical saved batch
       await fetchServerBatches(currentUser);
 
       startPolling(newBatchId, currentUser);
-      showSnackbarMessage('Bulk processing started successfully!', 'success');
+      showSnackbarMessage(
+        skipAlreadyAnalyzed 
+          ? `Bulk processing started for ${data.total_urls} new items (duplicates skipped)!` 
+          : 'Bulk processing started successfully!', 
+        'success'
+      );
 
     } catch (err) {
       const msg = err?.response?.data?.detail || err.message || 'Failed to start bulk processing';
@@ -686,7 +782,7 @@ export default function BulkUpload() {
       results.forEach(r => {
         const m = r.citnow_metadata || {};
         const escapeCsv = (str) => `"${String(str || '').replace(/"/g, '""')}"`;
-        const date = r.created_at ? new Date(r.created_at).toLocaleDateString() : '—';
+        const date = r.created_at ? formatDate(r.created_at) : '—';
         
         csvRows.push([
           escapeCsv(m.dealership),
@@ -758,8 +854,7 @@ export default function BulkUpload() {
   const formatBatchDate = (b) => {
     const raw = b.created_at || b.createdAt || b.createdAtString || null;
     if (!raw) return 'Unknown date';
-    const d = new Date(raw);
-    return isNaN(d.getTime()) ? 'Unknown date' : d.toLocaleString();
+    return formatDateTime(raw);
   };
 
   const resumeBatchTracking = (batch) => {
@@ -937,6 +1032,44 @@ export default function BulkUpload() {
       <Box sx={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', mt: 2 }}>
         {!status ? (
           <Box sx={{ width: '100%', maxWidth: 800, display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {/* Daily Quota Pill & Exceeded Banner */}
+          {quotaInfo && quotaInfo.daily_limit && (
+            <Card sx={{
+              background: THEME.surfaceElevated,
+              border: `1.5px solid ${((quotaInfo.used_today || 0) >= quotaInfo.daily_limit) ? THEME.error + '50' : THEME.border}`,
+              borderRadius: 3,
+              boxShadow: THEME.shadowSm,
+              p: 2.5
+            }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1.5 }}>
+                <Box sx={{ textAlign: 'left' }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: THEME.textPrimary }}>
+                    Dealership Quota: {currentUser?.showroom_name || currentUser?.dealer_id || 'Active Account'}
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: THEME.textSecondary }}>
+                    Remaining capacity today: {Math.max(0, quotaInfo.daily_limit - (quotaInfo.used_today || 0))} / {quotaInfo.daily_limit} links
+                  </Typography>
+                </Box>
+                <Chip
+                  size="small"
+                  label={`Daily Quota: ${quotaInfo.used_today || 0} / ${quotaInfo.daily_limit} links today`}
+                  sx={{
+                    fontWeight: 700,
+                    fontSize: '11px',
+                    bgcolor: ((quotaInfo.used_today || 0) >= quotaInfo.daily_limit) ? '#FEF2F2' : '#F0FDF4',
+                    color: ((quotaInfo.used_today || 0) >= quotaInfo.daily_limit) ? THEME.error : THEME.success,
+                    border: `1px solid ${((quotaInfo.used_today || 0) >= quotaInfo.daily_limit) ? THEME.error : THEME.success}40`
+                  }}
+                />
+              </Box>
+              {((quotaInfo.used_today || 0) >= quotaInfo.daily_limit && quotaInfo.enforce_strict_stop) && (
+                <Alert severity="error" sx={{ mt: 2, borderRadius: 2, textAlign: 'left' }}>
+                  <strong>Daily Link Quota Reached ({quotaInfo.daily_limit} / {quotaInfo.daily_limit}):</strong> Your dealership has processed its maximum allowed videos for today. Bulk uploads are temporarily paused. Contact your administrator or Master Admin for quota expansion.
+                </Alert>
+              )}
+            </Card>
+          )}
+
           {/* Excel Format Guide */}
           <Card sx={{
             background: THEME.surfaceElevated,
@@ -1043,14 +1176,188 @@ export default function BulkUpload() {
                 </Button>
 
                 {file && (
-                  <Box sx={{ mt: 3, p: 2, backgroundColor: THEME.successLight, borderRadius: 2 }}>
-                    <Typography variant="body2" sx={{ color: THEME.success, fontWeight: 600 }}>
-                      ✅ Selected: {file.name}
-                    </Typography>
-                    {excelPreview && (
-                      <Typography variant="body2" sx={{ color: THEME.textSecondary, mt: 1 }}>
-                        {excelPreview.message}
-                      </Typography>
+                  <Box sx={{ mt: 3 }}>
+                    {/* File selection box */}
+                    <Box sx={{ p: 2, backgroundColor: THEME.surface, border: `1px solid ${THEME.border}`, borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                        <Description sx={{ color: THEME.primary, fontSize: 28 }} />
+                        <Box sx={{ textAlign: 'left' }}>
+                          <Typography variant="body2" sx={{ color: THEME.textPrimary, fontWeight: 700 }}>
+                            {file.name}
+                          </Typography>
+                          <Typography variant="caption" sx={{ color: THEME.textSecondary }}>
+                            {validationData?.total_urls ? `${validationData.total_urls} CitNow links detected` : (isValidating ? 'Validating file...' : 'Excel spreadsheet')}
+                          </Typography>
+                        </Box>
+                      </Box>
+                      {isValidating && (
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <CircularProgress size={18} sx={{ color: THEME.primary }} />
+                          <Typography variant="caption" sx={{ color: THEME.primary, fontWeight: 600 }}>
+                            Validating...
+                          </Typography>
+                        </Box>
+                      )}
+                    </Box>
+
+                    {/* Dealership Matching Validation Banner */}
+                    {validationData?.dealer_validation && (
+                      <Box sx={{ mt: 1.5 }}>
+                        {validationData.dealer_validation.mismatch_detected ? (
+                          <Alert 
+                            severity="error" 
+                            variant="filled"
+                            sx={{ borderRadius: 2, textAlign: 'left', boxShadow: THEME.shadowSm }}
+                          >
+                            <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
+                              🚫 Dealership Mismatch Detected
+                            </Typography>
+                            <Typography variant="body2" sx={{ mt: 0.5 }}>
+                              {validationData.dealer_validation.error_message}
+                            </Typography>
+                            <Typography variant="caption" sx={{ display: 'block', mt: 0.5, opacity: 0.9 }}>
+                              Please select an Excel file belonging to <strong>{validationData.dealer_validation.user_dealer}</strong> to proceed.
+                            </Typography>
+                          </Alert>
+                        ) : validationData.dealer_validation.has_dealer_column ? (
+                          <Alert 
+                            severity="success" 
+                            sx={{ borderRadius: 2, textAlign: 'left', border: '1px solid rgba(16, 185, 129, 0.3)' }}
+                          >
+                            <Typography variant="body2" sx={{ fontWeight: 700, color: '#065F46' }}>
+                              🏢 Dealership Verified: {validationData.dealer_validation.excel_dealers.join(', ')}
+                            </Typography>
+                            <Typography variant="caption" sx={{ color: '#047857' }}>
+                              Matches your assigned dealership account. Ready for analysis.
+                            </Typography>
+                          </Alert>
+                        ) : null}
+                      </Box>
+                    )}
+
+                    {/* Duplicate Analysis Detection Banner */}
+                    {validationData?.duplicate_validation && (
+                      <Box sx={{ mt: 1.5 }}>
+                        {validationData.duplicate_validation.has_duplicates ? (
+                          <Alert 
+                            severity="warning" 
+                            sx={{ 
+                              borderRadius: 2, 
+                              textAlign: 'left', 
+                              bgcolor: '#FFFBEB', 
+                              border: '1px solid rgba(245, 158, 11, 0.4)',
+                              '& .MuiAlert-icon': { color: '#D97706' }
+                            }}
+                            action={
+                              <Button 
+                                color="warning" 
+                                size="small" 
+                                variant="contained"
+                                onClick={() => setDuplicateDialogOpen(true)}
+                                sx={{ 
+                                  fontWeight: 700, 
+                                  fontSize: '11px',
+                                  textTransform: 'none',
+                                  bgcolor: '#D97706',
+                                  '&:hover': { bgcolor: '#B45309' }
+                                }}
+                              >
+                                Review Duplicates
+                              </Button>
+                            }
+                          >
+                            <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#92400E' }}>
+                              ⚠️ Duplicate Links Found: {validationData.duplicate_validation.already_analyzed_count} of {validationData.total_urls} Links Already Analyzed
+                            </Typography>
+                            <Typography variant="caption" sx={{ color: '#B45309', display: 'block', mt: 0.25 }}>
+                              {validationData.duplicate_validation.new_urls_count} new link(s) • {validationData.duplicate_validation.already_analyzed_count} previously analyzed link(s). Click Start to choose whether to skip or re-analyze.
+                            </Typography>
+                          </Alert>
+                        ) : (
+                          <Alert 
+                            severity="info" 
+                            sx={{ borderRadius: 2, textAlign: 'left', bgcolor: '#F0FDFA', border: '1px solid rgba(13, 161, 184, 0.3)' }}
+                          >
+                            <Typography variant="body2" sx={{ fontWeight: 700, color: '#0E7490' }}>
+                              ✅ All {validationData.total_urls} Links Are New
+                            </Typography>
+                            <Typography variant="caption" sx={{ color: '#155E75' }}>
+                              None of these video links have been analyzed before in QualityLens.
+                            </Typography>
+                          </Alert>
+                        )}
+                      </Box>
+                    )}
+
+                    {/* Invalid Link Format Rejection Banner */}
+                    {validationData?.link_format_validation && (
+                      <Box sx={{ mt: 1.5 }}>
+                        {validationData.link_format_validation.all_invalid ? (
+                          <Alert 
+                            severity="error" 
+                            variant="filled"
+                            sx={{ borderRadius: 2, textAlign: 'left', boxShadow: THEME.shadowSm }}
+                          >
+                            <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
+                              🚫 Upload Blocked: No Valid CitNow Links Found
+                            </Typography>
+                            <Typography variant="body2" sx={{ mt: 0.5 }}>
+                              All {validationData.link_format_validation.invalid_count || validationData.total_rows} row(s) in this file contain invalid, non-CitNow, or placeholder links. Invalid links are strictly not accepted.
+                            </Typography>
+                            <Typography variant="caption" sx={{ display: 'block', mt: 0.5, opacity: 0.9 }}>
+                              Please ensure your Excel contains genuine CitNow video URLs (e.g. https://southasia.citnow.com/...) and try again.
+                            </Typography>
+                          </Alert>
+                        ) : validationData.link_format_validation.has_invalid ? (
+                          <Alert 
+                            severity="error" 
+                            sx={{ 
+                              borderRadius: 2, 
+                              textAlign: 'left', 
+                              bgcolor: '#FEF2F2', 
+                              border: '1px solid rgba(239, 68, 68, 0.4)',
+                              '& .MuiAlert-icon': { color: '#EF4444' }
+                            }}
+                            action={
+                              <Button 
+                                color="error" 
+                                size="small" 
+                                variant="outlined"
+                                onClick={() => setInvalidLinksDialogOpen(true)}
+                                sx={{ 
+                                  fontWeight: 700, 
+                                  fontSize: '11px',
+                                  textTransform: 'none',
+                                  borderColor: '#EF4444',
+                                  color: '#DC2626',
+                                  '&:hover': { bgcolor: '#FEE2E2', borderColor: '#DC2626' }
+                                }}
+                              >
+                                View Rejected ({validationData.link_format_validation.invalid_count})
+                              </Button>
+                            }
+                          >
+                            <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#991B1B' }}>
+                              🚫 {validationData.link_format_validation.invalid_count} Invalid Link(s) Rejected (Not Accepted)
+                            </Typography>
+                            <Typography variant="caption" sx={{ color: '#B91C1C', display: 'block', mt: 0.25 }}>
+                              Only authentic CitNow video links are accepted. The {validationData.link_format_validation.invalid_count} rejected row(s) will be automatically excluded and will NOT consume your quota. {validationData.total_urls} valid links will proceed.
+                            </Typography>
+                          </Alert>
+                        ) : (
+                          <Alert 
+                            severity="success" 
+                            sx={{ borderRadius: 2, textAlign: 'left', border: '1px solid rgba(16, 185, 129, 0.3)' }}
+                          >
+                            <Typography variant="body2" sx={{ fontWeight: 700, color: '#065F46' }}>
+                              🔗 Link Format Verified: CitNow URLs Accepted
+                            </Typography>
+                            <Typography variant="caption" sx={{ color: '#047857' }}>
+                              All {validationData.total_urls} links conform to genuine CitNow video formats.
+                            </Typography>
+                          </Alert>
+                        )}
+                      </Box>
                     )}
                   </Box>
                 )}
@@ -1102,14 +1409,23 @@ export default function BulkUpload() {
                   variant="contained" 
                   size="large" 
                   startIcon={<PlayArrow />}
-                  onClick={startBulkProcessing}
-                  disabled={!file || loading || (!!batchId && canStopBatch(status?.status))}
+                  onClick={handleStartClick}
+                  disabled={
+                    !file || 
+                    loading || 
+                    isValidating || 
+                    Boolean(validationData?.dealer_validation?.mismatch_detected) || 
+                    Boolean(validationData?.link_format_validation?.all_invalid) ||
+                    (validationData && validationData.total_urls === 0) ||
+                    (!!batchId && canStopBatch(status?.status)) || 
+                    (quotaInfo && (quotaInfo.used_today || 0) >= quotaInfo.daily_limit && quotaInfo.enforce_strict_stop)
+                  }
                   sx={{
-                    background: THEME.gradientPrimary,
+                    background: (validationData?.dealer_validation?.mismatch_detected || validationData?.link_format_validation?.all_invalid || (validationData && validationData.total_urls === 0)) ? THEME.textTertiary : THEME.gradientPrimary,
                     borderRadius: 3,
                     px: 6,
                     py: 1.5,
-                    fontWeight: 600,
+                    fontWeight: 700,
                     textTransform: 'none',
                     fontSize: '16px',
                     boxShadow: THEME.shadowMd,
@@ -1122,11 +1438,23 @@ export default function BulkUpload() {
                       transform: 'none'
                     },
                     transition: 'all 0.2s ease-in-out',
-                    minWidth: 200
+                    minWidth: 220
                   }}
                 >
-                  {loading ? 'Processing...' : 'Start Bulk Processing'}
+                  {loading ? 'Processing...' : (isValidating ? 'Validating File...' : 'Start Bulk Processing')}
                 </Button>
+
+                {validationData?.dealer_validation?.mismatch_detected && (
+                  <Typography variant="caption" sx={{ color: '#EF4444', display: 'block', mt: 1, fontWeight: 700 }}>
+                    ⚠️ Cannot start: Please resolve dealership mismatch first.
+                  </Typography>
+                )}
+
+                {validationData?.link_format_validation?.all_invalid && (
+                  <Typography variant="caption" sx={{ color: '#EF4444', display: 'block', mt: 1, fontWeight: 700 }}>
+                    🚫 Cannot start: No valid CitNow links found in file. Invalid links are not accepted.
+                  </Typography>
+                )}
 
                 {batchId && (
                   <Button 
@@ -1580,7 +1908,7 @@ export default function BulkUpload() {
                         {b.filename || 'Unknown file'}
                       </Typography>
                       <Typography variant="body2" sx={{ color: THEME.textSecondary, mb: 1 }}>
-                        Batch: {b.batchId} | {new Date(b.created_at).toLocaleString()}
+                        Batch: {b.batchId} | {formatDateTime(b.created_at)}
                       </Typography>
                       <Typography variant="body2" sx={{ color: THEME.textPrimary }}>
                         Processed: {b.processed_urls || 0} / {b.total_urls || 0} 
@@ -1721,6 +2049,173 @@ export default function BulkUpload() {
             sx={{ fontWeight: 600, borderRadius: 2 }}
           >
             Delete Batch
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Duplicate Links Decision Dialog */}
+      <Dialog 
+        open={duplicateDialogOpen} 
+        onClose={() => setDuplicateDialogOpen(false)} 
+        maxWidth="md" 
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 3, p: 1 } }}
+      >
+        <DialogTitle sx={{ fontWeight: 800, color: '#B45309', display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Warning sx={{ color: '#F59E0B' }} />
+          Previously Analyzed Links Detected
+        </DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body1" sx={{ color: THEME.textPrimary, fontWeight: 700, mb: 1 }}>
+            We detected that <strong>{validationData?.duplicate_validation?.already_analyzed_count}</strong> of <strong>{validationData?.total_urls}</strong> links in <em>"{file?.name}"</em> have already been analyzed previously in QualityLens.
+          </Typography>
+          <Typography variant="body2" sx={{ color: THEME.textSecondary, mb: 2 }}>
+            Do you want to re-analyze these links, or skip already analyzed links to save your daily CAPEX allowance?
+          </Typography>
+
+          {/* Duplicate Preview Table */}
+          {validationData?.duplicate_validation?.already_analyzed_samples?.length > 0 && (
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="caption" sx={{ fontWeight: 700, color: THEME.textSecondary, textTransform: 'uppercase', display: 'block', mb: 0.75 }}>
+                Previously Analyzed Links Preview:
+              </Typography>
+              <TableContainer component={Paper} elevation={0} sx={{ border: `1px solid ${THEME.border}`, borderRadius: 2, maxHeight: 220 }}>
+                <Table size="small" stickyHeader>
+                  <TableHead>
+                    <TableRow sx={{ bgcolor: THEME.surface }}>
+                      <TableCell sx={{ fontWeight: 700, fontSize: '11px' }}>Video URL</TableCell>
+                      <TableCell sx={{ fontWeight: 700, fontSize: '11px' }}>Vehicle / Dealership</TableCell>
+                      <TableCell sx={{ fontWeight: 700, fontSize: '11px' }}>Previous Score</TableCell>
+                      <TableCell sx={{ fontWeight: 700, fontSize: '11px' }}>Analyzed Date</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {validationData.duplicate_validation.already_analyzed_samples.map((item, i) => (
+                      <TableRow key={i} hover>
+                        <TableCell sx={{ fontSize: '11px', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
+                            {item.url}
+                          </Typography>
+                        </TableCell>
+                        <TableCell sx={{ fontSize: '11px' }}>
+                          <strong>{item.vehicle}</strong> <span style={{ color: '#64748B' }}>({item.dealership})</span>
+                        </TableCell>
+                        <TableCell sx={{ fontSize: '11px' }}>
+                          <Chip 
+                            label={`${item.score || 'N/A'} ${item.label || ''}`} 
+                            size="small" 
+                            sx={{ height: 20, fontSize: '10px', fontWeight: 700, bgcolor: 'rgba(13, 161, 184, 0.1)', color: THEME.primaryDark }} 
+                          />
+                        </TableCell>
+                        <TableCell sx={{ fontSize: '11px', fontWeight: 600 }}>
+                          {item.analyzed_at || '—'}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Box>
+          )}
+
+          <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: 'rgba(13, 161, 184, 0.08)', border: '1px solid rgba(13, 161, 184, 0.25)' }}>
+            <Typography variant="caption" sx={{ color: THEME.primaryDark, fontWeight: 600 }}>
+              💡 <strong>Smart Quota Saving:</strong> Skipping already analyzed links will process only the <strong>{validationData?.duplicate_validation?.new_urls_count} new link(s)</strong> and preserve your daily allowance for remaining videos.
+            </Typography>
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ p: 2, gap: 1, justifyContent: 'space-between' }}>
+          <Button onClick={() => setDuplicateDialogOpen(false)} color="inherit" sx={{ fontWeight: 600 }}>
+            Cancel
+          </Button>
+          <Box sx={{ display: 'flex', gap: 1.5 }}>
+            {validationData?.duplicate_validation?.new_urls_count > 0 && (
+              <Button
+                variant="contained"
+                onClick={() => executeBulkProcessing(true)}
+                sx={{
+                  background: THEME.gradientSuccess,
+                  fontWeight: 700,
+                  textTransform: 'none',
+                  px: 2.5,
+                  borderRadius: 2
+                }}
+              >
+                Skip Analyzed & Process {validationData.duplicate_validation.new_urls_count} New Links
+              </Button>
+            )}
+            <Button
+              variant="outlined"
+              color="warning"
+              onClick={() => executeBulkProcessing(false)}
+              sx={{ fontWeight: 700, textTransform: 'none', borderRadius: 2 }}
+            >
+              Re-Analyze All ({validationData?.total_urls} Links)
+            </Button>
+          </Box>
+        </DialogActions>
+      </Dialog>
+
+      {/* Rejected Invalid Links Dialog */}
+      <Dialog 
+        open={invalidLinksDialogOpen} 
+        onClose={() => setInvalidLinksDialogOpen(false)} 
+        maxWidth="md" 
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 3, p: 1 } }}
+      >
+        <DialogTitle sx={{ fontWeight: 800, color: '#B91C1C', display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Error sx={{ color: '#EF4444' }} />
+          Rejected Invalid Links ({validationData?.link_format_validation?.invalid_count})
+        </DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body1" sx={{ color: THEME.textPrimary, fontWeight: 700, mb: 1 }}>
+            The following items in <em>"{file?.name}"</em> do not contain authentic CitNow video links and were <strong>rejected</strong>.
+          </Typography>
+          <Typography variant="body2" sx={{ color: THEME.textSecondary, mb: 2 }}>
+            QualityLens only accepts authentic CitNow video URLs. These rejected rows will <strong>not be accepted or processed</strong> and will <strong>not consume your daily CAPEX quota</strong>.
+          </Typography>
+
+          {validationData?.link_format_validation?.invalid_samples?.length > 0 && (
+            <TableContainer component={Paper} elevation={0} sx={{ border: `1px solid ${THEME.border}`, borderRadius: 2, maxHeight: 300, mb: 2 }}>
+              <Table size="small" stickyHeader>
+                <TableHead>
+                  <TableRow sx={{ bgcolor: THEME.surface }}>
+                    <TableCell sx={{ fontWeight: 700, fontSize: '11px', width: '90px' }}>Excel Row</TableCell>
+                    <TableCell sx={{ fontWeight: 700, fontSize: '11px' }}>Raw Value in File</TableCell>
+                    <TableCell sx={{ fontWeight: 700, fontSize: '11px' }}>Rejection Reason</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {validationData.link_format_validation.invalid_samples.map((item, i) => (
+                    <TableRow key={i} hover>
+                      <TableCell sx={{ fontSize: '12px', fontWeight: 700, color: '#B91C1C' }}>
+                        Row {item.row}
+                      </TableCell>
+                      <TableCell sx={{ fontSize: '11px', maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        <Typography variant="caption" sx={{ fontFamily: 'monospace', bgcolor: '#FEE2E2', px: 1, py: 0.25, borderRadius: 1, color: '#991B1B' }}>
+                          {item.value || '(empty)'}
+                        </Typography>
+                      </TableCell>
+                      <TableCell sx={{ fontSize: '11px', color: '#B91C1C', fontWeight: 600 }}>
+                        {item.reason}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+
+          <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: '#FEF2F2', border: '1px solid rgba(239, 68, 68, 0.25)' }}>
+            <Typography variant="caption" sx={{ color: '#991B1B', fontWeight: 600 }}>
+              🛡️ <strong>Quota & Pipeline Protection:</strong> Invalid links are strictly not accepted to protect your dealership quota and guarantee accurate benchmark reporting.
+            </Typography>
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ p: 2, justifyContent: 'flex-end' }}>
+          <Button onClick={() => setInvalidLinksDialogOpen(false)} variant="contained" sx={{ bgcolor: THEME.primary, fontWeight: 700, borderRadius: 2, textTransform: 'none' }}>
+            Understood
           </Button>
         </DialogActions>
       </Dialog>

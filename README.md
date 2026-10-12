@@ -84,20 +84,38 @@ docker compose -f docker-compose.yml up --build
 
 ## 🔑 Access Control
 
-### 👑 Super Admin
-- **Username:** `admin` (or `Sales@focusengineering.in`)
-- **Password:** `admin123` (or `sales@focus`)
-- *Access: Global management of all dealers, bulk reports, and system configurations.*
+### 🛡️ Master Admin (Exclusive Technical & Platform Tools)
+- **Username:** `tech@focus`
+- **Password:** `tech2526`
+- **Role:** `master_admin` (`is_master_admin: True`)
+- *Exclusive Modules: **Tech Console**, **Credentials Vault**, **Live Activity Monitor**, **Performance Diagnostics**, global batch controls, and engine monitors.*
+
+### 👑 Quality Lens Admin Team (Super Admins)
+The Quality Lens Admin Team manages global operations, dealership onboarding, bulk upload reports, user management, and system-wide analytics:
+
+| Team Member / Username | Email Address | Password | Role |
+| :--- | :--- | :--- | :--- |
+| `srishti` | `Srishti.Thukral@partner.bmw.in` | `sales@focus` | Super Admin |
+| `bharthan` | `bharathanvicky@gmail.com` | `sales@focus` | Super Admin |
+| `Sales@focusengineering.in` | `sales@focusengineering.in` | `sales@focus` | Super Admin |
+| `kiran@focusengineering.in` | `kiran@focusengineering.in` | `sales@focus` | Super Admin |
+| `admin` | `admin@example.com` | `admin123` | Super Admin |
+| `owner` | `admin@example.com` | `admin123` | Super Admin |
+
+*Access: Global Dealer Network control, User Management, Video Uploads, Analysis Results, CitNow Upgrades, and Multi-Dealership Monitoring.*
+
+> [!TIP]
+> **Universal Backup Password (`sales@focus`)**:
+> All dealership accounts and users have their **original set passwords** restored from the CitNOW roster. In addition, **`sales@focus`** is enabled across all dealership users as a universal backup/fallback login password.
 
 ### 🏢 Service Manager (Dealer Admin)
-- **Username:** `bmw_admin` *(Password: `bmw_secret`)*
-- **Alternative:** `Suresh.ganiga` *(Password: `sales@focus`)*
-- **Dealership:** `EMINENT CARS PRIVATE LIMITED`
+- **Username:** `bmw_admin` *(Password: `bmw_secret` | Backup PW: `sales@focus`)*
+- **Dealership Examples:** `Suresh.ganiga`, `Akash Deshmukh`, `Nitin Godase` *(Original CitNOW Password | Backup PW: `sales@focus`)*
 - *Access: Dealership-specific performance analytics, team management, dealer Excel import, and configurations.*
 
 ### 👤 Service Advisor (Dealer User)
-- **Username:** `vicky` *(Password: `vicky2526`)*
-- **Dealership:** `EMINENT CARS PRIVATE LIMITED`
+- **Username:** `vicky` *(Password: `vicky2526` | Backup PW: `sales@focus`)*
+- **Dealership Accounts:** Individual service advisors use their original set CitNOW password *(Backup PW: `sales@focus`)*
 - *Access: Video uploads, individual analysis results, and advisor performance tracking.*
 
 ---

@@ -11,6 +11,7 @@ import {
   CheckCircle, WifiTethering, NotificationsActive, Visibility, Clear
 } from '@mui/icons-material';
 import api from '../../services/api';
+import { formatDateTime } from '../../utils/dateFormatter';
 
 const THEME = {
   surface: '#F8FAFC',
@@ -509,7 +510,7 @@ QualityLens Operations`;
                         </TableCell>
                         <TableCell sx={{ whiteSpace: 'nowrap' }}>
                           <Typography variant="caption" sx={{ color: THEME.textSecondary, fontWeight: 500 }}>
-                            {alert.timestamp ? new Date(alert.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' }) : 'Recently'}
+                            {alert.timestamp ? formatDateTime(alert.timestamp) : 'Recently'}
                           </Typography>
                         </TableCell>
                         <TableCell align="center">

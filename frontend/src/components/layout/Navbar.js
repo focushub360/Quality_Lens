@@ -61,6 +61,7 @@ import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../../contexts/AuthContext';
 import { useTasks } from '../../contexts/TaskContext';
 import api from '../../services/api';
+import { formatDateTime } from '../../utils/dateFormatter';
 
 // QualityLens Branding Theme Colors
 const THEME = {
@@ -110,6 +111,7 @@ const ROLE_ACCESS = {
 };
 
 const ROLE_LABEL = {
+  master_admin: 'Master Admin',
   super_admin: 'Super Admin',
   dealer_admin: 'Service Manager',
   branch_admin: 'Branch Admin',
@@ -117,6 +119,7 @@ const ROLE_LABEL = {
 };
 
 const ROLE_COLOR = {
+  master_admin: '#7C3AED',
   super_admin: THEME.primary,
   dealer_admin: THEME.accent,
   branch_admin: '#8B5CF6',
@@ -138,8 +141,12 @@ export default function Navbar() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [notifAnchor, setNotifAnchor] = useState(null);
 
+  const isMasterAdmin = user?.is_master_admin || user?.username === 'tech@focus' || role === 'master_admin';
+  const effectiveRoleColor = isMasterAdmin ? '#7C3AED' : (ROLE_COLOR[role] || THEME.primary);
+  const effectiveRoleLabel = isMasterAdmin ? 'Master Admin' : (ROLE_LABEL[role] || 'User');
+
   const fetchNotifications = async () => {
-    if (role !== 'super_admin') return;
+    if (role !== 'super_admin' && !isMasterAdmin) return;
     try {
       const res = await api.get('/admin/notifications?limit=25');
       setNotifications(res.data.notifications || []);
@@ -150,12 +157,12 @@ export default function Navbar() {
   };
 
   useEffect(() => {
-    if (role === 'super_admin') {
+    if (role === 'super_admin' || isMasterAdmin) {
       fetchNotifications();
       const interval = setInterval(fetchNotifications, 12000);
       return () => clearInterval(interval);
     }
-  }, [role]);
+  }, [role, isMasterAdmin]);
 
   const handleOpenNotifs = (e) => {
     setNotifAnchor(e.currentTarget);
@@ -353,8 +360,8 @@ export default function Navbar() {
               />
             )}
 
-            {/* Super Admin Invalid Link Notifications */}
-            {role === 'super_admin' && (
+            {/* Super Admin / Master Admin Invalid Link Notifications */}
+            {(role === 'super_admin' || isMasterAdmin) && (
               <>
                 <Tooltip title="Invalid Link Alerts & Notifications">
                   <IconButton
@@ -498,7 +505,7 @@ export default function Navbar() {
                               {n.url}
                             </Typography>
                             <Typography variant="caption" sx={{ color: THEME.textTertiary, fontSize: '0.68rem' }}>
-                              {n.created_at ? new Date(n.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                              {n.created_at ? formatDateTime(n.created_at) : ''}
                             </Typography>
                           </Box>
                         </Paper>
@@ -519,17 +526,33 @@ export default function Navbar() {
               }}>
                 {user?.username || 'User'}
               </Typography>
-              <Typography variant="caption" sx={{
-                fontWeight: 600,
-                color: ROLE_COLOR[role] || THEME.primary,
-                lineHeight: 1.2,
-                fontSize: '0.7rem',
-                textTransform: 'uppercase',
-                letterSpacing: '0.5px'
-              }}>
-                {ROLE_LABEL[role] || 'User'}
-              </Typography>
-              {(user?.showroom_name || user?.dealer_id) && role !== 'super_admin' && (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <Typography variant="caption" sx={{
+                  fontWeight: 700,
+                  color: effectiveRoleColor,
+                  lineHeight: 1.2,
+                  fontSize: '0.7rem',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px'
+                }}>
+                  {effectiveRoleLabel}
+                </Typography>
+                {isMasterAdmin && (
+                  <Box component="span" sx={{
+                    px: 0.6,
+                    py: 0.1,
+                    borderRadius: '4px',
+                    fontSize: '9px',
+                    fontWeight: 800,
+                    letterSpacing: '0.5px',
+                    background: 'linear-gradient(135deg, #7C3AED 0%, #4F46E5 100%)',
+                    color: '#FFFFFF'
+                  }}>
+                    TECH
+                  </Box>
+                )}
+              </Box>
+              {(user?.showroom_name || user?.dealer_id) && role !== 'super_admin' && !isMasterAdmin && (
                 <Typography variant="caption" sx={{
                   fontWeight: 600,
                   color: THEME.primary,
@@ -545,15 +568,15 @@ export default function Navbar() {
             </Box>
 
             {/* User Avatar */}
-            <Tooltip title="Account">
+            <Tooltip title={isMasterAdmin ? "Master Admin (Tech Core)" : "Account"}>
               <IconButton
                 onClick={openUserMenu}
                 sx={{
                   p: 0.5,
-                  border: `2px solid ${ROLE_COLOR[role] || THEME.border}30`,
+                  border: `2px solid ${effectiveRoleColor}40`,
                   '&:hover': {
-                    borderColor: ROLE_COLOR[role] || THEME.primary,
-                    background: THEME.primaryUltraLight
+                    borderColor: effectiveRoleColor,
+                    background: isMasterAdmin ? 'rgba(124, 58, 237, 0.08)' : THEME.primaryUltraLight
                   }
                 }}
               >
@@ -562,9 +585,10 @@ export default function Navbar() {
                   sx={{
                     width: 36,
                     height: 36,
-                    bgcolor: ROLE_COLOR[role] || THEME.primary,
+                    bgcolor: effectiveRoleColor,
                     fontWeight: 700,
-                    fontSize: '15px'
+                    fontSize: '15px',
+                    boxShadow: isMasterAdmin ? '0 0 10px rgba(124, 58, 237, 0.35)' : 'none'
                   }}
                 >
                   {!user?.profile_image && (user?.username || 'U').charAt(0).toUpperCase()}

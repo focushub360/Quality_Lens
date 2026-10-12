@@ -95,10 +95,10 @@ export default function Monitor() {
   const [latencyData, setLatencyData] = useState([]);
   const [systemAlerts, setSystemAlerts] = useState([]);
   const [metrics, setMetrics] = useState({
-    cpu: { used: 0, total: 1 },
-    ram: { used: 0, total: 1 },
-    gpu: { used: 0, total: 24 },
-    stats: { active_users: 0, total_analyzed: 12963, in_queue: 1, active_processing: 2 }
+    cpu: { used: 0.8, total: 2 },
+    ram: { used: 4.7, total: 7.7 },
+    gpu: { available: false, used: 0, total: 0, mode: 'CPU (PyTorch INT8)' },
+    stats: { active_users: 0, total_analyzed: 10742, in_queue: 0, active_processing: 0 }
   });
 
   // Monitoring Controls States
@@ -133,8 +133,8 @@ export default function Monitor() {
           setMetrics({ 
             cpu: data.cpu, 
             ram: data.ram, 
-            gpu: data.gpu || { used: 0, total: 24 }, 
-            stats: data.stats || { active_users: 0, total_analyzed: 12963, in_queue: 1, active_processing: 2 } 
+            gpu: data.gpu || { available: false, used: 0, total: 0, mode: 'CPU (PyTorch INT8)' }, 
+            stats: data.stats || { active_users: 0, total_analyzed: 10742, in_queue: 0, active_processing: 0 } 
           });
         }
         
@@ -201,7 +201,7 @@ export default function Monitor() {
         successRatePercentage: 99.4,
         stages: [
           { name: 'CitNow Stream Parser', engine: 'FFmpeg 6.1', status: 'Active', pid: 3812 },
-          { name: 'Whisper STT Multi-Lingual', engine: 'Whisper Large-v3', status: 'Processing', pid: 3815 },
+          { name: 'Whisper STT Multi-Lingual', engine: 'Whisper Base (PyTorch INT8)', status: 'Processing', pid: 3815 },
           { name: 'Video Emotion & Walkaround CV', engine: 'Computer Vision Net', status: 'Active', pid: 3819 },
           { name: 'Audit & Diagnostic Scoring', engine: 'Rule Matrix v2', status: 'Active', pid: 3824 }
         ]
@@ -548,7 +548,7 @@ export default function Monitor() {
               Whisper STT Multi-Lingual
             </Typography>
             <Typography variant="caption" sx={{ color: THEME.textSecondary, display: 'block', mb: 1 }}>
-              Engine: Whisper Large-v3
+              Engine: Whisper Base (PyTorch INT8 CPU)
             </Typography>
             <Box sx={{ pt: 1, borderTop: `1px solid ${THEME.border}`, display: 'flex', justifyContent: 'space-between' }}>
               <Typography variant="caption" sx={{ color: THEME.textTertiary, fontSize: '0.7rem' }}>Worker #2</Typography>

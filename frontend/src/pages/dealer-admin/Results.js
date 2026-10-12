@@ -9,7 +9,7 @@ import {
   Business, DirectionsCar, Person, Description, Email, Phone, Videocam, Mic,
   CheckCircle, Score, Visibility, ArrowBack,
   Delete as DeleteIcon, FileDownload as FileDownloadIcon, Search as SearchIcon,
-  Refresh, Assessment, Group, VideoLibrary, PictureAsPdf, TableChart, Translate
+  Refresh, Assessment, Group, VideoLibrary, PictureAsPdf, TableChart, Translate, Schedule
 } from '@mui/icons-material';
 import api from '../../services/api';
 import { getDealerUserStats } from '../../services/dealer_user';
@@ -18,6 +18,8 @@ import { AuthContext } from '../../contexts/AuthContext';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import CalendarDateRangePicker from '../../components/common/CalendarDateRangePicker';
+import { formatExecutiveSummary } from '../../utils/summaryFormatter';
+import { formatDate, formatDateTime } from '../../utils/dateFormatter';
 
 // QualityLens Branding Theme (consistent across dashboard)
 const THEME = {
@@ -163,10 +165,18 @@ const StatsCard = ({ icon: Icon, value, label, color, trend }) => (
   </Card>
 );
 
+// Module-level persistent cache for 0ms instant tab switching
+let _globalResultsCache = {
+  rows: null,
+  totalCount: 0,
+  stats: null,
+  activityMap: null
+};
+
 export default function Results() {
   const { user: authUser } = useContext(AuthContext);
-  const [rows, setRows] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [rows, setRows] = useState(() => _globalResultsCache.rows || []);
+  const [loading, setLoading] = useState(() => !_globalResultsCache.rows);
   const [selectedResult, setSelectedResult] = useState(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -186,7 +196,7 @@ export default function Results() {
   // Pagination state
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
-  const [totalCount, setTotalCount] = useState(0);
+  const [totalCount, setTotalCount] = useState(() => _globalResultsCache.totalCount || 0);
 
   const [allRows, setAllRows] = useState([]); // All loaded rows
   const [currentPageBackend, setCurrentPageBackend] = useState(1); // Backend page number
@@ -227,7 +237,7 @@ export default function Results() {
   }, []);
 
   // Dashboard stats
-  const [stats, setStats] = useState({
+  const [stats, setStats] = useState(() => _globalResultsCache.stats || {
     totalResults: 0,
     averageVideoScore: 0,
     averageAudioScore: 0,
@@ -236,7 +246,10 @@ export default function Results() {
   });
 
   const loadData = async (silent = false) => {
-    if (!silent) setLoading(true);
+    const isSearchOrFilter = Boolean(searchTerm || dealershipFilter || (dateRange.preset && dateRange.preset !== 'All Time'));
+    const shouldBeSilent = silent || (_globalResultsCache.rows && !isSearchOrFilter);
+    if (!shouldBeSilent) setLoading(true);
+
     try {
       const urlParams = new URLSearchParams(window.location.search);
       const batchId = urlParams.get('batchId');
@@ -257,46 +270,48 @@ export default function Results() {
         timeRangeParam = timeMap[dateRange.preset];
       }
 
-      // Instantly load pre-calculated stats via MongoDB aggregations (<15ms)
-      let st = null;
-      try {
-        let statsEndpoint = '/results/summary-stats?';
-        if (searchTerm) statsEndpoint += `&search=${encodeURIComponent(searchTerm)}`;
-        if (timeRangeParam) statsEndpoint += `&timeRange=${timeRangeParam}`;
-        if (dateRange.startDate && dateRange.endDate) {
-          statsEndpoint += `&start_date=${dateRange.startDate}&end_date=${dateRange.endDate}`;
-        }
-        
-        const statsRes = await api.get(statsEndpoint, { headers });
-        st = statsRes.data;
-        if (st && st.total !== undefined) {
-          setStats(prev => ({
-            ...prev,
-            totalResults: st.total,
-            averageVideoScore: st.avg_video,
-            averageAudioScore: st.avg_audio,
-            averageOverallScore: st.avg_overall
-          }));
-        }
-      } catch (stErr) {
-        console.warn('Could not load fast summary stats:', stErr);
+      // Build stats query
+      let statsEndpoint = '/results/summary-stats?';
+      if (searchTerm) statsEndpoint += `&search=${encodeURIComponent(searchTerm)}`;
+      if (timeRangeParam) statsEndpoint += `&timeRange=${timeRangeParam}`;
+      if (dateRange.startDate && dateRange.endDate) {
+        statsEndpoint += `&start_date=${dateRange.startDate}&end_date=${dateRange.endDate}`;
       }
 
-      // Fetch server-paginated data
+      // Build paginated query
       const endpointParams = new URLSearchParams();
       endpointParams.append('page', page + 1); // API is 1-indexed, UI is 0-indexed
       endpointParams.append('per_page', rowsPerPage);
       if (batchId) endpointParams.append('batch_id', batchId);
       if (searchTerm) endpointParams.append('search', searchTerm);
-      if (dealershipFilter) endpointParams.append('search', dealershipFilter); // Approximate filter if dealer is string
-      
+      if (dealershipFilter) endpointParams.append('search', dealershipFilter);
       if (timeRangeParam) endpointParams.append('timeRange', timeRangeParam);
       if (dateRange.startDate && dateRange.endDate) {
         endpointParams.append('start_date', dateRange.startDate);
         endpointParams.append('end_date', dateRange.endDate);
       }
 
-      const res = await api.get(`/results?${endpointParams.toString()}`, { headers });
+      // Concurrent parallel requests for summary stats + paginated rows
+      const [statsRes, res] = await Promise.all([
+        api.get(statsEndpoint, { headers }).catch(stErr => {
+          console.warn('Could not load fast summary stats:', stErr);
+          return { data: null };
+        }),
+        api.get(`/results?${endpointParams.toString()}`, { headers })
+      ]);
+
+      const st = statsRes?.data;
+      if (st && st.total !== undefined) {
+        const newStats = {
+          totalResults: st.total,
+          averageVideoScore: st.avg_video,
+          averageAudioScore: st.avg_audio,
+          averageOverallScore: st.avg_overall,
+          qualityDistribution: { excellent: 0, good: 0, fair: 0, poor: 0 }
+        };
+        setStats(newStats);
+        _globalResultsCache.stats = newStats;
+      }
       const data = res.data;
       let rawResults = data.results || data || [];
       
@@ -373,6 +388,10 @@ export default function Results() {
         ? data.total
         : (st && st.total !== undefined ? st.total : finalResults.length);
       setTotalCount(serverTotal);
+
+      // Cache the loaded rows and totals for instant re-navigation
+      _globalResultsCache.rows = finalResults;
+      _globalResultsCache.totalCount = serverTotal;
 
       // Update hasMore logically based on total
       if (serverTotal !== undefined) {
@@ -526,7 +545,7 @@ export default function Results() {
       const transcription = r.transcription?.text || '';
       const summary = r.summarization?.summary || '';
       const translation = r.translation?.translated_text || '';
-      const uploadedDate = r.created_at ? new Date(r.created_at).toLocaleString() : '';
+      const uploadedDate = r.created_at ? formatDateTime(r.created_at) : '';
       const videoLink = m.page_url || '';
       const id = r._id;
 
@@ -583,7 +602,7 @@ export default function Results() {
     doc.text('QualityLens Analytics — Quality Analysis Report', 14, 12);
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Generated: ${new Date().toLocaleString()}`, 220, 12);
+    doc.text(`Generated: ${formatDateTime(new Date())}`, 220, 12);
 
     // Table
     const columns = [
@@ -607,7 +626,7 @@ export default function Results() {
         audio: (r.audio_analysis?.score || 0).toFixed(1),
         overall: (r.overall_quality?.overall_score || 0).toFixed(1),
         quality: r.overall_quality?.overall_label || '—',
-        date: r.created_at ? new Date(r.created_at).toLocaleDateString() : '—',
+        date: r.created_at ? formatDate(r.created_at) : '—',
       };
     });
 
@@ -1533,6 +1552,11 @@ export default function Results() {
                               label: 'Phone',
                               value: selectedResult.citnow_metadata?.phone,
                               icon: Phone
+                            },
+                            {
+                              label: 'Analyzed Date & Time',
+                              value: selectedResult.created_at ? formatDateTime(selectedResult.created_at) : (selectedResult.processing_timestamp ? formatDateTime(selectedResult.processing_timestamp) : '—'),
+                              icon: Schedule
                             }
                           ].map((item, index) => (
                             <Grid item xs={12} sm={6} md={4} key={item.label}>
@@ -2350,24 +2374,67 @@ export default function Results() {
                               Summary
                             </Typography>
                           </Box>
-                          <Paper sx={{
-                            p: 2,
-                            background: THEME.surface,
-                            border: `1px solid ${THEME.borderLight}`,
-                            borderRadius: 2,
-                            flex: 1,
-                            overflow: 'auto',
-                            maxHeight: 300
-                          }}>
-                            <Typography variant="body2" sx={{
-                              color: THEME.textPrimary,
-                              whiteSpace: 'pre-wrap',
-                              lineHeight: 1.6,
-                              fontSize: '0.875rem'
-                            }}>
-                              {selectedResult.summarization?.summary || 'No summary available'}
-                            </Typography>
-                          </Paper>
+                          {(() => {
+                            const summaryData = formatExecutiveSummary(selectedResult.summarization?.summary, selectedResult);
+                            return (
+                              <Paper sx={{
+                                p: 2,
+                                background: THEME.surface,
+                                border: `1px solid ${THEME.borderLight}`,
+                                borderRadius: 2,
+                                flex: 1,
+                                overflow: 'auto',
+                                maxHeight: 340
+                              }}>
+                                <Box sx={{ mb: 1.5, p: 1.5, bgcolor: '#FFFFFF', borderRadius: 1.5, borderLeft: `3px solid ${THEME.primary}` }}>
+                                  <Typography variant="caption" sx={{ fontWeight: 800, color: THEME.primaryDark, textTransform: 'uppercase', display: 'block', mb: 0.5 }}>
+                                    Executive Overview
+                                  </Typography>
+                                  <Typography variant="body2" sx={{ color: THEME.textPrimary, lineHeight: 1.6, fontSize: '0.84rem' }}>
+                                    {summaryData.executiveText}
+                                  </Typography>
+                                </Box>
+
+                                <Box sx={{ mb: 1.5, p: 1.5, bgcolor: '#FFFFFF', borderRadius: 1.5, border: `1px solid ${THEME.borderLight}` }}>
+                                  <Typography variant="caption" sx={{ fontWeight: 800, color: THEME.textPrimary, display: 'block', mb: 0.5 }}>
+                                    🎥 Visual Performance ({summaryData.videoScore}/10 • {summaryData.videoLabel})
+                                  </Typography>
+                                  <Typography variant="body2" sx={{ color: THEME.textSecondary, lineHeight: 1.55, fontSize: '0.82rem' }}>
+                                    {summaryData.visualText}
+                                  </Typography>
+                                </Box>
+
+                                <Box sx={{ mb: 1.5, p: 1.5, bgcolor: '#FFFFFF', borderRadius: 1.5, border: `1px solid ${THEME.borderLight}` }}>
+                                  <Typography variant="caption" sx={{ fontWeight: 800, color: THEME.textPrimary, display: 'block', mb: 0.5 }}>
+                                    🎙️ Acoustic Profile ({summaryData.audioScore}/10 • {summaryData.audioLabel})
+                                  </Typography>
+                                  <Typography variant="body2" sx={{ color: THEME.textSecondary, lineHeight: 1.55, fontSize: '0.82rem' }}>
+                                    {summaryData.acousticText}
+                                  </Typography>
+                                </Box>
+
+                                {summaryData.spokenFindings && (
+                                  <Box sx={{ mb: 1.5, p: 1.5, bgcolor: 'rgba(124, 58, 237, 0.04)', borderRadius: 1.5, border: '1px solid rgba(124, 58, 237, 0.15)' }}>
+                                    <Typography variant="caption" sx={{ fontWeight: 800, color: '#7C3AED', display: 'block', mb: 0.5 }}>
+                                      🎙️ Spoken Observations
+                                    </Typography>
+                                    <Typography variant="body2" sx={{ color: THEME.textPrimary, lineHeight: 1.55, fontSize: '0.82rem' }}>
+                                      {summaryData.spokenFindings}
+                                    </Typography>
+                                  </Box>
+                                )}
+
+                                <Box sx={{ p: 1.5, bgcolor: '#F0FDF4', borderRadius: 1.5, border: '1px dashed #A7F3D0' }}>
+                                  <Typography variant="caption" sx={{ fontWeight: 800, color: '#065F46', display: 'block', mb: 0.25 }}>
+                                    ✨ Best Practice Takeaway
+                                  </Typography>
+                                  <Typography variant="caption" sx={{ color: '#065F46', lineHeight: 1.45, display: 'block' }}>
+                                    {summaryData.recommendation}
+                                  </Typography>
+                                </Box>
+                              </Paper>
+                            );
+                          })()}
                         </CardContent>
                       </Card>
                     </Grid>
