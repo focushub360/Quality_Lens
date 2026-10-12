@@ -91,6 +91,7 @@ export default function BulkUpload() {
   const [isValidating, setIsValidating] = useState(false);
   const [validationData, setValidationData] = useState(null);
   const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false);
+  const [dupSearch, setDupSearch] = useState('');
   const [invalidLinksDialogOpen, setInvalidLinksDialogOpen] = useState(false);
 
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
@@ -2057,61 +2058,161 @@ export default function BulkUpload() {
       <Dialog 
         open={duplicateDialogOpen} 
         onClose={() => setDuplicateDialogOpen(false)} 
-        maxWidth="md" 
+        maxWidth="lg" 
         fullWidth
         PaperProps={{ sx: { borderRadius: 3, p: 1 } }}
       >
-        <DialogTitle sx={{ fontWeight: 800, color: '#B45309', display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Warning sx={{ color: '#F59E0B' }} />
-          Previously Analyzed Links Detected
+        <DialogTitle sx={{ fontWeight: 800, color: '#B45309', display: 'flex', alignItems: 'center', justifyContent: 'space-between', pb: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Warning sx={{ color: '#F59E0B', fontSize: 28 }} />
+            <Typography variant="h6" sx={{ fontWeight: 800, color: '#B45309' }}>
+              Previously Analyzed Links Detected ({validationData?.duplicate_validation?.already_analyzed_count || 0} Duplicates)
+            </Typography>
+          </Box>
+          <IconButton size="small" onClick={() => setDuplicateDialogOpen(false)}>
+            <Close fontSize="small" />
+          </IconButton>
         </DialogTitle>
         <DialogContent dividers>
-          <Typography variant="body1" sx={{ color: THEME.textPrimary, fontWeight: 700, mb: 1 }}>
+          <Typography variant="body1" sx={{ color: THEME.textPrimary, fontWeight: 700, mb: 0.5 }}>
             We detected that <strong>{validationData?.duplicate_validation?.already_analyzed_count}</strong> of <strong>{validationData?.total_urls}</strong> links in <em>"{file?.name}"</em> have already been analyzed previously in QualityLens.
           </Typography>
           <Typography variant="body2" sx={{ color: THEME.textSecondary, mb: 2 }}>
-            Do you want to re-analyze these links, or skip already analyzed links to save your daily CAPEX allowance?
+            Below is the complete list of previously analyzed records with their recorded vehicle, dealership, score, and analysis date.
           </Typography>
 
-          {/* Duplicate Preview Table */}
+          {/* Search bar & count */}
           {validationData?.duplicate_validation?.already_analyzed_samples?.length > 0 && (
             <Box sx={{ mb: 2 }}>
-              <Typography variant="caption" sx={{ fontWeight: 700, color: THEME.textSecondary, textTransform: 'uppercase', display: 'block', mb: 0.75 }}>
-                Previously Analyzed Links Preview:
-              </Typography>
-              <TableContainer component={Paper} elevation={0} sx={{ border: `1px solid ${THEME.border}`, borderRadius: 2, maxHeight: 220 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1.5, mb: 1 }}>
+                <Typography variant="caption" sx={{ fontWeight: 800, color: THEME.textPrimary, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  All Previously Analyzed Links ({(() => {
+                    const samples = validationData.duplicate_validation.already_analyzed_samples || [];
+                    const q = dupSearch.toLowerCase().trim();
+                    if (!q) return samples.length;
+                    return samples.filter(item => 
+                      (item.url || '').toLowerCase().includes(q) ||
+                      (item.vehicle || '').toLowerCase().includes(q) ||
+                      (item.dealership || '').toLowerCase().includes(q) ||
+                      (item.score || '').toString().toLowerCase().includes(q) ||
+                      (item.analyzed_at || '').toLowerCase().includes(q)
+                    ).length;
+                  })()} shown):
+                </Typography>
+                <TextField
+                  size="small"
+                  placeholder="Filter by vehicle, dealer, date, or URL..."
+                  value={dupSearch}
+                  onChange={(e) => setDupSearch(e.target.value)}
+                  sx={{
+                    width: 280,
+                    '& .MuiOutlinedInput-root': {
+                      height: 32,
+                      fontSize: '12px',
+                      borderRadius: 2,
+                      bgcolor: '#fff'
+                    }
+                  }}
+                />
+              </Box>
+
+              <TableContainer component={Paper} elevation={0} sx={{ border: `1px solid ${THEME.border}`, borderRadius: 2, maxHeight: 340 }}>
                 <Table size="small" stickyHeader>
                   <TableHead>
                     <TableRow sx={{ bgcolor: THEME.surface }}>
-                      <TableCell sx={{ fontWeight: 700, fontSize: '11px' }}>Video URL</TableCell>
-                      <TableCell sx={{ fontWeight: 700, fontSize: '11px' }}>Vehicle / Dealership</TableCell>
-                      <TableCell sx={{ fontWeight: 700, fontSize: '11px' }}>Previous Score</TableCell>
-                      <TableCell sx={{ fontWeight: 700, fontSize: '11px' }}>Analyzed Date</TableCell>
+                      <TableCell sx={{ fontWeight: 800, fontSize: '11px', width: 45 }}>#</TableCell>
+                      <TableCell sx={{ fontWeight: 800, fontSize: '11px' }}>Video URL</TableCell>
+                      <TableCell sx={{ fontWeight: 800, fontSize: '11px' }}>Vehicle / Reg</TableCell>
+                      <TableCell sx={{ fontWeight: 800, fontSize: '11px' }}>Dealership</TableCell>
+                      <TableCell sx={{ fontWeight: 800, fontSize: '11px' }}>Previous Score</TableCell>
+                      <TableCell sx={{ fontWeight: 800, fontSize: '11px' }}>Analyzed Date</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {validationData.duplicate_validation.already_analyzed_samples.map((item, i) => (
-                      <TableRow key={i} hover>
-                        <TableCell sx={{ fontSize: '11px', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
-                            {item.url}
-                          </Typography>
-                        </TableCell>
-                        <TableCell sx={{ fontSize: '11px' }}>
-                          <strong>{item.vehicle}</strong> <span style={{ color: '#64748B' }}>({item.dealership})</span>
-                        </TableCell>
-                        <TableCell sx={{ fontSize: '11px' }}>
-                          <Chip 
-                            label={`${item.score || 'N/A'} ${item.label || ''}`} 
-                            size="small" 
-                            sx={{ height: 20, fontSize: '10px', fontWeight: 700, bgcolor: 'rgba(13, 161, 184, 0.1)', color: THEME.primaryDark }} 
-                          />
-                        </TableCell>
-                        <TableCell sx={{ fontSize: '11px', fontWeight: 600 }}>
-                          {item.analyzed_at || '—'}
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {(() => {
+                      const samples = validationData.duplicate_validation.already_analyzed_samples || [];
+                      const q = dupSearch.toLowerCase().trim();
+                      const filtered = !q ? samples : samples.filter(item => 
+                        (item.url || '').toLowerCase().includes(q) ||
+                        (item.vehicle || '').toLowerCase().includes(q) ||
+                        (item.dealership || '').toLowerCase().includes(q) ||
+                        (item.score || '').toString().toLowerCase().includes(q) ||
+                        (item.analyzed_at || '').toLowerCase().includes(q)
+                      );
+
+                      if (filtered.length === 0) {
+                        return (
+                          <TableRow>
+                            <TableCell colSpan={6} align="center" sx={{ py: 3, color: THEME.textTertiary, fontSize: '12px' }}>
+                              No matching duplicate links found for "{dupSearch}"
+                            </TableCell>
+                          </TableRow>
+                        );
+                      }
+
+                      return filtered.map((item, i) => {
+                        const numScore = parseFloat(item.score);
+                        let chipBg = 'rgba(13, 161, 184, 0.12)';
+                        let chipColor = THEME.primaryDark;
+                        if (!isNaN(numScore)) {
+                          if (numScore >= 7.0) {
+                            chipBg = 'rgba(16, 185, 129, 0.15)';
+                            chipColor = '#065F46';
+                          } else if (numScore >= 5.5) {
+                            chipBg = 'rgba(245, 158, 11, 0.18)';
+                            chipColor = '#92400E';
+                          } else {
+                            chipBg = 'rgba(239, 68, 68, 0.15)';
+                            chipColor = '#991B1B';
+                          }
+                        }
+
+                        return (
+                          <TableRow key={i} hover>
+                            <TableCell sx={{ fontSize: '11px', color: THEME.textTertiary, fontWeight: 600 }}>
+                              {i + 1}
+                            </TableCell>
+                            <TableCell sx={{ fontSize: '11px', maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              <Typography 
+                                component="a"
+                                href={item.url}
+                                target="_blank"
+                                rel="noreferrer"
+                                variant="caption" 
+                                sx={{ 
+                                  fontFamily: 'monospace', 
+                                  color: THEME.primary, 
+                                  textDecoration: 'none',
+                                  '&:hover': { textDecoration: 'underline' } 
+                                }}
+                              >
+                                {item.url}
+                              </Typography>
+                            </TableCell>
+                            <TableCell sx={{ fontSize: '11px' }}>
+                              <Typography variant="body2" sx={{ fontSize: '11px', fontWeight: 700, color: THEME.textPrimary }}>
+                                {item.vehicle || '—'}
+                              </Typography>
+                            </TableCell>
+                            <TableCell sx={{ fontSize: '11px' }}>
+                              <Typography variant="caption" sx={{ fontWeight: 600, color: THEME.textSecondary, bgcolor: THEME.surface, px: 1, py: 0.25, borderRadius: 1, border: `1px solid ${THEME.borderLight}` }}>
+                                {item.dealership || '—'}
+                              </Typography>
+                            </TableCell>
+                            <TableCell sx={{ fontSize: '11px' }}>
+                              <Chip 
+                                label={`${item.score || 'Completed'} ${item.label ? `(${item.label})` : ''}`} 
+                                size="small" 
+                                sx={{ height: 22, fontSize: '10.5px', fontWeight: 800, bgcolor: chipBg, color: chipColor }} 
+                              />
+                            </TableCell>
+                            <TableCell sx={{ fontSize: '11px', fontWeight: 600, color: THEME.textPrimary }}>
+                              {item.analyzed_at || '—'}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      });
+                    })()}
                   </TableBody>
                 </Table>
               </TableContainer>
@@ -2155,7 +2256,6 @@ export default function BulkUpload() {
           </Box>
         </DialogActions>
       </Dialog>
-
       {/* Rejected Invalid Links Dialog */}
       <Dialog 
         open={invalidLinksDialogOpen} 

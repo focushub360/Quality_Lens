@@ -3387,49 +3387,164 @@ def extract_excel_urls_and_dealers(df: pd.DataFrame) -> dict:
         "dealers_found": dealers_found
     }
 
-async def check_duplicate_urls_in_db(non_empty_urls: list[str]) -> tuple[dict, list[str]]:
-    """Checks MongoDB results_collection for URLs that have already been analyzed."""
+
+DEALER_DISPLAY_NAMES = {
+    'bmw-kun': 'BMW-KUN',
+    'kun': 'BMW-KUN',
+    'eminent': 'Eminent Cars',
+    'bird': 'Bird Automotive',
+    'deutschemotoren': 'Deutsche Motoren',
+    'evmautokraft': 'EVM Autokraft',
+    'evm': 'EVM Autokraft',
+    'varsha autohaus': 'Varsha Autohaus',
+    'varsha': 'Varsha Autohaus',
+    'gallop': 'Gallop Autohaus',
+    'sanghi classic': 'Sanghi Classic',
+    'sanghi': 'Sanghi Classic',
+    'navnit mumbai': 'Navnit Mumbai',
+    'navnit': 'Navnit Mumbai',
+    'bavaria motors': 'Bavaria Motors',
+    'bavaria': 'Bavaria Motors'
+}
+
+def resolve_clean_dealer_name(dealer_str: str) -> str:
+    if not dealer_str:
+        return ""
+    clean = str(dealer_str).strip()
+    clean_lower = clean.lower()
+    for k, v in DEALER_DISPLAY_NAMES.items():
+        if k in clean_lower or clean_lower in k:
+            return v
+    return clean
+async def check_duplicate_urls_in_db(non_empty_urls: list[str], excel_meta_by_url: dict = None, default_dealer: str = "") -> tuple[dict, list[str]]:
+    """Checks MongoDB results_collection for URLs that have already been analyzed with rich metadata fallback."""
     if not non_empty_urls or results_collection is None:
         return {}, []
 
+    if excel_meta_by_url is None:
+        excel_meta_by_url = {}
+
     unique_urls = list(dict.fromkeys(non_empty_urls))
     cursor = results_collection.find(
-        {"input_source": {"$in": unique_urls}},
+        {"$or": [
+            {"input_source": {"$in": unique_urls}},
+            {"citnow_metadata.page_url": {"$in": unique_urls}}
+        ]},
         {
             "input_source": 1,
-            "citnow_metadata.page_url": 1,
+            "citnow_metadata": 1,
             "citnow_dealership": 1,
             "citnow_vehicle": 1,
+            "citnow_registration": 1,
             "overall_quality_score": 1,
             "overall_quality_label": 1,
+            "overall_score": 1,
+            "overall_quality": 1,
+            "dealer_id": 1,
+            "dealership": 1,
+            "dealer_name": 1,
+            "excel_metadata": 1,
             "created_at": 1,
+            "processing_timestamp": 1,
             "status": 1
         }
     )
-    existing_docs = await cursor.to_list(length=10000)
-    
+    existing_docs = await cursor.to_list(length=20000)
+
     analyzed_map = {}
     for doc in existing_docs:
         url_key = doc.get("input_source") or (doc.get("citnow_metadata") or {}).get("page_url")
-        if url_key and url_key not in analyzed_map:
-            c_at = doc.get("created_at")
-            c_at_str = ""
-            if isinstance(c_at, dt):
-                c_at_str = c_at.strftime("%d/%m/%Y")
-            elif isinstance(c_at, str):
-                try:
-                    c_at_str = dt.fromisoformat(c_at).strftime("%d/%m/%Y")
-                except Exception:
-                    c_at_str = c_at[:10]
-            
-            analyzed_map[url_key] = {
-                "url": url_key,
-                "analyzed_at": c_at_str,
-                "score": doc.get("overall_quality_score"),
-                "label": doc.get("overall_quality_label") or "Analyzed",
-                "vehicle": doc.get("citnow_vehicle") or "Vehicle",
-                "dealership": doc.get("citnow_dealership") or "Dealership"
-            }
+        if not url_key or url_key in analyzed_map:
+            continue
+
+        ex_meta = excel_meta_by_url.get(url_key) or {}
+
+        # 1. Resolve Vehicle
+        raw_veh = (
+            doc.get("citnow_vehicle")
+            or doc.get("citnow_registration")
+            or (doc.get("citnow_metadata") or {}).get("vehicle")
+            or (doc.get("citnow_metadata") or {}).get("registration")
+            or (doc.get("excel_metadata") or {}).get("Vehicle ID")
+            or doc.get("vehicle")
+            or ex_meta.get("vehicle")
+        )
+        vehicle_str = str(raw_veh).strip() if raw_veh and str(raw_veh).lower() not in ('none', 'nan', 'null', 'vehicle', '') else ""
+        if not vehicle_str:
+            vehicle_str = ex_meta.get("vehicle") or "—"
+
+        # 2. Resolve Dealership
+        raw_dealer = (
+            doc.get("citnow_dealership")
+            or (doc.get("citnow_metadata") or {}).get("dealership")
+            or (doc.get("excel_metadata") or {}).get("Location Name")
+            or doc.get("dealership")
+            or doc.get("dealer_name")
+            or ex_meta.get("dealership")
+            or default_dealer
+        )
+        dealer_str = str(raw_dealer).strip() if raw_dealer and str(raw_dealer).lower() not in ('none', 'nan', 'null', 'dealership', '') else ""
+        if not dealer_str and doc.get("dealer_id"):
+            d_id = str(doc.get("dealer_id")).strip()
+            dealer_str = resolve_clean_dealer_name(d_id)
+        if not dealer_str:
+            dealer_str = resolve_clean_dealer_name(default_dealer) or "Dealership"
+
+        # 3. Resolve Score & Label
+        score_val = doc.get("overall_quality_score")
+        if score_val is None:
+            score_val = doc.get("overall_score") or (doc.get("overall_quality") or {}).get("overall_score")
+        
+        label_val = doc.get("overall_quality_label") or (doc.get("overall_quality") or {}).get("overall_label")
+
+        if score_val is not None:
+            try:
+                s_float = float(score_val)
+                score_display = f"{s_float:.1f}"
+                if not label_val or label_val in ("Analyzed", "None"):
+                    if s_float >= 7.5: label_val = "Great"
+                    elif s_float >= 6.5: label_val = "Good"
+                    elif s_float >= 5.5: label_val = "Fair"
+                    else: label_val = "Poor"
+            except Exception:
+                score_display = str(score_val)
+                label_val = "Analyzed"
+        else:
+            score_display = "Completed"
+            label_val = "Analyzed"
+
+        # 4. Resolve Date
+        c_at = (
+            doc.get("created_at")
+            or doc.get("processing_timestamp")
+            or (doc.get("citnow_metadata") or {}).get("date")
+            or (doc.get("excel_metadata") or {}).get("date")
+            or ex_meta.get("date")
+        )
+        c_at_str = ""
+        if isinstance(c_at, dt):
+            c_at_str = c_at.strftime("%d/%m/%Y")
+        elif isinstance(c_at, str) and c_at.strip():
+            raw_s = c_at.strip().split('T')[0].split(' ')[0]
+            parts = re.split(r'[-/]', raw_s)
+            if len(parts) == 3:
+                if len(parts[0]) == 4:  # YYYY-MM-DD
+                    c_at_str = f"{parts[2]}/{parts[1]}/{parts[0]}"
+                else:  # DD-MM-YYYY
+                    c_at_str = f"{parts[0]}/{parts[1]}/{parts[2]}"
+            else:
+                c_at_str = c_at[:10]
+        if not c_at_str:
+            c_at_str = dt.now().strftime("%d/%m/%Y")
+
+        analyzed_map[url_key] = {
+            "url": url_key,
+            "analyzed_at": c_at_str,
+            "score": score_display,
+            "label": label_val,
+            "vehicle": vehicle_str,
+            "dealership": dealer_str
+        }
 
     already_analyzed_urls = [u for u in non_empty_urls if u in analyzed_map]
     return analyzed_map, already_analyzed_urls
@@ -3493,7 +3608,33 @@ async def validate_bulk_excel(
                         mismatched_dealers.append(d)
 
         # Duplicate Links Validation
-        analyzed_map, already_analyzed_urls = await check_duplicate_urls_in_db(non_empty_urls)
+        # Build excel_meta_by_url map from df for accurate vehicle, dealer, and date fallback
+        excel_meta_by_url = {}
+        for idx, row in df.iterrows():
+            val = row.get(url_column)
+            is_valid, norm_url, _ = validate_citnow_url(val)
+            if is_valid and norm_url:
+                v_cand = ""
+                for col_name in ['Vehicle ID', 'Vehicle', 'Registration', 'Reg', 'VRM', 'Vehicle Reg', 'Vehicle ID ']:
+                    if col_name in row and pd.notna(row[col_name]):
+                        v_cand = str(row[col_name]).strip()
+                        break
+                d_cand = ""
+                if dealer_col and dealer_col in row and pd.notna(row[dealer_col]):
+                    d_cand = str(row[dealer_col]).strip()
+                dt_cand = ""
+                for col_name in ['date', 'Date', 'Created Date', 'Upload Date', 'Video Date']:
+                    if col_name in row and pd.notna(row[col_name]):
+                        dt_cand = str(row[col_name]).strip()
+                        break
+                excel_meta_by_url[norm_url] = {
+                    "vehicle": v_cand,
+                    "dealership": d_cand,
+                    "date": dt_cand
+                }
+
+        detected_primary_dealer = dealers_found[0] if dealers_found else user_dealer_name
+        analyzed_map, already_analyzed_urls = await check_duplicate_urls_in_db(non_empty_urls, excel_meta_by_url, detected_primary_dealer)
         unique_urls = list(dict.fromkeys(non_empty_urls))
         file_dups_count = len(non_empty_urls) - len(unique_urls)
 
@@ -3501,7 +3642,7 @@ async def validate_bulk_excel(
         new_urls_count = len(set(non_empty_urls) - set(already_analyzed_urls))
 
         # Sample list of already analyzed links for preview
-        samples = list(analyzed_map.values())[:15]
+        samples = list(analyzed_map.values())
 
         mismatch_msg = None
         if dealer_mismatch:
