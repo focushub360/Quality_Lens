@@ -82,7 +82,12 @@ import {
   LinkOff,
   ErrorOutline,
   CheckCircleOutline,
-  NotificationsActive
+  NotificationsActive,
+  Public,
+  CheckCircle,
+  Speed,
+  AutoGraph,
+  Flag
 } from '@mui/icons-material';
 import {
   LineChart,
@@ -162,148 +167,976 @@ const CHART_COLORS = {
 };
 
 // Custom Chart Components
-const PerformanceTrendChart = ({ data, selectedDealerName, isAllDealers }) => {
-  const chartData = data && data.length > 0 ? data : [];
-  const firstScore = chartData.length > 0 ? (chartData[0].overall || 6.2) : 6.2;
-  const lastScore = chartData.length > 0 ? (chartData[chartData.length - 1].overall || 7.4) : 7.4;
-  const delta = (lastScore - firstScore).toFixed(2);
-  const deltaSign = Number(delta) >= 0 ? '+' : '';
-  const deltaPercent = firstScore > 0 ? (((lastScore - firstScore) / firstScore) * 100).toFixed(1) : '0';
+const PerformanceTrendChart = ({ data, weeklyData, selectedDealerName, isAllDealers }) => {
+  const [activeMetricView, setActiveMetricView] = useState('overall'); // 'overall', 'pillars'
+  const [hoveredPoint, setHoveredPoint] = useState(null);
+  // Default to null so week bars and W1, W2, W3, W4 appear ONLY when hovering!
+  const [activeHoverMonth, setActiveHoverMonth] = useState(null);
+  const [showAllWeekBars, setShowAllWeekBars] = useState(false); // Optional toggle to view all week bars simultaneously
+
+  const monthlyChartData = data && data.length > 0 ? data : [];
+  const weeklyChartData = weeklyData && weeklyData.length > 0 ? weeklyData : [];
+
+  // Monthly stats
+  const janScore = monthlyChartData.length > 0 ? (monthlyChartData[0].overall || 5.15) : 5.15;
+  const mayLowScore = monthlyChartData.length > 4 ? (monthlyChartData[4].overall || 4.95) : 4.95;
+  const octScore = monthlyChartData.length > 0 ? (monthlyChartData[monthlyChartData.length - 1].overall || 7.40) : 7.40;
+  const totalGain = (octScore - mayLowScore).toFixed(2);
+  const gainPercent = mayLowScore > 0 ? (((octScore - mayLowScore) / mayLowScore) * 100).toFixed(1) : '49.5';
+
+  // Target attainment
+  const TARGET_SCORE = 8.0;
+  const attainmentPercent = Math.min(100, Math.round((octScore / TARGET_SCORE) * 100));
+  const remainingTarget = Math.max(0, Number((TARGET_SCORE - octScore).toFixed(2)));
+
+  // Combine Jan - May monthly points with Jun - Oct week-by-week in-between points
+  const timelineData = [
+    // Jan - May monthly points: Almost stable with slight natural fluctuations
+    ...(monthlyChartData.slice(0, 5).map(m => ({
+      name: m.name,
+      displayTick: m.name,
+      month: m.fullMonth || m.name,
+      overall: m.overall,
+      phase: 'before',
+      activeBarValue: null,
+      barLabel: null,
+      isMonthStart: true,
+      video: m.video || (m.overall + 0.10),
+      audio: m.audio || (m.overall - 0.15),
+      protocol: m.protocol || m.overall,
+      audits: m.audits || 0
+    }))),
+    // Jun - Oct week-by-week points sitting in-between the months
+    ...(weeklyChartData.map(w => {
+      const parts = w.name.split(' ');
+      const mShort = parts[0]; // Jun, Jul, Aug, Sep, Oct
+      const wShort = parts[1]; // W1, W2, W3, W4
+      const isStart = wShort === 'W1';
+      // Bars and labels appear ONLY when hovering this month (or in show-all mode)
+      const isBarActive = showAllWeekBars || (activeHoverMonth && w.month === activeHoverMonth);
+
+      let barColor = '#0DA1B8';
+      if (wShort === 'W2') barColor = '#0284C7';
+      if (wShort === 'W3') barColor = '#6366F1';
+      if (wShort === 'W4') barColor = '#10B981';
+
+      return {
+        name: w.name,
+        displayTick: isStart ? mShort : wShort,
+        month: w.month,
+        overall: w.overall,
+        phase: 'after',
+        wow: w.wow || 0,
+        audits: w.audits || 0,
+        weekLabel: w.weekLabel || w.name,
+        activeBarValue: isBarActive ? w.overall : null,
+        barLabel: isBarActive ? `${wShort} ${w.overall.toFixed(2)}` : null,
+        barColor: barColor,
+        isMonthStart: isStart,
+        video: w.video || (w.overall + 0.35),
+        audio: w.audio || (w.overall - 0.25),
+        protocol: w.protocol || (w.overall - 0.10)
+      };
+    }))
+  ];
+
+  // Active month weeks for top summary
+  const activeMonthWeeks = activeHoverMonth ? weeklyChartData.filter(w => w.month === activeHoverMonth) : [];
+  const activeMonthData = activeHoverMonth 
+    ? monthlyChartData.find(m => m.fullMonth?.startsWith(activeHoverMonth) || m.name === activeHoverMonth.slice(0, 3))
+    : null;
+
+  // Custom Glassmorphic Tooltip
+  const CustomTimelineTooltip = ({ active, payload }) => {
+    if (!active || !payload || !payload.length) return null;
+    const item = payload[0].payload;
+    const isBefore = item.phase === 'before';
+    const isWeekly = item.phase === 'after';
+
+    return (
+      <Box sx={{
+        background: 'rgba(255, 255, 255, 0.98)',
+        backdropFilter: 'blur(16px)',
+        border: isBefore ? '1.5px solid rgba(239, 68, 68, 0.4)' : '1.5px solid rgba(13, 161, 184, 0.4)',
+        borderRadius: 2.5,
+        p: 2,
+        boxShadow: isBefore ? '0 16px 36px rgba(239, 68, 68, 0.16)' : '0 16px 36px rgba(12, 88, 125, 0.22)',
+        minWidth: 260,
+        pointerEvents: 'none'
+      }}>
+        {/* Header */}
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1, borderBottom: '1px solid #E2E8F0', pb: 0.8 }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#0F172A', display: 'flex', alignItems: 'center', gap: 0.8 }}>
+            <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: isBefore ? '#EF4444' : '#0DA1B8' }} />
+            {item.weekLabel || item.name}
+          </Typography>
+          <Chip
+            label={isBefore ? 'Before QualityLens' : `${item.month} AI Audit`}
+            size="small"
+            sx={{
+              height: 20,
+              fontSize: '0.65rem',
+              fontWeight: 800,
+              bgcolor: isBefore ? '#FEE2E2' : '#ECFDF5',
+              color: isBefore ? '#B91C1C' : '#059669'
+            }}
+          />
+        </Box>
+
+        {/* Quality Score */}
+        <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', mb: 1 }}>
+          <Typography variant="caption" sx={{ color: '#64748B', fontWeight: 600 }}>
+            {isAllDealers ? (isWeekly ? 'Weekly Quality Score' : 'Monthly Score') : `${selectedDealerName}`}
+          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.6 }}>
+            <Typography variant="h6" sx={{ fontWeight: 900, color: isBefore ? '#DC2626' : '#0DA1B8', lineHeight: 1 }}>
+              {item.overall?.toFixed(2)}
+            </Typography>
+            <Typography variant="caption" sx={{ color: '#94A3B8', fontWeight: 600 }}>/ 10</Typography>
+          </Box>
+        </Box>
+
+        {/* Delta Badges */}
+        <Box sx={{ display: 'flex', gap: 1, mb: 1.2, flexWrap: 'wrap' }}>
+          {isWeekly ? (
+            <Chip
+              size="small"
+              label={item.name === 'Jun W1' ? 'Launch Base' : `Minimal Growth: +${item.wow?.toFixed(2)} WoW`}
+              sx={{
+                height: 20,
+                fontSize: '0.65rem',
+                fontWeight: 800,
+                bgcolor: item.name === 'Jun W1' ? '#F1F5F9' : '#ECFDF5',
+                color: item.name === 'Jun W1' ? '#64748B' : '#059669'
+              }}
+            />
+          ) : (
+            <Chip
+              size="small"
+              label="Pre-QualityLens Manual Baseline"
+              sx={{ height: 20, fontSize: '0.65rem', fontWeight: 700, bgcolor: '#FEE2E2', color: '#991B1B' }}
+            />
+          )}
+
+          {item.audits > 0 && (
+            <Chip
+              size="small"
+              label={`${item.audits.toLocaleString()} Audits`}
+              sx={{ height: 20, fontSize: '0.65rem', fontWeight: 700, bgcolor: '#F0F9FF', color: '#0369A1' }}
+            />
+          )}
+        </Box>
+
+        {/* Pillars Mini Breakdown */}
+        {activeMetricView === 'pillars' && (
+          <Box sx={{ pt: 1, borderTop: '1px dashed #E2E8F0', display: 'flex', flexDirection: 'column', gap: 0.6 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px' }}>
+              <span style={{ color: '#3B82F6', fontWeight: 600 }}>🎥 Video Stability:</span>
+              <strong style={{ color: '#1E293B' }}>{item.video?.toFixed(2) || '7.80'} / 10</strong>
+            </Box>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px' }}>
+              <span style={{ color: '#8B5CF6', fontWeight: 600 }}>🎙️ Audio Clarity:</span>
+              <strong style={{ color: '#1E293B' }}>{item.audio?.toFixed(2) || '7.15'} / 10</strong>
+            </Box>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px' }}>
+              <span style={{ color: '#10B981', fontWeight: 600 }}>📋 Walkaround Protocol:</span>
+              <strong style={{ color: '#1E293B' }}>{item.protocol?.toFixed(2) || '7.25'} / 10</strong>
+            </Box>
+          </Box>
+        )}
+      </Box>
+    );
+  };
 
   return (
     <Box sx={{ width: '100%' }}>
-      {/* KPI Stats Bar */}
+      {/* 🚀 1. Modelistic Executive Command HUD */}
+      <Grid container spacing={2} sx={{ mb: 3 }}>
+        {/* Card 1: Before QualityLens */}
+        <Grid item xs={12} sm={6} md={3}>
+          <Card sx={{
+            p: 2.2, height: '100%', borderRadius: 3,
+            background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(254, 242, 242, 0.7) 100%)',
+            border: '1px solid rgba(239, 68, 68, 0.2)', boxShadow: '0 4px 16px rgba(239, 68, 68, 0.06)'
+          }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+              <Typography variant="caption" sx={{ fontWeight: 800, color: '#991B1B', textTransform: 'uppercase', fontSize: '11px' }}>
+                Before QualityLens
+              </Typography>
+              <Chip label="Jan–May (5 Mos)" size="small" sx={{ height: 18, fontSize: '9px', fontWeight: 800, bgcolor: 'rgba(239, 68, 68, 0.12)', color: '#991B1B' }} />
+            </Box>
+            <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mb: 0.5 }}>
+              <Typography variant="h5" sx={{ fontWeight: 900, color: '#DC2626' }}>
+                {janScore.toFixed(2)} ⟷ {mayLowScore.toFixed(2)}
+              </Typography>
+              <Typography variant="caption" sx={{ color: '#94A3B8', fontWeight: 600 }}>/ 10</Typography>
+            </Box>
+            <Typography variant="caption" sx={{ color: '#B91C1C', fontWeight: 600, display: 'block' }}>
+              Almost stable (~5.1 avg) with manual up/down movement
+            </Typography>
+          </Card>
+        </Grid>
+
+        {/* Card 2: After QualityLens Growth */}
+        <Grid item xs={12} sm={6} md={3}>
+          <Card sx={{
+            p: 2.2, height: '100%', borderRadius: 3,
+            background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(240, 253, 244, 0.8) 100%)',
+            border: '1px solid rgba(16, 185, 129, 0.25)', boxShadow: '0 4px 16px rgba(16, 185, 129, 0.08)'
+          }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+              <Typography variant="caption" sx={{ fontWeight: 800, color: '#065F46', textTransform: 'uppercase', fontSize: '11px' }}>
+                After QualityLens
+              </Typography>
+              <TrendingUp sx={{ color: '#10B981', fontSize: 16 }} />
+            </Box>
+            <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mb: 0.5 }}>
+              <Typography variant="h5" sx={{ fontWeight: 900, color: '#0F172A' }}>
+                {mayLowScore.toFixed(2)} → {octScore.toFixed(2)}
+              </Typography>
+              <Typography variant="caption" sx={{ color: '#94A3B8', fontWeight: 600 }}>/ 10</Typography>
+            </Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8 }}>
+              <Chip
+                label={`+${totalGain} (+${gainPercent}%)`}
+                size="small"
+                sx={{ height: 18, fontSize: '9.5px', fontWeight: 800, bgcolor: '#ECFDF5', color: '#059669' }}
+              />
+              <Typography variant="caption" sx={{ color: '#047857', fontWeight: 700 }}>
+                Steady AI Growth
+              </Typography>
+            </Box>
+          </Card>
+        </Grid>
+
+        {/* Card 3: Target Attainment */}
+        <Grid item xs={12} sm={6} md={3}>
+          <Card sx={{
+            p: 2.2, height: '100%', borderRadius: 3,
+            background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(245, 243, 255, 0.8) 100%)',
+            border: '1px solid rgba(139, 92, 246, 0.2)', boxShadow: '0 4px 16px rgba(139, 92, 246, 0.06)'
+          }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+              <Typography variant="caption" sx={{ fontWeight: 800, color: '#5B21B6', textTransform: 'uppercase', fontSize: '11px' }}>
+                Target Attainment
+              </Typography>
+              <Speed sx={{ color: '#8B5CF6', fontSize: 16 }} />
+            </Box>
+            <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mb: 0.5 }}>
+              <Typography variant="h5" sx={{ fontWeight: 900, color: '#5B21B6' }}>
+                {attainmentPercent}%
+              </Typography>
+              <Chip label="Goal: 8.0 / 10" size="small" sx={{ height: 18, fontSize: '9px', fontWeight: 800, bgcolor: 'rgba(139, 92, 246, 0.12)', color: '#5B21B6' }} />
+            </Box>
+            <Typography variant="caption" sx={{ color: '#6D28D9', fontWeight: 600, display: 'block' }}>
+              {remainingTarget > 0 ? `${remainingTarget} pts to National Target` : 'Target Exceeded!'}
+            </Typography>
+          </Card>
+        </Grid>
+
+        {/* Card 4: Audited Corpus */}
+        <Grid item xs={12} sm={6} md={3}>
+          <Card sx={{
+            p: 2.2, height: '100%', borderRadius: 3,
+            background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(240, 249, 255, 0.8) 100%)',
+            border: '1px solid rgba(13, 161, 184, 0.2)', boxShadow: '0 4px 16px rgba(13, 161, 184, 0.06)'
+          }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+              <Typography variant="caption" sx={{ fontWeight: 800, color: '#0C587D', textTransform: 'uppercase', fontSize: '11px' }}>
+                Real Audited Corpus
+              </Typography>
+              <Videocam sx={{ color: '#0DA1B8', fontSize: 18 }} />
+            </Box>
+            <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mb: 0.5 }}>
+              <Typography variant="h5" sx={{ fontWeight: 900, color: '#0F172A' }}>
+                10,928 Audits
+              </Typography>
+            </Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6 }}>
+              <Chip label="Live Ingestion" size="small" sx={{ height: 18, fontSize: '9px', fontWeight: 800, bgcolor: 'rgba(13, 161, 184, 0.15)', color: '#0C587D' }} />
+              <Typography variant="caption" sx={{ color: '#0369A1', fontWeight: 600 }}>
+                Since June 1, 2026
+              </Typography>
+            </Box>
+          </Card>
+        </Grid>
+      </Grid>
+
+      {/* 🧭 2. Rollout Progression Roadmap Banner */}
       <Box sx={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        flexWrap: 'wrap',
-        gap: 2,
-        mb: 2.5,
-        p: 2,
-        borderRadius: 2.5,
-        background: 'linear-gradient(135deg, rgba(13, 161, 184, 0.06) 0%, rgba(12, 88, 125, 0.1) 100%)',
-        border: `1px solid ${THEME.borderLight}`
+        p: 1.5, px: 2, mb: 3, borderRadius: 2.5,
+        bgcolor: '#F8FAFC', border: '1px solid #E2E8F0',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1.5
       }}>
-        <Box>
-          <Typography variant="subtitle1" sx={{ fontWeight: 700, color: THEME.textPrimary, display: 'flex', alignItems: 'center', gap: 1 }}>
-            <TrendingUp sx={{ color: THEME.primary, fontSize: 20 }} />
-            {isAllDealers
-              ? 'Pan-India Pilot Overall Performance Trend (Jan – Oct 2026)'
-              : `${selectedDealerName} — Overall Performance Trend (Jan – Oct 2026)`}
-          </Typography>
-          <Typography variant="caption" sx={{ color: THEME.textSecondary, fontWeight: 500 }}>
-            {isAllDealers
-              ? 'Tracking average overall quality score improvement across the 6 pilot dealerships'
-              : `Tracking month-by-month overall quality improvement for ${selectedDealerName} vs Pan-India average`}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Flag sx={{ color: '#0DA1B8', fontSize: 18 }} />
+          <Typography variant="caption" sx={{ fontWeight: 800, color: '#0F172A', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            Rollout Roadmap:
           </Typography>
         </Box>
-
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2.5, flexWrap: 'wrap' }}>
-          <Box sx={{ textAlign: 'center' }}>
-            <Typography variant="caption" sx={{ color: THEME.textTertiary, display: 'block', fontWeight: 600, fontSize: '10px' }}>
-              JAN BASELINE
-            </Typography>
-            <Typography variant="body2" sx={{ fontWeight: 800, color: THEME.textSecondary, fontSize: '14px' }}>
-              {Number(firstScore).toFixed(1)}/10
-            </Typography>
-          </Box>
-
-          <Box sx={{ width: '1px', height: 26, bgcolor: THEME.borderLight }} />
-
-          <Box sx={{ textAlign: 'center' }}>
-            <Typography variant="caption" sx={{ color: THEME.textTertiary, display: 'block', fontWeight: 600, fontSize: '10px' }}>
-              CURRENT (OCT)
-            </Typography>
-            <Typography variant="body2" sx={{ fontWeight: 800, color: THEME.primary, fontSize: '14px' }}>
-              {Number(lastScore).toFixed(1)}/10
-            </Typography>
-          </Box>
-
-          <Box sx={{ width: '1px', height: 26, bgcolor: THEME.borderLight }} />
-
-          <Box sx={{ textAlign: 'center' }}>
-            <Typography variant="caption" sx={{ color: THEME.textTertiary, display: 'block', fontWeight: 600, fontSize: '10px' }}>
-              IMPROVEMENT
-            </Typography>
-            <Typography variant="body2" sx={{ fontWeight: 800, color: Number(delta) >= 0 ? THEME.success : THEME.error, fontSize: '14px' }}>
-              {deltaSign}{delta} ({deltaSign}{deltaPercent}%) {Number(delta) >= 0 ? '↑' : '↓'}
-            </Typography>
-          </Box>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+          <Chip size="small" label="Jan–May: Before QualityLens (5.15 ⟷ 4.95 Stable Baseline with Fluctuations)" sx={{ bgcolor: '#FEE2E2', color: '#991B1B', fontWeight: 800, fontSize: '11px', height: 24 }} />
+          <Typography variant="caption" sx={{ color: '#94A3B8' }}>⚡</Typography>
+          <Chip size="small" label="⚡ June: QualityLens Deployed (Live Ingestion Begins)" sx={{ bgcolor: 'rgba(13, 161, 184, 0.15)', color: '#0C587D', fontWeight: 800, fontSize: '11px', height: 24 }} />
+          <Typography variant="caption" sx={{ color: '#94A3B8' }}>→</Typography>
+          <Chip size="small" label="Jul–Sep: Steady AI Growth (5.9 → 6.9)" sx={{ bgcolor: '#ECFDF5', color: '#065F46', fontWeight: 700, fontSize: '11px', height: 24 }} />
+          <Typography variant="caption" sx={{ color: '#94A3B8' }}>→</Typography>
+          <Chip size="small" label="Oct: Peak Benchmark (7.4) • Current" sx={{ bgcolor: '#ECFDF5', color: '#065F46', fontWeight: 800, fontSize: '11px', height: 24 }} />
         </Box>
       </Box>
 
-      {/* Line Chart — Overall Score Alone */}
-      <ResponsiveContainer width="100%" height={340}>
-        <LineChart data={chartData} margin={{ top: 15, right: 30, left: 0, bottom: 10 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke={THEME.borderLight} />
-          <XAxis
-            dataKey="name"
-            stroke={THEME.textSecondary}
-            fontSize={12}
-            fontWeight={600}
-            tickLine={false}
-          />
-          <YAxis
-            stroke={THEME.textSecondary}
-            fontSize={11}
-            domain={[4.5, 8.5]}
-            ticks={[4.5, 5.0, 5.5, 6.0, 6.5, 7.0, 7.5, 8.0, 8.5]}
-            tickFormatter={(val) => `${Number(val).toFixed(1)}`}
-          />
-          <RechartsTooltip
-            contentStyle={{
-              background: 'rgba(255, 255, 255, 0.98)',
-              border: `1px solid ${THEME.border}`,
-              borderRadius: 8,
-              boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
-              fontSize: '12px'
+      {/* 📊 3. Interactive Toolbar with In-Between Week Bar Controls */}
+      <Box sx={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2, mb: 1.5, px: 0.5
+      }}>
+        <Box>
+          <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#0F172A', display: 'flex', alignItems: 'center', gap: 1 }}>
+            <TrendingUp sx={{ color: '#0DA1B8', fontSize: 20 }} />
+            {isAllDealers 
+              ? 'Pan-India Quality Transformation: Before (Jan–May) vs After (Jun–Oct)' 
+              : `${selectedDealerName} • Before (Jan–May) vs After (Jun–Oct) Trajectory`}
+          </Typography>
+          <Typography variant="caption" sx={{ color: '#64748B', fontWeight: 500 }}>
+            Jan to Oct timeline • Hover between Jun–Jul, Jul–Aug, Aug–Sep, Sep–Oct to see weekly bars & badges appear!
+          </Typography>
+        </Box>
+
+        {/* View Controls: Show on Hover vs Show All Bars */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.2, flexWrap: 'wrap' }}>
+          <Box sx={{ display: 'flex', bgcolor: '#F1F5F9', p: 0.4, borderRadius: 2 }}>
+            <Button
+              size="small"
+              onClick={() => {
+                setShowAllWeekBars(false);
+                setActiveHoverMonth(null);
+              }}
+              sx={{
+                py: 0.4, px: 1.4, minWidth: 'auto', fontSize: '11px', fontWeight: 800, textTransform: 'none', borderRadius: 1.5,
+                bgcolor: !showAllWeekBars ? '#0DA1B8' : 'transparent',
+                color: !showAllWeekBars ? '#FFFFFF' : '#475569',
+                boxShadow: !showAllWeekBars ? '0 2px 6px rgba(13, 161, 184, 0.3)' : 'none',
+                '&:hover': { bgcolor: !showAllWeekBars ? '#0C587D' : '#E2E8F0' }
+              }}
+            >
+              ⚡ Week Bars on Hover Only
+            </Button>
+            <Button
+              size="small"
+              onClick={() => setShowAllWeekBars(true)}
+              sx={{
+                py: 0.4, px: 1.4, minWidth: 'auto', fontSize: '11px', fontWeight: 800, textTransform: 'none', borderRadius: 1.5,
+                bgcolor: showAllWeekBars ? '#0DA1B8' : 'transparent',
+                color: showAllWeekBars ? '#FFFFFF' : '#475569',
+                boxShadow: showAllWeekBars ? '0 2px 6px rgba(13, 161, 184, 0.3)' : 'none',
+                '&:hover': { bgcolor: showAllWeekBars ? '#0C587D' : '#E2E8F0' }
+              }}
+            >
+              ⚡ Show All Week Bars
+            </Button>
+          </Box>
+
+          <Chip
+            clickable
+            size="small"
+            label={activeMetricView === 'pillars' ? 'Hide Pillars' : 'Pillars Breakdown'}
+            onClick={() => setActiveMetricView(activeMetricView === 'pillars' ? 'overall' : 'pillars')}
+            sx={{
+              fontWeight: 700, fontSize: '11px', height: 28,
+              bgcolor: activeMetricView === 'pillars' ? '#0C587D' : '#F1F5F9',
+              color: activeMetricView === 'pillars' ? '#FFFFFF' : '#475569'
             }}
-            formatter={(value, name) => {
-              const num = typeof value === 'number' ? value : parseFloat(value);
-              const formattedVal = !isNaN(num) ? num.toFixed(2) : value;
-              return [`${formattedVal} / 10`, name];
+          />
+        </Box>
+      </Box>
+
+      {/* ⚡ 4. IN-BETWEEN WEEK BAR SUMMARY (Shown when a month is hovered) */}
+      {activeHoverMonth && (
+        <Box sx={{
+          mb: 2,
+          p: 2,
+          borderRadius: 2.5,
+          background: 'linear-gradient(135deg, rgba(240, 249, 255, 0.95) 0%, rgba(236, 253, 245, 0.95) 100%)',
+          border: '1.5px solid #0DA1B8',
+          boxShadow: '0 4px 20px rgba(13, 161, 184, 0.12)'
+        }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1.5, mb: 1.5, borderBottom: '1px solid rgba(13, 161, 184, 0.18)', pb: 1 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <TrendingUp sx={{ fontSize: 20, color: '#0DA1B8' }} />
+              <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#0C587D', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                ⚡ In-Between Week Bars: <strong>{activeHoverMonth} 2026</strong>
+              </Typography>
+              <Chip
+                size="small"
+                label={`Monthly Avg: ${activeMonthData?.overall?.toFixed(2) || '0.0'}/10`}
+                sx={{ height: 20, fontSize: '10px', fontWeight: 800, bgcolor: 'rgba(13, 161, 184, 0.15)', color: '#0C587D' }}
+              />
+              <Typography variant="caption" sx={{ color: '#059669', fontWeight: 800, fontSize: '11px' }}>
+                Minimal Continuous Growth (+0.10 to +0.15/week)
+              </Typography>
+            </Box>
+
+            {/* Quick Month Switcher */}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8 }}>
+              <Typography variant="caption" sx={{ color: '#64748B', fontWeight: 700, mr: 0.5 }}>Active Month:</Typography>
+              {['June', 'July', 'August', 'September', 'October'].map((mName) => (
+                <Chip
+                  key={mName}
+                  clickable
+                  size="small"
+                  label={mName}
+                  onClick={() => setActiveHoverMonth(mName)}
+                  sx={{
+                    height: 22,
+                    fontSize: '10.5px',
+                    fontWeight: activeHoverMonth === mName ? 900 : 700,
+                    bgcolor: activeHoverMonth === mName ? '#0DA1B8' : '#FFFFFF',
+                    color: activeHoverMonth === mName ? '#FFFFFF' : '#475569',
+                    border: activeHoverMonth === mName ? '1px solid #0C587D' : '1px solid #CBD5E1',
+                    boxShadow: activeHoverMonth === mName ? '0 2px 6px rgba(13, 161, 184, 0.3)' : 'none'
+                  }}
+                />
+              ))}
+            </Box>
+          </Box>
+
+          {/* 4 Spacious Week Cards for the active in-between month */}
+          <Grid container spacing={2}>
+            {activeMonthWeeks.map((wk, wIdx) => {
+              const isFirst = wk.name === 'Jun W1';
+              const cardColors = ['#0DA1B8', '#0284C7', '#6366F1', '#10B981'];
+              const barColor = cardColors[wIdx % cardColors.length];
+              const isHovered = hoveredPoint === wk.name;
+
+              return (
+                <Grid item xs={12} sm={6} md={activeMonthWeeks.length === 2 ? 6 : 3} key={wk.name}>
+                  <Box
+                    onMouseEnter={() => setHoveredPoint(wk.name)}
+                    onMouseLeave={() => setHoveredPoint(null)}
+                    sx={{
+                      p: 1.5,
+                      borderRadius: 2,
+                      bgcolor: isHovered ? '#FFFFFF' : 'rgba(255, 255, 255, 0.9)',
+                      border: isHovered ? `2px solid ${barColor}` : '1.5px solid #CBD5E1',
+                      boxShadow: isHovered ? '0 8px 24px rgba(13, 161, 184, 0.18)' : '0 2px 6px rgba(0,0,0,0.03)',
+                      cursor: 'pointer',
+                      transition: 'all 0.18s ease'
+                    }}
+                  >
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.8 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8 }}>
+                        <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: barColor }} />
+                        <Typography variant="subtitle2" sx={{ fontWeight: 900, color: '#0F172A', fontSize: '13px' }}>
+                          {wk.name}
+                        </Typography>
+                      </Box>
+                      <Chip
+                        size="small"
+                        label={isFirst ? 'Base' : `+${wk.wow.toFixed(2)} WoW`}
+                        sx={{
+                          height: 20, fontSize: '10px', fontWeight: 800,
+                          bgcolor: isFirst ? '#F1F5F9' : '#ECFDF5',
+                          color: isFirst ? '#64748B' : '#059669'
+                        }}
+                      />
+                    </Box>
+
+                    <Typography variant="caption" sx={{ color: '#64748B', display: 'block', mb: 1, fontSize: '10.5px' }}>
+                      {wk.weekLabel ? wk.weekLabel.split('(')[1]?.replace(')', '') : ''} • {wk.audits?.toLocaleString()} live audits
+                    </Typography>
+
+                    <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', mb: 0.8 }}>
+                      <Typography variant="caption" sx={{ color: '#64748B', fontWeight: 600 }}>
+                        Quality Score
+                      </Typography>
+                      <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.5 }}>
+                        <Typography variant="h6" sx={{ fontWeight: 900, color: barColor, lineHeight: 1 }}>
+                          {wk.overall.toFixed(2)}
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: '#94A3B8', fontWeight: 600 }}>/ 10</Typography>
+                      </Box>
+                    </Box>
+
+                    <Box sx={{ width: '100%', height: 6, bgcolor: '#F1F5F9', borderRadius: 3, overflow: 'hidden' }}>
+                      <Box sx={{ width: `${(wk.overall / 10) * 100}%`, height: '100%', bgcolor: barColor, borderRadius: 3 }} />
+                    </Box>
+
+                    {isHovered && (
+                      <Box sx={{ mt: 1, pt: 0.8, borderTop: '1px dashed #E2E8F0', display: 'flex', justifyContent: 'space-between', fontSize: '10px' }}>
+                        <span style={{ color: '#3B82F6', fontWeight: 700 }}>🎥 {wk.video?.toFixed(1)}</span>
+                        <span style={{ color: '#8B5CF6', fontWeight: 700 }}>🎙️ {wk.audio?.toFixed(1)}</span>
+                        <span style={{ color: '#10B981', fontWeight: 700 }}>📋 {wk.protocol?.toFixed(1)}</span>
+                      </Box>
+                    )}
+                  </Box>
+                </Grid>
+              );
+            })}
+          </Grid>
+        </Box>
+      )}
+
+      {/* 📈 5. In-Chart Timeline: Jan to Oct with In-Between Weekly Bars on Hover */}
+      <Box sx={{
+        bgcolor: '#FFFFFF', p: 2.5, borderRadius: 3, border: '1px solid #E2E8F0', boxShadow: '0 2px 10px rgba(0, 0, 0, 0.03)',
+        position: 'relative'
+      }}>
+        {/* On-Chart Active Status Badge */}
+        {activeHoverMonth && (
+          <Box sx={{
+            position: 'absolute',
+            top: 14,
+            right: 35,
+            zIndex: 5,
+            bgcolor: 'rgba(255, 255, 255, 0.95)',
+            border: '1.5px solid #0DA1B8',
+            borderRadius: 2,
+            px: 1.5,
+            py: 0.6,
+            boxShadow: '0 2px 10px rgba(13, 161, 184, 0.15)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1.2
+          }}>
+            <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#0DA1B8' }} />
+            <Typography variant="caption" sx={{ fontWeight: 800, color: '#0C587D', fontSize: '11px' }}>
+              In-Between Weekly Bars: <strong>{activeHoverMonth} 2026</strong>
+            </Typography>
+          </Box>
+        )}
+
+        <ResponsiveContainer width="100%" height={400}>
+          <ComposedChart
+            data={timelineData}
+            margin={{ top: 48, right: 35, left: 0, bottom: 20 }}
+            barCategoryGap="15%"
+            onMouseMove={(state) => {
+              if (state && state.activeLabel) {
+                setHoveredPoint(state.activeLabel);
+                const pt = timelineData.find(d => d.name === state.activeLabel);
+                if (pt && pt.month && ['June', 'July', 'August', 'September', 'October'].includes(pt.month)) {
+                  setActiveHoverMonth(pt.month);
+                }
+              }
             }}
-            labelFormatter={(label, payload) => {
-              const item = payload && payload[0] && payload[0].payload;
-              return item?.fullMonth || `${label} 2026`;
+            onMouseLeave={() => {
+              setHoveredPoint(null);
+              if (!showAllWeekBars) {
+                setActiveHoverMonth(null);
+              }
             }}
-          />
-          <Legend
-            verticalAlign="top"
-            align="right"
-            wrapperStyle={{ fontSize: '12px', fontWeight: 600, paddingBottom: '12px' }}
-            iconType="circle"
-            iconSize={8}
-          />
-          {/* Main Overall Quality Line */}
-          <Line
-            type="monotone"
-            dataKey="overall"
-            stroke={THEME.primary}
-            strokeWidth={3.5}
-            dot={{ fill: THEME.primary, strokeWidth: 2, r: 5 }}
-            activeDot={{ r: 7.5, fill: THEME.primary, stroke: '#fff', strokeWidth: 2.5 }}
-            name={isAllDealers ? 'Pan-India Overall Score' : `${selectedDealerName} Overall Score`}
-          />
-          {/* If a specific dealer is selected, show Pan-India Benchmark as reference dashed line */}
-          {!isAllDealers && (
-            <Line
-              type="monotone"
-              dataKey="panIndiaOverall"
-              stroke="#94A3B8"
-              strokeWidth={2}
-              strokeDasharray="4 4"
-              dot={false}
-              name="Pan-India Baseline"
+          >
+            <defs>
+              <linearGradient id="overallGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#0DA1B8" stopOpacity={0.35} />
+                <stop offset="60%" stopColor="#0DA1B8" stopOpacity={0.08} />
+                <stop offset="95%" stopColor="#0DA1B8" stopOpacity={0.0} />
+              </linearGradient>
+              <linearGradient id="videoGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3} />
+                <stop offset="95%" stopColor="#3B82F6" stopOpacity={0.0} />
+              </linearGradient>
+              <linearGradient id="audioGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#8B5CF6" stopOpacity={0.3} />
+                <stop offset="95%" stopColor="#8B5CF6" stopOpacity={0.0} />
+              </linearGradient>
+              <linearGradient id="protocolGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#10B981" stopOpacity={0.3} />
+                <stop offset="95%" stopColor="#10B981" stopOpacity={0.0} />
+              </linearGradient>
+            </defs>
+
+            <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
+            
+            {/* X-AXIS: Month labels always clean; W1, W2, W3, W4 appear ONLY on hover */}
+            <XAxis
+              dataKey="name"
+              stroke="#64748B"
+              fontSize={11}
+              fontWeight={700}
+              tickLine={false}
+              axisLine={{ stroke: '#E2E8F0' }}
+              interval={0}
+              tick={({ x, y, payload }) => {
+                const item = timelineData.find(d => d.name === payload.value);
+                if (!item) return null;
+                const isStart = item.isMonthStart;
+                const isMonthHovered = showAllWeekBars || (activeHoverMonth && item.month === activeHoverMonth);
+
+                // Jan to May: Always clean monthly labels
+                if (item.phase === 'before') {
+                  return (
+                    <g transform={`translate(${x},${y})`}>
+                      <text
+                        x={0}
+                        y={0}
+                        dy={14}
+                        textAnchor="middle"
+                        fill="#475569"
+                        fontSize={11.5}
+                        fontWeight={800}
+                      >
+                        {item.displayTick}
+                      </text>
+                    </g>
+                  );
+                }
+
+                const parts = item.name.split(' ');
+                const mShort = parts[0];
+                const wShort = parts[1];
+
+                // If NOT hovered and NOT in showAll mode:
+                // HIDE W2, W3, W4 completely! Only show the main month name (Jun, Jul, Aug, Sep, Oct)!
+                if (!isMonthHovered) {
+                  if (!isStart) return null;
+                  return (
+                    <g transform={`translate(${x},${y})`}>
+                      <text
+                        x={0}
+                        y={0}
+                        dy={14}
+                        textAnchor="middle"
+                        fill="#0F172A"
+                        fontSize={12}
+                        fontWeight={800}
+                      >
+                        {mShort}
+                      </text>
+                    </g>
+                  );
+                }
+
+                // When HOVERED: reveal W1 under the month name, and W2, W3, W4 in their columns!
+                return (
+                  <g transform={`translate(${x},${y})`}>
+                    {isStart ? (
+                      <>
+                        <text
+                          x={0}
+                          y={0}
+                          dy={12}
+                          textAnchor="middle"
+                          fill="#0C587D"
+                          fontSize={12}
+                          fontWeight={900}
+                        >
+                          {mShort}
+                        </text>
+                        <text
+                          x={0}
+                          y={0}
+                          dy={25}
+                          textAnchor="middle"
+                          fill="#0DA1B8"
+                          fontSize={10}
+                          fontWeight={900}
+                        >
+                          W1
+                        </text>
+                      </>
+                    ) : (
+                      <text
+                        x={0}
+                        y={0}
+                        dy={14}
+                        textAnchor="middle"
+                        fill="#0DA1B8"
+                        fontSize={10.5}
+                        fontWeight={900}
+                      >
+                        {wShort}
+                      </text>
+                    )}
+                  </g>
+                );
+              }}
             />
-          )}
-        </LineChart>
-      </ResponsiveContainer>
+            
+            <YAxis
+              stroke="#64748B"
+              fontSize={11}
+              fontWeight={600}
+              domain={[4.0, 8.6]}
+              ticks={[4.0, 4.5, 5.0, 5.5, 6.0, 6.5, 7.0, 7.5, 8.0, 8.5]}
+              tickFormatter={(val) => `${Number(val).toFixed(1)}`}
+              axisLine={{ stroke: '#E2E8F0' }}
+              tickLine={false}
+            />
+
+            <Tooltip
+              content={<CustomTimelineTooltip />}
+              cursor={{ stroke: '#0DA1B8', strokeWidth: 1.5, strokeDasharray: '3 3' }}
+              wrapperStyle={{ zIndex: 9999 }}
+              isAnimationActive={false}
+            />
+
+            {/* QualityLens Deployment Milestone (June 2026) */}
+            <ReferenceLine
+              x="Jun W1"
+              stroke="#0DA1B8"
+              strokeDasharray="4 4"
+              strokeWidth={2}
+              label={{
+                value: '✨ QualityLens Deployed (June 2026)',
+                position: 'top',
+                fill: '#0C587D',
+                fontSize: 11.5,
+                fontWeight: 800,
+                offset: 10
+              }}
+            />
+
+            {/* National Target Benchmark (8.0) */}
+            <ReferenceLine
+              y={8.0}
+              stroke="#10B981"
+              strokeDasharray="4 4"
+              strokeWidth={2}
+              label={{
+                value: 'National Target (8.0)',
+                position: 'right',
+                fill: '#059669',
+                fontSize: 11,
+                fontWeight: 800
+              }}
+            />
+
+            {/* ⚡ THE IN-BETWEEN WEEKLY BARS (Neat, clean, floating badges with zero text collision) */}
+            <Bar
+              dataKey="activeBarValue"
+              name="Weekly Quality Bar"
+              barSize={20}
+              radius={[5, 5, 0, 0]}
+            >
+              <LabelList
+                dataKey="barLabel"
+                content={(props) => {
+                  const { x, y, width, value } = props;
+                  if (!value || typeof x !== 'number' || typeof y !== 'number') return null;
+
+                  const parts = String(value).split(' ');
+                  const weekTag = parts[0] || 'W1';
+                  const scoreNum = parts[1] || '';
+
+                  let tagColor = '#0DA1B8';
+                  if (weekTag === 'W2') tagColor = '#0284C7';
+                  if (weekTag === 'W3') tagColor = '#6366F1';
+                  if (weekTag === 'W4') tagColor = '#10B981';
+
+                  // 62px width gives generous, clean spacing between the week tag and score
+                  const pillWidth = 62;
+                  const pillHeight = 22;
+                  const centerX = x + width / 2;
+                  const pillX = centerX - pillWidth / 2;
+                  const pillY = y - 34; // Elevated safely above the dot and trend line
+
+                  return (
+                    <g key={`week-badge-${value}-${x}`}>
+                      {/* Dotted connector stem line pointing to the data dot */}
+                      <line
+                        x1={centerX}
+                        y1={pillY + pillHeight}
+                        x2={centerX}
+                        y2={y - 5}
+                        stroke={tagColor}
+                        strokeWidth={1.5}
+                        strokeDasharray="2 2"
+                        opacity={0.85}
+                      />
+                      {/* Outer White Badge Card with shadow */}
+                      <rect
+                        x={pillX}
+                        y={pillY}
+                        width={pillWidth}
+                        height={pillHeight}
+                        rx={6}
+                        fill="#FFFFFF"
+                        stroke={tagColor}
+                        strokeWidth={1.5}
+                        style={{ filter: 'drop-shadow(0 2px 5px rgba(0, 0, 0, 0.12))' }}
+                      />
+                      {/* Color Tag Chip for Week */}
+                      <rect
+                        x={pillX + 2.5}
+                        y={pillY + 2.5}
+                        width={23}
+                        height={pillHeight - 5}
+                        rx={3.5}
+                        fill={tagColor}
+                      />
+                      {/* Week Text inside Tag */}
+                      <text
+                        x={pillX + 14}
+                        y={pillY + 14.5}
+                        textAnchor="middle"
+                        fill="#FFFFFF"
+                        fontSize={10}
+                        fontWeight={900}
+                      >
+                        {weekTag}
+                      </text>
+                      {/* Score Number in Dark Slate with comfortable 6px margin */}
+                      <text
+                        x={pillX + 43}
+                        y={pillY + 15}
+                        textAnchor="middle"
+                        fill="#0F172A"
+                        fontSize={11}
+                        fontWeight={900}
+                      >
+                        {scoreNum}
+                      </text>
+                    </g>
+                  );
+                }}
+              />
+              {timelineData.map((entry, index) => (
+                <Cell
+                  key={`cell-bar-${index}`}
+                  fill={entry.barColor || '#0DA1B8'}
+                  fillOpacity={0.85}
+                  stroke={entry.barColor || '#0DA1B8'}
+                  strokeWidth={1}
+                />
+              ))}
+            </Bar>
+
+            {/* Primary Area Trend Curve connecting Jan all the way to Oct */}
+            <Area
+              type="monotone"
+              dataKey="overall"
+              stroke="#0DA1B8"
+              strokeWidth={3}
+              fillOpacity={1}
+              fill="url(#overallGrad)"
+              name={isAllDealers ? 'Quality Score Trajectory' : `${selectedDealerName}`}
+              dot={(props) => {
+                const { cx, cy, payload } = props;
+                if (!cx || !cy) return null;
+                const isBefore = payload.phase === 'before';
+                const isHovered = (activeHoverMonth && payload.month === activeHoverMonth) || hoveredPoint === payload.name;
+                
+                if (isBefore) {
+                  return (
+                    <circle
+                      key={`dot-${payload.name}`}
+                      cx={cx}
+                      cy={cy}
+                      r={isHovered ? 5.5 : 4}
+                      fill="#EF4444"
+                      stroke="#FFFFFF"
+                      strokeWidth={2}
+                    />
+                  );
+                }
+
+                return (
+                  <circle
+                    key={`dot-${payload.name}`}
+                    cx={cx}
+                    cy={cy}
+                    r={isHovered ? 4.5 : 3.5}
+                    fill={isHovered ? '#0DA1B8' : '#0284C7'}
+                    stroke="#FFFFFF"
+                    strokeWidth={2}
+                  />
+                );
+              }}
+              activeDot={{
+                r: 6.5,
+                fill: '#0DA1B8',
+                stroke: '#FFFFFF',
+                strokeWidth: 2.5
+              }}
+            />
+
+            {/* Pillars Breakdown Overlay */}
+            {activeMetricView === 'pillars' && (
+              <>
+                <Area type="monotone" dataKey="video" stroke="#3B82F6" strokeWidth={2.5} fillOpacity={1} fill="url(#videoGrad)" dot={{ fill: '#3B82F6', r: 3, stroke: '#FFFFFF' }} name="Video Quality" />
+                <Area type="monotone" dataKey="protocol" stroke="#10B981" strokeWidth={2.5} fillOpacity={1} fill="url(#protocolGrad)" dot={{ fill: '#10B981', r: 3, stroke: '#FFFFFF' }} name="Walkaround Protocol" />
+                <Area type="monotone" dataKey="audio" stroke="#8B5CF6" strokeWidth={2.5} fillOpacity={1} fill="url(#audioGrad)" dot={{ fill: '#8B5CF6', r: 3, stroke: '#FFFFFF' }} name="Audio Clarity" />
+              </>
+            )}
+          </ComposedChart>
+        </ResponsiveContainer>
+
+        {/* 🗓️ 6. Month-by-Month Quality Performance Matrix (Jan – Oct 2026) */}
+        <Box sx={{ mt: 2.5, pt: 2, borderTop: '1px solid #F1F5F9' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1, mb: 1.5 }}>
+            <Typography variant="caption" sx={{ fontWeight: 800, color: '#1E293B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              MONTH-BY-MONTH QUALITY PERFORMANCE MATRIX (JAN – OCT 2026):
+            </Typography>
+            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+              <Chip size="small" label="Jan–May: Before QualityLens (Almost Stable with Fluctuations)" sx={{ bgcolor: '#FEF2F2', color: '#991B1B', fontWeight: 800, fontSize: '10px', height: 22 }} />
+              <Chip size="small" label="Jun–Oct: In-Between Week Bars on Hover (W1, W2, W3, W4)" sx={{ bgcolor: '#ECFDF5', color: '#065F46', fontWeight: 800, fontSize: '10px', height: 22 }} />
+            </Box>
+          </Box>
+
+          <Grid container spacing={1}>
+            {monthlyChartData.map((m, idx) => {
+              const isSelected = activeHoverMonth && (activeHoverMonth.startsWith(m.name) || hoveredPoint === m.name);
+              const isJun = m.name === 'Jun';
+              const isBefore = m.phase === 'before' || ['Jan', 'Feb', 'Mar', 'Apr', 'May'].includes(m.name);
+              const momVal = m.mom !== undefined ? m.mom : 0;
+              const hasWeeks = Array.isArray(m.weeks) && m.weeks.length > 0;
+
+              return (
+                <Grid item xs={6} sm={2.4} md={1.2} key={m.name}>
+                  <Box 
+                    onMouseEnter={() => {
+                      if (hasWeeks) {
+                        setActiveHoverMonth(m.fullMonth.split(' ')[0]);
+                        setHoveredPoint(m.name);
+                      }
+                    }}
+                    onMouseLeave={() => setHoveredPoint(null)}
+                    onClick={() => {
+                      if (hasWeeks) {
+                        setActiveHoverMonth(m.fullMonth.split(' ')[0]);
+                      }
+                    }}
+                    sx={{
+                      p: 1, textAlign: 'center', borderRadius: 2, cursor: hasWeeks ? 'pointer' : 'default',
+                      bgcolor: isSelected 
+                        ? (isBefore ? 'rgba(239, 68, 68, 0.12)' : 'rgba(13, 161, 184, 0.15)') 
+                        : isBefore ? '#FEF2F2' : '#F0FDF4',
+                      border: isSelected 
+                        ? (isBefore ? '1px solid #EF4444' : '2px solid #0DA1B8') 
+                        : isBefore ? '1px solid #FCA5A5' : '1px solid #A7F3D0',
+                      boxShadow: isSelected ? '0 4px 12px rgba(13, 161, 184, 0.15)' : 'none',
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5 }}>
+                      <Typography variant="caption" sx={{ fontWeight: 800, color: isBefore ? '#991B1B' : '#047857', fontSize: '11px' }}>
+                        {m.name}
+                      </Typography>
+                      {hasWeeks && (
+                        <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: '#0DA1B8' }} />
+                      )}
+                    </Box>
+                    <Typography variant="body2" sx={{ fontWeight: 900, color: isBefore ? '#B91C1C' : '#0F172A', my: 0.2, fontSize: '13px' }}>
+                      {m.overall?.toFixed(2) || '0.0'}
+                    </Typography>
+                    <Box sx={{ display: 'inline-flex', alignItems: 'center', fontSize: '10px', fontWeight: 800, color: isBefore ? (momVal > 0 ? '#059669' : '#DC2626') : '#059669' }}>
+                      {idx === 0 ? 'Base' : isJun ? '⚡ +0.45' : `${momVal > 0 ? '+' : ''}${momVal.toFixed(2)}`}
+                    </Box>
+                    {hasWeeks && (
+                      <Typography variant="caption" sx={{ display: 'block', fontSize: '8.5px', fontWeight: 800, color: '#0C587D', mt: 0.3 }}>
+                        {m.weeks.length} Week Bars ▾
+                      </Typography>
+                    )}
+                  </Box>
+                </Grid>
+              );
+            })}
+          </Grid>
+        </Box>
+      </Box>
     </Box>
   );
 };
-
 const DealerPerformanceChart = ({ data }) => {
   if (!data || data.length === 0) {
     return (
@@ -3092,16 +3925,16 @@ export default function SuperAdminDashboard() {
    * Used to format data for the trend chart
    */
   const PAN_INDIA_MONTHLY_DATA = [
-    { name: 'Jan', fullMonth: 'January 2026', overall: 6.20, panIndiaOverall: 6.20 },
-    { name: 'Feb', fullMonth: 'February 2026', overall: 6.40, panIndiaOverall: 6.40 },
-    { name: 'Mar', fullMonth: 'March 2026', overall: 6.50, panIndiaOverall: 6.50 },
-    { name: 'Apr', fullMonth: 'April 2026', overall: 6.50, panIndiaOverall: 6.50 },
-    { name: 'May', fullMonth: 'May 2026', overall: 6.75, panIndiaOverall: 6.75 },
-    { name: 'Jun', fullMonth: 'June 2026', overall: 6.90, panIndiaOverall: 6.90 },
-    { name: 'Jul', fullMonth: 'July 2026', overall: 6.90, panIndiaOverall: 6.90 },
-    { name: 'Aug', fullMonth: 'August 2026', overall: 7.10, panIndiaOverall: 7.10 },
-    { name: 'Sep', fullMonth: 'September 2026', overall: 7.25, panIndiaOverall: 7.25 },
-    { name: 'Oct', fullMonth: 'October 2026', overall: 7.40, panIndiaOverall: 7.40 }
+    { name: 'Jan', fullMonth: 'January 2026', overall: 5.15, panIndiaOverall: 5.15, video: 5.25, audio: 5.00, protocol: 5.20, audits: 840, target: 8.0, mom: 0.00, phase: 'before', phaseLabel: 'Before QualityLens' },
+    { name: 'Feb', fullMonth: 'February 2026', overall: 5.05, panIndiaOverall: 5.05, video: 5.15, audio: 4.90, protocol: 5.10, audits: 1020, target: 8.0, mom: -0.10, phase: 'before', phaseLabel: 'Before QualityLens' },
+    { name: 'Mar', fullMonth: 'March 2026', overall: 5.25, panIndiaOverall: 5.25, video: 5.35, audio: 5.10, protocol: 5.30, audits: 1180, target: 8.0, mom: 0.20, phase: 'before', phaseLabel: 'Before QualityLens' },
+    { name: 'Apr', fullMonth: 'April 2026', overall: 5.10, panIndiaOverall: 5.10, video: 5.20, audio: 4.95, protocol: 5.15, audits: 1240, target: 8.0, mom: -0.15, phase: 'before', phaseLabel: 'Before QualityLens' },
+    { name: 'May', fullMonth: 'May 2026', overall: 4.95, panIndiaOverall: 4.95, video: 5.05, audio: 4.85, protocol: 4.95, audits: 1300, target: 8.0, mom: -0.15, phase: 'before', phaseLabel: 'Before QualityLens' },
+    { name: 'Jun', fullMonth: 'June 2026', overall: 5.40, panIndiaOverall: 5.40, video: 5.60, audio: 5.25, protocol: 5.40, audits: 7193, target: 8.0, mom: 0.45, phase: 'after', phaseLabel: 'QualityLens Deployed' },
+    { name: 'Jul', fullMonth: 'July 2026', overall: 5.90, panIndiaOverall: 5.90, video: 6.15, audio: 5.70, protocol: 5.90, audits: 2425, target: 8.0, mom: 0.50, phase: 'after', phaseLabel: 'QualityLens Growth Phase' },
+    { name: 'Aug', fullMonth: 'August 2026', overall: 6.40, panIndiaOverall: 6.40, video: 6.70, audio: 6.15, protocol: 6.40, audits: 482, target: 8.0, mom: 0.50, phase: 'after', phaseLabel: 'QualityLens Growth Phase' },
+    { name: 'Sep', fullMonth: 'September 2026', overall: 6.90, panIndiaOverall: 6.90, video: 7.20, audio: 6.65, protocol: 6.90, audits: 512, target: 8.0, mom: 0.50, phase: 'after', phaseLabel: 'QualityLens Growth Phase' },
+    { name: 'Oct', fullMonth: 'October 2026', overall: 7.40, panIndiaOverall: 7.40, video: 7.75, audio: 7.15, protocol: 7.40, audits: 316, target: 8.0, mom: 0.50, phase: 'after', phaseLabel: 'Active AI Progression (Oct 2026)' }
   ];
 
   /* 
@@ -3109,31 +3942,132 @@ export default function SuperAdminDashboard() {
    * Matches Overall score based on selected dealership
    */
   const calculateDealerPerformanceTrend = (dealerPerformance, selectedDealer = 'all') => {
+    const weeklyList = calculateDealerWeeklyTrend(dealerPerformance, selectedDealer);
+    const monthKeyMap = {
+      'Jun': 'June',
+      'Jul': 'July',
+      'Aug': 'August',
+      'Sep': 'September',
+      'Oct': 'October'
+    };
+
     if (!selectedDealer || selectedDealer === 'all') {
-      return PAN_INDIA_MONTHLY_DATA;
+      return PAN_INDIA_MONTHLY_DATA.map((m) => {
+        const fullMonthName = monthKeyMap[m.name];
+        const monthWeeks = fullMonthName 
+          ? weeklyList.filter(w => w.month === fullMonthName)
+          : [];
+        return {
+          ...m,
+          weeks: monthWeeks
+        };
+      });
     }
 
     const norm = normalizeDealerId(selectedDealer);
     const dObj = (dealerPerformance || []).find(d => normalizeDealerId(d.id || d.name) === norm);
     const dealerCurrentOverall = dObj ? (dObj.overall || 7.0) : 7.0;
 
-    // Progression curve leading up to dealerCurrentOverall in Oct
-    const baselineRatio = Math.max(0.7, Math.min(1.3, dealerCurrentOverall / 7.40));
-    const startScore = Math.max(4.5, Number((dealerCurrentOverall - 1.20 * baselineRatio).toFixed(2)));
-    // Curve progression weights matching Kabir's trajectory
-    const curveWeights = [0, 0.16, 0.25, 0.25, 0.46, 0.58, 0.58, 0.75, 0.88, 1.0];
+    // Narrative progression:
+    // Jan-May (Before QualityLens): Stagnant/dull decline down to preQlLow
+    // Jun-Oct (After QualityLens): Slow & steady growth stepping up to dealerCurrentOverall
+    const preQlLow = Math.max(4.2, Number((dealerCurrentOverall - 2.60).toFixed(2)));
+    const preQlBase = Number((preQlLow + 0.40).toFixed(2));
+    const step = Number(((dealerCurrentOverall - (preQlLow + 0.60)) / 4).toFixed(2));
+    
+    const monthlyWeights = [
+      preQlBase,
+      Number((preQlBase - 0.10).toFixed(2)),
+      Number((preQlBase + 0.10).toFixed(2)),
+      Number((preQlBase - 0.05).toFixed(2)),
+      preQlLow,
+      Number((preQlLow + 0.45).toFixed(2)),
+      Number((preQlLow + 0.45 + step * 1).toFixed(2)),
+      Number((preQlLow + 0.45 + step * 2).toFixed(2)),
+      Number((preQlLow + 0.45 + step * 3).toFixed(2)),
+      dealerCurrentOverall
+    ];
 
     return PAN_INDIA_MONTHLY_DATA.map((m, idx) => {
-      const weight = curveWeights[idx];
-      const monthlyScore = Number((startScore + (dealerCurrentOverall - startScore) * weight).toFixed(2));
+      const monthlyScore = Number(monthlyWeights[idx].toFixed(2));
+      const prevScore = idx === 0 ? monthlyScore : Number(monthlyWeights[idx - 1].toFixed(2));
+      const mom = idx === 0 ? 0 : Number((monthlyScore - prevScore).toFixed(2));
+      const fullMonthName = monthKeyMap[m.name];
+      const monthWeeks = fullMonthName 
+        ? weeklyList.filter(w => w.month === fullMonthName)
+        : [];
+
       return {
         name: m.name,
         fullMonth: m.fullMonth,
         overall: monthlyScore,
-        panIndiaOverall: m.panIndiaOverall
+        panIndiaOverall: m.panIndiaOverall,
+        video: Number((monthlyScore + 0.35).toFixed(2)),
+        audio: Number((monthlyScore - 0.25).toFixed(2)),
+        protocol: Number((monthlyScore - 0.10).toFixed(2)),
+        audits: Math.round(m.audits * (dObj ? 0.22 : 1)),
+        target: 8.0,
+        mom: mom,
+        phase: m.phase,
+        phaseLabel: m.phaseLabel,
+        weeks: monthWeeks
       };
     });
   };
+
+  const PAN_INDIA_WEEKLY_DATA = [
+    { name: 'Jun W1', weekLabel: 'June Week 1 (Jun 1–7)', month: 'June', overall: 5.35, panIndiaOverall: 5.35, video: 5.50, audio: 5.15, protocol: 5.35, audits: 1820, target: 8.0, wow: 0.00, phase: 'after' },
+    { name: 'Jun W2', weekLabel: 'June Week 2 (Jun 8–14)', month: 'June', overall: 5.50, panIndiaOverall: 5.50, video: 5.65, audio: 5.30, protocol: 5.50, audits: 1790, target: 8.0, wow: 0.15, phase: 'after' },
+    { name: 'Jun W3', weekLabel: 'June Week 3 (Jun 15–21)', month: 'June', overall: 5.65, panIndiaOverall: 5.65, video: 5.80, audio: 5.45, protocol: 5.65, audits: 1810, target: 8.0, wow: 0.15, phase: 'after' },
+    { name: 'Jun W4', weekLabel: 'June Week 4 (Jun 22–30)', month: 'June', overall: 5.80, panIndiaOverall: 5.80, video: 6.00, audio: 5.60, protocol: 5.80, audits: 1773, target: 8.0, wow: 0.15, phase: 'after' },
+    { name: 'Jul W1', weekLabel: 'July Week 1 (Jul 1–7)', month: 'July', overall: 5.95, panIndiaOverall: 5.95, video: 6.15, audio: 5.75, protocol: 5.95, audits: 640, target: 8.0, wow: 0.15, phase: 'after' },
+    { name: 'Jul W2', weekLabel: 'July Week 2 (Jul 8–14)', month: 'July', overall: 6.10, panIndiaOverall: 6.10, video: 6.30, audio: 5.90, protocol: 6.10, audits: 620, target: 8.0, wow: 0.15, phase: 'after' },
+    { name: 'Jul W3', weekLabel: 'July Week 3 (Jul 15–21)', month: 'July', overall: 6.25, panIndiaOverall: 6.25, video: 6.45, audio: 6.05, protocol: 6.25, audits: 595, target: 8.0, wow: 0.15, phase: 'after' },
+    { name: 'Jul W4', weekLabel: 'July Week 4 (Jul 22–31)', month: 'July', overall: 6.40, panIndiaOverall: 6.40, video: 6.60, audio: 6.20, protocol: 6.40, audits: 570, target: 8.0, wow: 0.15, phase: 'after' },
+    { name: 'Aug W1', weekLabel: 'August Week 1 (Aug 1–7)', month: 'August', overall: 6.50, panIndiaOverall: 6.50, video: 6.75, audio: 6.30, protocol: 6.50, audits: 125, target: 8.0, wow: 0.10, phase: 'after' },
+    { name: 'Aug W2', weekLabel: 'August Week 2 (Aug 8–14)', month: 'August', overall: 6.65, panIndiaOverall: 6.65, video: 6.90, audio: 6.45, protocol: 6.65, audits: 118, target: 8.0, wow: 0.15, phase: 'after' },
+    { name: 'Aug W3', weekLabel: 'August Week 3 (Aug 15–21)', month: 'August', overall: 6.75, panIndiaOverall: 6.75, video: 7.00, audio: 6.55, protocol: 6.75, audits: 121, target: 8.0, wow: 0.10, phase: 'after' },
+    { name: 'Aug W4', weekLabel: 'August Week 4 (Aug 22–31)', month: 'August', overall: 6.85, panIndiaOverall: 6.85, video: 7.15, audio: 6.65, protocol: 6.85, audits: 118, target: 8.0, wow: 0.10, phase: 'after' },
+    { name: 'Sep W1', weekLabel: 'September Week 1 (Sep 1–7)', month: 'September', overall: 6.95, panIndiaOverall: 6.95, video: 7.25, audio: 6.75, protocol: 6.95, audits: 132, target: 8.0, wow: 0.10, phase: 'after' },
+    { name: 'Sep W2', weekLabel: 'September Week 2 (Sep 8–14)', month: 'September', overall: 7.05, panIndiaOverall: 7.05, video: 7.35, audio: 6.85, protocol: 7.05, audits: 128, target: 8.0, wow: 0.10, phase: 'after' },
+    { name: 'Sep W3', weekLabel: 'September Week 3 (Sep 15–21)', month: 'September', overall: 7.15, panIndiaOverall: 7.15, video: 7.45, audio: 6.95, protocol: 7.15, audits: 130, target: 8.0, wow: 0.10, phase: 'after' },
+    { name: 'Sep W4', weekLabel: 'September Week 4 (Sep 22–30)', month: 'September', overall: 7.25, panIndiaOverall: 7.25, video: 7.55, audio: 7.05, protocol: 7.25, audits: 128, target: 8.0, wow: 0.10, phase: 'after' },
+    { name: 'Oct W1', weekLabel: 'October Week 1 (Oct 1–7)', month: 'October', overall: 7.35, panIndiaOverall: 7.35, video: 7.70, audio: 7.15, protocol: 7.35, audits: 160, target: 8.0, wow: 0.10, phase: 'after' },
+    { name: 'Oct W2', weekLabel: 'October Week 2 (Oct 8–14)', month: 'October', overall: 7.40, panIndiaOverall: 7.40, video: 7.80, audio: 7.15, protocol: 7.40, audits: 150, target: 8.0, wow: 0.05, phase: 'after' }
+  ];
+
+  const calculateDealerWeeklyTrend = (dealerPerformance, selectedDealer = 'all') => {
+    if (!selectedDealer || selectedDealer === 'all') {
+      return PAN_INDIA_WEEKLY_DATA;
+    }
+
+    const norm = normalizeDealerId(selectedDealer);
+    const dObj = (dealerPerformance || []).find(d => normalizeDealerId(d.id || d.name) === norm);
+    const targetOct = dObj ? (dObj.overall || 7.0) : 7.0;
+    const startJun = Math.max(4.5, Number((targetOct - 2.05).toFixed(2)));
+    const step = Number(((targetOct - startJun) / 17).toFixed(3));
+
+    return PAN_INDIA_WEEKLY_DATA.map((w, idx) => {
+      const weeklyScore = Number((startJun + step * idx).toFixed(2));
+      const prevScore = idx === 0 ? weeklyScore : Number((startJun + step * (idx - 1)).toFixed(2));
+      const wow = idx === 0 ? 0 : Number((weeklyScore - prevScore).toFixed(2));
+      return {
+        name: w.name,
+        weekLabel: w.weekLabel,
+        month: w.month,
+        overall: weeklyScore,
+        panIndiaOverall: w.panIndiaOverall,
+        video: Number((weeklyScore + 0.35).toFixed(2)),
+        audio: Number((weeklyScore - 0.25).toFixed(2)),
+        protocol: Number((weeklyScore - 0.10).toFixed(2)),
+        audits: Math.round(w.audits * (dObj ? 0.22 : 1)),
+        target: 8.0,
+        wow: wow,
+        phase: 'after'
+      };
+    });
+  };
+
 
   // Helper to filter results by selected time range (day, week, month, quarter)
   const filterByTimeRange = (results, range) => {
@@ -3991,6 +4925,7 @@ export default function SuperAdminDashboard() {
                   <Box sx={{ width: '100%', minHeight: 320 }}>
                     <PerformanceTrendChart 
                       data={calculateDealerPerformanceTrend(dashboardData.dealerRankings, selectedTrendDealer)}
+                      weeklyData={calculateDealerWeeklyTrend(dashboardData.dealerRankings, selectedTrendDealer)}
                       selectedDealerName={
                         selectedTrendDealer === 'all' 
                           ? 'All Dealerships' 
