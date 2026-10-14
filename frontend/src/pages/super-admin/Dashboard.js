@@ -178,8 +178,8 @@ const PerformanceTrendChart = ({ data, weeklyData, selectedDealerName, isAllDeal
   const weeklyChartData = weeklyData && weeklyData.length > 0 ? weeklyData : [];
 
   // Monthly stats
-  const janScore = monthlyChartData.length > 0 ? (monthlyChartData[0].overall || 5.15) : 5.15;
-  const mayLowScore = monthlyChartData.length > 4 ? (monthlyChartData[4].overall || 4.95) : 4.95;
+  const janScore = monthlyChartData.length > 0 ? (monthlyChartData[0].overall || 5.45) : 5.45;
+  const mayLowScore = monthlyChartData.length > 4 ? (monthlyChartData[4].overall || 5.25) : 5.25;
   const octScore = monthlyChartData.length > 0 ? (monthlyChartData[monthlyChartData.length - 1].overall || 7.40) : 7.40;
   const totalGain = (octScore - mayLowScore).toFixed(2);
   const gainPercent = mayLowScore > 0 ? (((octScore - mayLowScore) / mayLowScore) * 100).toFixed(1) : '49.5';
@@ -372,7 +372,7 @@ const PerformanceTrendChart = ({ data, weeklyData, selectedDealerName, isAllDeal
               <Typography variant="caption" sx={{ color: '#94A3B8', fontWeight: 600 }}>/ 10</Typography>
             </Box>
             <Typography variant="caption" sx={{ color: '#B91C1C', fontWeight: 600, display: 'block' }}>
-              Almost stable (~5.1 avg) with manual up/down movement
+              Almost stable (~5.4 avg) with manual up/down movement
             </Typography>
           </Card>
         </Grid>
@@ -475,11 +475,11 @@ const PerformanceTrendChart = ({ data, weeklyData, selectedDealerName, isAllDeal
           </Typography>
         </Box>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-          <Chip size="small" label="Jan–May: Before QualityLens (5.15 ⟷ 4.95 Stable Baseline with Fluctuations)" sx={{ bgcolor: '#FEE2E2', color: '#991B1B', fontWeight: 800, fontSize: '11px', height: 24 }} />
+          <Chip size="small" label="Jan–May: Before QualityLens (5.45 ⟷ 5.25 Stable Baseline with Fluctuations)" sx={{ bgcolor: '#FEE2E2', color: '#991B1B', fontWeight: 800, fontSize: '11px', height: 24 }} />
           <Typography variant="caption" sx={{ color: '#94A3B8' }}>⚡</Typography>
-          <Chip size="small" label="⚡ June: QualityLens Deployed (Live Ingestion Begins)" sx={{ bgcolor: 'rgba(13, 161, 184, 0.15)', color: '#0C587D', fontWeight: 800, fontSize: '11px', height: 24 }} />
+          <Chip size="small" label="⚡ June: QualityLens Deployed (Live Ingestion Begins at 5.70)" sx={{ bgcolor: 'rgba(13, 161, 184, 0.15)', color: '#0C587D', fontWeight: 800, fontSize: '11px', height: 24 }} />
           <Typography variant="caption" sx={{ color: '#94A3B8' }}>→</Typography>
-          <Chip size="small" label="Jul–Sep: Steady AI Growth (5.9 → 6.9)" sx={{ bgcolor: '#ECFDF5', color: '#065F46', fontWeight: 700, fontSize: '11px', height: 24 }} />
+          <Chip size="small" label="Jul–Sep: Steady AI Growth (6.2 → 7.05)" sx={{ bgcolor: '#ECFDF5', color: '#065F46', fontWeight: 700, fontSize: '11px', height: 24 }} />
           <Typography variant="caption" sx={{ color: '#94A3B8' }}>→</Typography>
           <Chip size="small" label="Oct: Peak Benchmark (7.4) • Current" sx={{ bgcolor: '#ECFDF5', color: '#065F46', fontWeight: 800, fontSize: '11px', height: 24 }} />
         </Box>
@@ -3925,16 +3925,16 @@ export default function SuperAdminDashboard() {
    * Used to format data for the trend chart
    */
   const PAN_INDIA_MONTHLY_DATA = [
-    { name: 'Jan', fullMonth: 'January 2026', overall: 5.15, panIndiaOverall: 5.15, video: 5.25, audio: 5.00, protocol: 5.20, audits: 840, target: 8.0, mom: 0.00, phase: 'before', phaseLabel: 'Before QualityLens' },
-    { name: 'Feb', fullMonth: 'February 2026', overall: 5.05, panIndiaOverall: 5.05, video: 5.15, audio: 4.90, protocol: 5.10, audits: 1020, target: 8.0, mom: -0.10, phase: 'before', phaseLabel: 'Before QualityLens' },
-    { name: 'Mar', fullMonth: 'March 2026', overall: 5.25, panIndiaOverall: 5.25, video: 5.35, audio: 5.10, protocol: 5.30, audits: 1180, target: 8.0, mom: 0.20, phase: 'before', phaseLabel: 'Before QualityLens' },
-    { name: 'Apr', fullMonth: 'April 2026', overall: 5.10, panIndiaOverall: 5.10, video: 5.20, audio: 4.95, protocol: 5.15, audits: 1240, target: 8.0, mom: -0.15, phase: 'before', phaseLabel: 'Before QualityLens' },
-    { name: 'May', fullMonth: 'May 2026', overall: 4.95, panIndiaOverall: 4.95, video: 5.05, audio: 4.85, protocol: 4.95, audits: 1300, target: 8.0, mom: -0.15, phase: 'before', phaseLabel: 'Before QualityLens' },
-    { name: 'Jun', fullMonth: 'June 2026', overall: 5.40, panIndiaOverall: 5.40, video: 5.60, audio: 5.25, protocol: 5.40, audits: 7193, target: 8.0, mom: 0.45, phase: 'after', phaseLabel: 'QualityLens Deployed' },
-    { name: 'Jul', fullMonth: 'July 2026', overall: 5.90, panIndiaOverall: 5.90, video: 6.15, audio: 5.70, protocol: 5.90, audits: 2425, target: 8.0, mom: 0.50, phase: 'after', phaseLabel: 'QualityLens Growth Phase' },
-    { name: 'Aug', fullMonth: 'August 2026', overall: 6.40, panIndiaOverall: 6.40, video: 6.70, audio: 6.15, protocol: 6.40, audits: 482, target: 8.0, mom: 0.50, phase: 'after', phaseLabel: 'QualityLens Growth Phase' },
-    { name: 'Sep', fullMonth: 'September 2026', overall: 6.90, panIndiaOverall: 6.90, video: 7.20, audio: 6.65, protocol: 6.90, audits: 512, target: 8.0, mom: 0.50, phase: 'after', phaseLabel: 'QualityLens Growth Phase' },
-    { name: 'Oct', fullMonth: 'October 2026', overall: 7.40, panIndiaOverall: 7.40, video: 7.75, audio: 7.15, protocol: 7.40, audits: 316, target: 8.0, mom: 0.50, phase: 'after', phaseLabel: 'Active AI Progression (Oct 2026)' }
+    { name: 'Jan', fullMonth: 'January 2026', overall: 5.45, panIndiaOverall: 5.45, video: 5.55, audio: 5.30, protocol: 5.50, audits: 840, target: 8.0, mom: 0.00, phase: 'before', phaseLabel: 'Before QualityLens' },
+    { name: 'Feb', fullMonth: 'February 2026', overall: 5.35, panIndiaOverall: 5.35, video: 5.45, audio: 5.20, protocol: 5.40, audits: 1020, target: 8.0, mom: -0.10, phase: 'before', phaseLabel: 'Before QualityLens' },
+    { name: 'Mar', fullMonth: 'March 2026', overall: 5.55, panIndiaOverall: 5.55, video: 5.65, audio: 5.40, protocol: 5.60, audits: 1180, target: 8.0, mom: 0.20, phase: 'before', phaseLabel: 'Before QualityLens' },
+    { name: 'Apr', fullMonth: 'April 2026', overall: 5.40, panIndiaOverall: 5.40, video: 5.50, audio: 5.25, protocol: 5.45, audits: 1240, target: 8.0, mom: -0.15, phase: 'before', phaseLabel: 'Before QualityLens' },
+    { name: 'May', fullMonth: 'May 2026', overall: 5.25, panIndiaOverall: 5.25, video: 5.35, audio: 5.10, protocol: 5.25, audits: 1300, target: 8.0, mom: -0.15, phase: 'before', phaseLabel: 'Before QualityLens' },
+    { name: 'Jun', fullMonth: 'June 2026', overall: 5.70, panIndiaOverall: 5.70, video: 5.90, audio: 5.55, protocol: 5.70, audits: 7193, target: 8.0, mom: 0.45, phase: 'after', phaseLabel: 'QualityLens Deployed' },
+    { name: 'Jul', fullMonth: 'July 2026', overall: 6.20, panIndiaOverall: 6.20, video: 6.45, audio: 6.00, protocol: 6.20, audits: 2425, target: 8.0, mom: 0.50, phase: 'after', phaseLabel: 'QualityLens Growth Phase' },
+    { name: 'Aug', fullMonth: 'August 2026', overall: 6.65, panIndiaOverall: 6.65, video: 6.95, audio: 6.40, protocol: 6.65, audits: 482, target: 8.0, mom: 0.45, phase: 'after', phaseLabel: 'QualityLens Growth Phase' },
+    { name: 'Sep', fullMonth: 'September 2026', overall: 7.05, panIndiaOverall: 7.05, video: 7.35, audio: 6.80, protocol: 7.05, audits: 512, target: 8.0, mom: 0.40, phase: 'after', phaseLabel: 'QualityLens Growth Phase' },
+    { name: 'Oct', fullMonth: 'October 2026', overall: 7.40, panIndiaOverall: 7.40, video: 7.75, audio: 7.15, protocol: 7.40, audits: 316, target: 8.0, mom: 0.35, phase: 'after', phaseLabel: 'Active AI Progression (Oct 2026)' }
   ];
 
   /* 
@@ -4016,24 +4016,24 @@ export default function SuperAdminDashboard() {
   };
 
   const PAN_INDIA_WEEKLY_DATA = [
-    { name: 'Jun W1', weekLabel: 'June Week 1 (Jun 1–7)', month: 'June', overall: 5.35, panIndiaOverall: 5.35, video: 5.50, audio: 5.15, protocol: 5.35, audits: 1820, target: 8.0, wow: 0.00, phase: 'after' },
-    { name: 'Jun W2', weekLabel: 'June Week 2 (Jun 8–14)', month: 'June', overall: 5.50, panIndiaOverall: 5.50, video: 5.65, audio: 5.30, protocol: 5.50, audits: 1790, target: 8.0, wow: 0.15, phase: 'after' },
-    { name: 'Jun W3', weekLabel: 'June Week 3 (Jun 15–21)', month: 'June', overall: 5.65, panIndiaOverall: 5.65, video: 5.80, audio: 5.45, protocol: 5.65, audits: 1810, target: 8.0, wow: 0.15, phase: 'after' },
-    { name: 'Jun W4', weekLabel: 'June Week 4 (Jun 22–30)', month: 'June', overall: 5.80, panIndiaOverall: 5.80, video: 6.00, audio: 5.60, protocol: 5.80, audits: 1773, target: 8.0, wow: 0.15, phase: 'after' },
-    { name: 'Jul W1', weekLabel: 'July Week 1 (Jul 1–7)', month: 'July', overall: 5.95, panIndiaOverall: 5.95, video: 6.15, audio: 5.75, protocol: 5.95, audits: 640, target: 8.0, wow: 0.15, phase: 'after' },
-    { name: 'Jul W2', weekLabel: 'July Week 2 (Jul 8–14)', month: 'July', overall: 6.10, panIndiaOverall: 6.10, video: 6.30, audio: 5.90, protocol: 6.10, audits: 620, target: 8.0, wow: 0.15, phase: 'after' },
-    { name: 'Jul W3', weekLabel: 'July Week 3 (Jul 15–21)', month: 'July', overall: 6.25, panIndiaOverall: 6.25, video: 6.45, audio: 6.05, protocol: 6.25, audits: 595, target: 8.0, wow: 0.15, phase: 'after' },
-    { name: 'Jul W4', weekLabel: 'July Week 4 (Jul 22–31)', month: 'July', overall: 6.40, panIndiaOverall: 6.40, video: 6.60, audio: 6.20, protocol: 6.40, audits: 570, target: 8.0, wow: 0.15, phase: 'after' },
-    { name: 'Aug W1', weekLabel: 'August Week 1 (Aug 1–7)', month: 'August', overall: 6.50, panIndiaOverall: 6.50, video: 6.75, audio: 6.30, protocol: 6.50, audits: 125, target: 8.0, wow: 0.10, phase: 'after' },
-    { name: 'Aug W2', weekLabel: 'August Week 2 (Aug 8–14)', month: 'August', overall: 6.65, panIndiaOverall: 6.65, video: 6.90, audio: 6.45, protocol: 6.65, audits: 118, target: 8.0, wow: 0.15, phase: 'after' },
-    { name: 'Aug W3', weekLabel: 'August Week 3 (Aug 15–21)', month: 'August', overall: 6.75, panIndiaOverall: 6.75, video: 7.00, audio: 6.55, protocol: 6.75, audits: 121, target: 8.0, wow: 0.10, phase: 'after' },
-    { name: 'Aug W4', weekLabel: 'August Week 4 (Aug 22–31)', month: 'August', overall: 6.85, panIndiaOverall: 6.85, video: 7.15, audio: 6.65, protocol: 6.85, audits: 118, target: 8.0, wow: 0.10, phase: 'after' },
-    { name: 'Sep W1', weekLabel: 'September Week 1 (Sep 1–7)', month: 'September', overall: 6.95, panIndiaOverall: 6.95, video: 7.25, audio: 6.75, protocol: 6.95, audits: 132, target: 8.0, wow: 0.10, phase: 'after' },
-    { name: 'Sep W2', weekLabel: 'September Week 2 (Sep 8–14)', month: 'September', overall: 7.05, panIndiaOverall: 7.05, video: 7.35, audio: 6.85, protocol: 7.05, audits: 128, target: 8.0, wow: 0.10, phase: 'after' },
-    { name: 'Sep W3', weekLabel: 'September Week 3 (Sep 15–21)', month: 'September', overall: 7.15, panIndiaOverall: 7.15, video: 7.45, audio: 6.95, protocol: 7.15, audits: 130, target: 8.0, wow: 0.10, phase: 'after' },
-    { name: 'Sep W4', weekLabel: 'September Week 4 (Sep 22–30)', month: 'September', overall: 7.25, panIndiaOverall: 7.25, video: 7.55, audio: 7.05, protocol: 7.25, audits: 128, target: 8.0, wow: 0.10, phase: 'after' },
-    { name: 'Oct W1', weekLabel: 'October Week 1 (Oct 1–7)', month: 'October', overall: 7.35, panIndiaOverall: 7.35, video: 7.70, audio: 7.15, protocol: 7.35, audits: 160, target: 8.0, wow: 0.10, phase: 'after' },
-    { name: 'Oct W2', weekLabel: 'October Week 2 (Oct 8–14)', month: 'October', overall: 7.40, panIndiaOverall: 7.40, video: 7.80, audio: 7.15, protocol: 7.40, audits: 150, target: 8.0, wow: 0.05, phase: 'after' }
+    { name: 'Jun W1', weekLabel: 'June Week 1 (Jun 1–7)', month: 'June', overall: 5.65, panIndiaOverall: 5.65, video: 5.80, audio: 5.45, protocol: 5.65, audits: 1820, target: 8.0, wow: 0.00, phase: 'after' },
+    { name: 'Jun W2', weekLabel: 'June Week 2 (Jun 8–14)', month: 'June', overall: 5.80, panIndiaOverall: 5.80, video: 5.95, audio: 5.60, protocol: 5.80, audits: 1790, target: 8.0, wow: 0.15, phase: 'after' },
+    { name: 'Jun W3', weekLabel: 'June Week 3 (Jun 15–21)', month: 'June', overall: 5.95, panIndiaOverall: 5.95, video: 6.10, audio: 5.75, protocol: 5.95, audits: 1810, target: 8.0, wow: 0.15, phase: 'after' },
+    { name: 'Jun W4', weekLabel: 'June Week 4 (Jun 22–30)', month: 'June', overall: 6.10, panIndiaOverall: 6.10, video: 6.30, audio: 5.90, protocol: 6.10, audits: 1773, target: 8.0, wow: 0.15, phase: 'after' },
+    { name: 'Jul W1', weekLabel: 'July Week 1 (Jul 1–7)', month: 'July', overall: 6.20, panIndiaOverall: 6.20, video: 6.40, audio: 6.00, protocol: 6.20, audits: 640, target: 8.0, wow: 0.10, phase: 'after' },
+    { name: 'Jul W2', weekLabel: 'July Week 2 (Jul 8–14)', month: 'July', overall: 6.32, panIndiaOverall: 6.32, video: 6.52, audio: 6.12, protocol: 6.32, audits: 620, target: 8.0, wow: 0.12, phase: 'after' },
+    { name: 'Jul W3', weekLabel: 'July Week 3 (Jul 15–21)', month: 'July', overall: 6.44, panIndiaOverall: 6.44, video: 6.64, audio: 6.24, protocol: 6.44, audits: 595, target: 8.0, wow: 0.12, phase: 'after' },
+    { name: 'Jul W4', weekLabel: 'July Week 4 (Jul 22–31)', month: 'July', overall: 6.55, panIndiaOverall: 6.55, video: 6.75, audio: 6.35, protocol: 6.55, audits: 570, target: 8.0, wow: 0.11, phase: 'after' },
+    { name: 'Aug W1', weekLabel: 'August Week 1 (Aug 1–7)', month: 'August', overall: 6.65, panIndiaOverall: 6.65, video: 6.90, audio: 6.45, protocol: 6.65, audits: 125, target: 8.0, wow: 0.10, phase: 'after' },
+    { name: 'Aug W2', weekLabel: 'August Week 2 (Aug 8–14)', month: 'August', overall: 6.75, panIndiaOverall: 6.75, video: 7.00, audio: 6.55, protocol: 6.75, audits: 118, target: 8.0, wow: 0.10, phase: 'after' },
+    { name: 'Aug W3', weekLabel: 'August Week 3 (Aug 15–21)', month: 'August', overall: 6.85, panIndiaOverall: 6.85, video: 7.10, audio: 6.65, protocol: 6.85, audits: 121, target: 8.0, wow: 0.10, phase: 'after' },
+    { name: 'Aug W4', weekLabel: 'August Week 4 (Aug 22–31)', month: 'August', overall: 6.95, panIndiaOverall: 6.95, video: 7.20, audio: 6.75, protocol: 6.95, audits: 118, target: 8.0, wow: 0.10, phase: 'after' },
+    { name: 'Sep W1', weekLabel: 'September Week 1 (Sep 1–7)', month: 'September', overall: 7.05, panIndiaOverall: 7.05, video: 7.35, audio: 6.85, protocol: 7.05, audits: 132, target: 8.0, wow: 0.10, phase: 'after' },
+    { name: 'Sep W2', weekLabel: 'September Week 2 (Sep 8–14)', month: 'September', overall: 7.15, panIndiaOverall: 7.15, video: 7.45, audio: 6.95, protocol: 7.15, audits: 128, target: 8.0, wow: 0.10, phase: 'after' },
+    { name: 'Sep W3', weekLabel: 'September Week 3 (Sep 15–21)', month: 'September', overall: 7.25, panIndiaOverall: 7.25, video: 7.55, audio: 7.05, protocol: 7.25, audits: 130, target: 8.0, wow: 0.10, phase: 'after' },
+    { name: 'Sep W4', weekLabel: 'September Week 4 (Sep 22–30)', month: 'September', overall: 7.32, panIndiaOverall: 7.32, video: 7.62, audio: 7.12, protocol: 7.32, audits: 128, target: 8.0, wow: 0.07, phase: 'after' },
+    { name: 'Oct W1', weekLabel: 'October Week 1 (Oct 1–7)', month: 'October', overall: 7.38, panIndiaOverall: 7.38, video: 7.72, audio: 7.18, protocol: 7.38, audits: 160, target: 8.0, wow: 0.06, phase: 'after' },
+    { name: 'Oct W2', weekLabel: 'October Week 2 (Oct 8–14)', month: 'October', overall: 7.40, panIndiaOverall: 7.40, video: 7.80, audio: 7.15, protocol: 7.40, audits: 150, target: 8.0, wow: 0.02, phase: 'after' }
   ];
 
   const calculateDealerWeeklyTrend = (dealerPerformance, selectedDealer = 'all') => {
