@@ -65,6 +65,17 @@ export default function LiveActivityMonitor() {
   const [lastRefreshed, setLastRefreshed] = useState(new Date());
   const [refreshIntervalSec, setRefreshIntervalSec] = useState(5);
   const [isPaused, setIsPaused] = useState(false);
+
+  // Track individual paused batch IDs so only that batch is paused and never disappears
+  const [pausedBatchIds, setPausedBatchIds] = useState(() => {
+    try {
+      const saved = localStorage.getItem('ql_paused_batch_ids');
+      return saved ? new Set(JSON.parse(saved)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+
   const [activeTab, setActiveTab] = useState(0); // 0: Live Video Pipelines, 1: Live Users Directory
 
   // Completed Feed View Mode: 'BULK' (Completed Bulk Uploads) | 'VIDEOS' (Completed Video Analyses)
@@ -633,15 +644,6 @@ export default function LiveActivityMonitor() {
     });
   };
 
-  // Track individual paused batch IDs so only that batch is paused and never disappears
-  const [pausedBatchIds, setPausedBatchIds] = useState(() => {
-    try {
-      const saved = localStorage.getItem('ql_paused_batch_ids');
-      return saved ? new Set(JSON.parse(saved)) : new Set();
-    } catch {
-      return new Set();
-    }
-  });
 
   // Individual Pause / Resume for a single batch
   const handleToggleIndividualBatchPause = async (vid) => {
