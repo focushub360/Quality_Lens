@@ -146,7 +146,7 @@ export default function Navbar() {
   const effectiveRoleLabel = isMasterAdmin ? 'Master Admin' : (ROLE_LABEL[role] || 'User');
 
   const fetchNotifications = async () => {
-    if (role !== 'super_admin' && !isMasterAdmin) return;
+    if (!user) return;
     try {
       const res = await api.get('/admin/notifications?limit=25');
       setNotifications(res.data.notifications || []);
@@ -157,12 +157,12 @@ export default function Navbar() {
   };
 
   useEffect(() => {
-    if (role === 'super_admin' || isMasterAdmin) {
+    if (user) {
       fetchNotifications();
       const interval = setInterval(fetchNotifications, 12000);
       return () => clearInterval(interval);
     }
-  }, [role, isMasterAdmin]);
+  }, [user]);
 
   const handleOpenNotifs = (e) => {
     setNotifAnchor(e.currentTarget);

@@ -46,7 +46,8 @@ import {
   Terminal,
   Speed,
   Sensors,
-  Delete as DeleteIcon
+  Delete as DeleteIcon,
+  Close
 } from '@mui/icons-material';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../../contexts/AuthContext';
@@ -635,6 +636,13 @@ function GlobalAnalysisMonitor() {
   const [batchToDelete, setBatchToDelete] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [snackMsg, setSnackMsg] = useState('');
+  const [dismissedNotices, setDismissedNotices] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('ql_dismissed_admin_notices') || '[]');
+    } catch {
+      return [];
+    }
+  });
   const { role, user } = useContext(AuthContext);
 
   const isSuperAdmin = role === 'super_admin' || role === 'master_admin' || user?.is_master_admin || user?.username === 'tech@focus';
@@ -743,6 +751,22 @@ function GlobalAnalysisMonitor() {
   const completedBatches = batches.filter(b => ['completed', 'failed'].includes(b.status)).slice(0, 5);
   const deletedAdminBatches = batches.filter(b => b.deleted_by_admin || b.status === 'deleted_by_admin');
 
+  const handleDismissAllNotices = (e) => {
+    e.stopPropagation();
+    const ids = deletedAdminBatches.map(b => String(b.batch_id || b.batchId || b._id));
+    setDismissedNotices(prev => {
+      const next = Array.from(new Set([...prev, ...ids]));
+      try {
+        localStorage.setItem('ql_dismissed_admin_notices', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  };
+
+  const visibleDeletedBatches = deletedAdminBatches.filter(
+    b => !dismissedNotices.includes(String(b.batch_id || b.batchId || b._id))
+  );
+
   const handleDeleteClick = (e, b) => {
     e.stopPropagation();
     setBatchToDelete(b);
@@ -771,23 +795,91 @@ function GlobalAnalysisMonitor() {
     <Box sx={{ px: 2, pb: 2, mt: 'auto' }}>
       <Divider sx={{ mb: 1.5, borderColor: THEME.divider }} />
 
-      {/* Deleted by Admin notification alert for Dealer users */}
-      {!isSuperAdmin && deletedAdminBatches.length > 0 && (
+      {/* Deleted by Admin notification alert for Dealer users (Fixed Overflow & Out of Box UI) */}
+      {!isSuperAdmin && visibleDeletedBatches.length > 0 && (
         <Box sx={{
-          background: 'rgba(239, 68, 68, 0.1)',
-          border: '1px solid #EF4444',
-          borderRadius: 2,
-          p: 1,
-          mb: 1
+          background: '#FEF2F2',
+          border: '1px solid #FCA5A5',
+          borderRadius: 2.5,
+          p: 1.25,
+          mb: 1.5,
+          width: '100%',
+          maxWidth: '100%',
+          boxSizing: 'border-box',
+          overflow: 'hidden',
+          boxShadow: '0 2px 8px rgba(239, 68, 68, 0.08)'
         }}>
-          <Typography variant="caption" sx={{ color: '#EF4444', fontWeight: 700, display: 'block', fontSize: '10px' }}>
-            ⚠️ Notice from Super Admin
-          </Typography>
-          {deletedAdminBatches.slice(0, 2).map(b => (
-            <Typography key={b.batch_id} variant="caption" sx={{ color: '#DC2626', display: 'block', fontSize: '9px', mt: 0.25 }}>
-              • Batch '{b.filename}' was deleted by Super Admin.
-            </Typography>
-          ))}
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.75 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+              <Typography sx={{ fontSize: '13px', lineHeight: 1 }}>⚠️</Typography>
+              <Typography variant="caption" sx={{ color: '#B91C1C', fontWeight: 800, fontSize: '11px', lineHeight: 1.2 }}>
+                Notice from Super Admin
+              </Typography>
+            </Box>
+            <Tooltip title="Dismiss notice">
+              <IconButton
+                size="small"
+                onClick={handleDismissAllNotices}
+                sx={{
+                  p: 0.2,
+                  color: '#EF4444',
+                  '&:hover': { bgcolor: '#FEE2E2', color: '#991B1B' }
+                }}
+              >
+                <Close sx={{ fontSize: 13 }} />
+              </IconButton>
+            </Tooltip>
+          </Box>
+
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+            {visibleDeletedBatches.slice(0, 2).map(b => {
+              const bId = b.batch_id || b.batchId || b._id;
+              const displayName = b.filename || b.original_filename || 'Batch Upload';
+
+              return (
+                <Box
+                  key={bId}
+                  sx={{
+                    p: 0.75,
+                    borderRadius: 1.5,
+                    bgcolor: 'rgba(255, 255, 255, 0.85)',
+                    border: '1px solid #FECACA',
+                    width: '100%',
+                    maxWidth: '100%',
+                    boxSizing: 'border-box',
+                    overflow: 'hidden'
+                  }}
+                >
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      color: '#991B1B',
+                      fontWeight: 700,
+                      fontSize: '9.5px',
+                      display: 'block',
+                      wordBreak: 'break-all',
+                      overflowWrap: 'anywhere',
+                      lineHeight: 1.3
+                    }}
+                  >
+                    • Batch '{displayName}'
+                  </Typography>
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      color: '#DC2626',
+                      fontSize: '9px',
+                      fontWeight: 600,
+                      display: 'block',
+                      mt: 0.25
+                    }}
+                  >
+                    was deleted by Super Admin.
+                  </Typography>
+                </Box>
+              );
+            })}
+          </Box>
         </Box>
       )}
 

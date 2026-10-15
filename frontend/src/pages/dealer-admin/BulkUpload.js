@@ -9,9 +9,10 @@ import {
 import {
   Upload, PlayArrow, CheckCircle, Error, TableChart,
   Close, History, Refresh, Stop, Delete, Download, Translate,
-  CloudUpload, Archive, Description, Warning
+  CloudUpload, Archive, Description, Warning, Pause
 } from '@mui/icons-material';
 import api from '../../services/api';
+import { useAuth } from '../../contexts/AuthContext';
 import { formatDate, formatDateTime } from '../../utils/dateFormatter';
 
 // QualityLens Branding Theme
@@ -45,14 +46,61 @@ const THEME = {
   shadowLg: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
 };
 
-// Persistent storage keys helper
+// Persistent storage keys helper (robust to user.id, user._id, or user.username)
 const getStorageKeys = (user) => {
-  const suffix = user && user.id ? `:${user.id}` : '_guest';
+  const uId = user ? (user.id || user._id || user.username || (user.email ? user.email.replace(/[@.]/g, '_') : null)) : null;
+  const suffix = uId ? `:${uId}` : '_guest';
   return {
     batches: `bulkProcessingBatches${suffix}`,
     status: `bulkActiveStatusSnapshot${suffix}`,
     trackedId: `trackedBulkBatchId${suffix}`,
   };
+};
+
+// Batch ownership check: did this user submit this batch?
+const isSubmittedByThisUser = (b, user) => {
+  if (!user || !b) return false;
+  const uId = String(user._id || user.id || '').trim();
+  const bSubId = String(b.submitted_by_user_id || '').trim();
+  if (uId && bSubId && uId === bSubId) return true;
+
+  const uName = (user.username || '').toLowerCase().trim();
+  const bSubName = (b.submitted_by_username || '').toLowerCase().trim();
+  if (uName && bSubName && uName === bSubName) return true;
+
+  const uEmail = (user.email || '').toLowerCase().trim();
+  const bSubEmail = (b.submitted_by_email || '').toLowerCase().trim();
+  if (uEmail && bSubEmail && uEmail === bSubEmail) return true;
+  if (uEmail && bSubName && uEmail === bSubName) return true;
+  if (uName && bSubEmail && uName === bSubEmail) return true;
+
+  return false;
+};
+
+// Dealership affiliation check: ONLY for dealer admins (never for super admin)
+const isBelongingToDealership = (b, user) => {
+  if (!user || !b) return false;
+  const isSuper = user.role === 'super_admin' || user.is_master_admin || user.role === 'master_admin';
+  if (isSuper) return false; // Super Admins have no dealership scope and must only see batches they uploaded
+
+  const userDealer = (user.dealer_id || user.showroom_name || '').toLowerCase().trim();
+  if (!userDealer || userDealer === 'global' || userDealer === 'global admin' || userDealer === 'focus') return false;
+
+  const bDealerId = (b.dealer_id || '').toLowerCase().trim();
+  const bDealerName = (b.dealer_name || '').toLowerCase().trim();
+
+  return Boolean(
+    bDealerId === userDealer ||
+    bDealerName === userDealer ||
+    (userDealer.length > 2 && (bDealerId.includes(userDealer) || userDealer.includes(bDealerId) || bDealerName.includes(userDealer) || userDealer.includes(bDealerName)))
+  );
+};
+
+// Combined helper for Bulk Upload workbench access
+const isBatchForThisLogin = (b, user) => {
+  if (!user || !b) return false;
+  if (isSubmittedByThisUser(b, user)) return true;
+  return isBelongingToDealership(b, user);
 };
 
 // Language options
@@ -202,11 +250,20 @@ export default function BulkUpload() {
   const [targetLanguage, setTargetLanguage] = useState('en');
   const [list, setList] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [currentUser, setCurrentUser] = useState(null);
+  const { user: authUser } = useAuth();
+  const [currentUser, setCurrentUser] = useState(authUser || null);
   const [quotaInfo, setQuotaInfo] = useState(null);
 
   const isMounted = useRef(true);
   const pollingIntervalRef = useRef(null);
+
+  // Sync currentUser with AuthContext whenever authUser loads or switches
+  useEffect(() => {
+    if (authUser) {
+      setCurrentUser(authUser);
+      fetchServerBatches(authUser);
+    }
+  }, [authUser]);
 
   // Fetch daily dealer quota
   useEffect(() => {
@@ -239,8 +296,11 @@ export default function BulkUpload() {
     const init = async () => {
       try {
         // 1) Get current user (includes dealer_id and role)
-        const meRes = await api.get('/users/me');
-        const me = meRes.data;
+        let me = authUser;
+        if (!me || !me.username) {
+          const meRes = await api.get('/users/me');
+          me = meRes.data;
+        }
         setCurrentUser(me);
 
         // ── INSTANT RESTORE (Per-User Scoped) ─────────────────────────
@@ -249,14 +309,25 @@ export default function BulkUpload() {
           const snapshot = localStorage.getItem(keys.status);
           if (snapshot) {
             const saved = JSON.parse(snapshot);
-            if (saved && saved.batchId) {
+            if (saved && saved.batchId && isBatchForThisLogin(saved, me)) {
               setBatchId(saved.batchId);
               setStatus(saved);
               // Restart polling immediately if the batch was still running
               if (['processing', 'pending', 'stopping'].includes(saved.status)) {
                 startPolling(saved.batchId, me);
+              } else {
+                fetchBatchResults(saved.batchId, saved);
               }
+            } else {
+              // Stale or foreign snapshot: clear it immediately
+              localStorage.removeItem(keys.status);
+              localStorage.removeItem(keys.trackedId);
+              setBatchId(null);
+              setStatus(null);
             }
+          } else {
+            setBatchId(null);
+            setStatus(null);
           }
         } catch (e) {
           console.warn('Could not restore status snapshot', e);
@@ -339,57 +410,66 @@ export default function BulkUpload() {
 
   const fetchServerBatches = async (me = null) => {
     try {
-      const activeUser = me || currentUser;
+      const activeUser = me || currentUser || authUser;
       const keys = getStorageKeys(activeUser);
       const res = await api.get('/bulk-batches');
       const serverBatches = Array.isArray(res.data) ? res.data.map(normalizeBatch) : [];
-      // If we have current user and they are dealer_admin, server already filtered; but be safe and filter again client-side
-      const filtered = activeUser && activeUser.role === 'dealer_admin' && activeUser.dealer_id
-        ? serverBatches.filter(b => String(b.dealer_id) === String(activeUser.dealer_id))
-        : serverBatches;
-      setActiveBatches(filtered);
-      if (keys) {
-        localStorage.setItem(keys.batches, JSON.stringify(filtered));
-      }
-      // Look for previously tracked batch ID in localStorage
-      const savedTrackedId = keys ? localStorage.getItem(keys.trackedId) : null;
-      let targetBatch = null;
-      if (savedTrackedId) {
-        targetBatch = filtered.find(b => String(b.batchId) === String(savedTrackedId));
-        // If the saved tracked batch is already completed or failed, we don't display it on active view anymore!
-        if (targetBatch && ['completed', 'failed', 'cancelled'].includes(targetBatch.status)) {
-          targetBatch = null;
-        }
-      }
       
-      // Fallback to first active batch if no saved tracked batch, or if it wasn't found
-      if (!targetBatch) {
-        targetBatch = filtered.find(b => ['processing', 'pending', 'stopping'].includes(b.status));
+      // Strict filtering: only batches belonging to this login (or dealership for non-super dealer admins)
+      const finalBatches = serverBatches.filter(b => isBatchForThisLogin(b, activeUser));
+      setActiveBatches(finalBatches);
+      if (keys) {
+        localStorage.setItem(keys.batches, JSON.stringify(finalBatches));
       }
 
-      // If we have an active batch, track and display it. Otherwise clear status (so form is shown)
-      if (targetBatch) {
+      // 1) Look for previously tracked batch ID in localStorage that belongs to this user
+      const savedTrackedId = keys ? localStorage.getItem(keys.trackedId) : null;
+      let targetBatch = null;
+
+      if (savedTrackedId) {
+        targetBatch = finalBatches.find(b => String(b.batchId) === String(savedTrackedId));
+      }
+      
+      // 2) If no tracked batch or it is not active, prioritize any ACTIVE in-flight batch submitted by THIS user
+      if (!targetBatch || !['processing', 'pending', 'stopping'].includes(targetBatch.status)) {
+        const myActiveBatch = finalBatches.find(b => 
+          ['processing', 'pending', 'stopping'].includes(b.status) &&
+          isSubmittedByThisUser(b, activeUser)
+        );
+        if (myActiveBatch) {
+          targetBatch = myActiveBatch;
+        } else if (!targetBatch) {
+          const dealerActive = finalBatches.find(b => ['processing', 'pending', 'stopping'].includes(b.status));
+          if (dealerActive) {
+            targetBatch = dealerActive;
+          }
+        }
+      }
+
+      // If we have a verified target batch for this login, track and display it
+      if (targetBatch && isBatchForThisLogin(targetBatch, activeUser)) {
         setBatchId(targetBatch.batchId);
         setStatus(targetBatch);
         if (keys) {
           localStorage.setItem(keys.trackedId, targetBatch.batchId);
+          localStorage.setItem(keys.status, JSON.stringify(targetBatch));
         }
         if (['processing', 'pending', 'stopping'].includes(targetBatch.status)) {
           startPolling(targetBatch.batchId, activeUser);
         } else {
-          // Fetch results immediately for completed/failed batch
           fetchBatchResults(targetBatch.batchId, targetBatch);
         }
       } else {
+        // No batch belongs to this login: clear state & remove stale keys!
         setBatchId(null);
         setStatus(null);
         if (keys) {
           localStorage.removeItem(keys.trackedId);
+          localStorage.removeItem(keys.status);
         }
       }
     } catch (err) {
       console.warn('fetchServerBatches failed, will fallback to localStorage', err);
-      // fallback to local storage; if currentUser known, pass it so we can filter
       loadActiveBatchesFromStorage(me);
     }
   };
@@ -399,7 +479,7 @@ export default function BulkUpload() {
   // ---------------------------
   const loadActiveBatchesFromStorage = (me = null) => {
     try {
-      const activeUser = me || currentUser;
+      const activeUser = me || currentUser || authUser;
       const keys = getStorageKeys(activeUser);
       if (!keys) return;
 
@@ -408,20 +488,10 @@ export default function BulkUpload() {
       const raw = JSON.parse(stored);
 
       const normalized = (Array.isArray(raw) ? raw : []).map(normalizeBatch);
-
-      // Filter stale entries:
-      const filtered = normalized.filter(b => {
-        // require dealer info (drop legacy entries lacking dealer_id)
-        if (!b.dealer_id) return false;
-        if (activeUser && activeUser.role === 'dealer_admin') {
-          return String(b.dealer_id) === String(activeUser.dealer_id);
-        }
-        return true;
-      });
+      const filtered = normalized.filter(b => isBatchForThisLogin(b, activeUser));
 
       setActiveBatches(filtered);
 
-      // Look for previously tracked batch ID in localStorage
       const savedTrackedId = localStorage.getItem(keys.trackedId);
       let targetBatch = null;
       if (savedTrackedId) {
@@ -429,15 +499,13 @@ export default function BulkUpload() {
       }
       
       if (!targetBatch) {
-        targetBatch = filtered.find(b => ['processing', 'pending', 'stopping'].includes(b.status));
+        targetBatch = filtered.find(b => 
+          ['processing', 'pending', 'stopping'].includes(b.status) &&
+          isSubmittedByThisUser(b, activeUser)
+        );
       }
 
-      // Fallback to most recent batch if none are active
-      if (!targetBatch && filtered.length > 0) {
-        targetBatch = filtered[0];
-      }
-
-      if (targetBatch) {
+      if (targetBatch && isBatchForThisLogin(targetBatch, activeUser)) {
         setBatchId(targetBatch.batchId);
         setStatus(targetBatch);
         localStorage.setItem(keys.trackedId, targetBatch.batchId);
@@ -446,6 +514,11 @@ export default function BulkUpload() {
         } else {
           fetchBatchResults(targetBatch.batchId, targetBatch);
         }
+      } else {
+        setBatchId(null);
+        setStatus(null);
+        localStorage.removeItem(keys.trackedId);
+        localStorage.removeItem(keys.status);
       }
     } catch (err) {
       console.error('Error loading batches from storage:', err);
@@ -454,19 +527,12 @@ export default function BulkUpload() {
 
   const pruneLocalStorage = (me) => {
     try {
-      const activeUser = me || currentUser;
+      const activeUser = me || currentUser || authUser;
       const keys = getStorageKeys(activeUser);
       if (!keys) return;
 
       const stored = JSON.parse(localStorage.getItem(keys.batches) || '[]');
-      const kept = (stored || []).filter(b => {
-        const dealerId = b.dealer_id || b.dealerId || null;
-        if (!dealerId) return false;
-        if (activeUser && activeUser.role === 'dealer_admin') {
-          return String(dealerId) === String(activeUser.dealer_id);
-        }
-        return true;
-      }).map(normalizeBatch);
+      const kept = (stored || []).filter(b => isBatchForThisLogin(b, activeUser)).map(normalizeBatch);
       localStorage.setItem(keys.batches, JSON.stringify(kept));
       setActiveBatches(kept);
     } catch (err) {
@@ -575,9 +641,6 @@ export default function BulkUpload() {
       const newBatchId = data.batch_id;
       setBatchId(newBatchId);
       const keys = getStorageKeys(currentUser);
-      if (keys) {
-        localStorage.setItem(keys.trackedId, newBatchId);
-      }
 
       const initialStatus = {
         batchId: newBatchId,
@@ -590,7 +653,15 @@ export default function BulkUpload() {
         filename: file.name,
         created_at: new Date().toISOString(),
         dealer_id: currentUser?.dealer_id || null,
+        dealer_name: currentUser?.showroom_name || currentUser?.dealer_id || 'Dealership',
+        submitted_by_user_id: currentUser?._id || currentUser?.id || null,
+        submitted_by_username: currentUser?.username || 'User',
       };
+
+      if (keys) {
+        localStorage.setItem(keys.trackedId, newBatchId);
+        localStorage.setItem(keys.status, JSON.stringify(initialStatus));
+      }
 
       setStatus(initialStatus);
       saveBatchToStorage(initialStatus);
@@ -911,6 +982,7 @@ export default function BulkUpload() {
       case 'pending': return 'warning';
       case 'cancelled': return 'warning';
       case 'stopping': return 'warning';
+      case 'paused': return 'warning';
       default: return 'default';
     }
   };
@@ -923,6 +995,7 @@ export default function BulkUpload() {
       case 'pending': return <Upload />;
       case 'cancelled': return <Stop />;
       case 'stopping': return <Stop />;
+      case 'paused': return <Pause />;
       default: return <Upload />;
     }
   };
@@ -934,7 +1007,8 @@ export default function BulkUpload() {
       completed: { bgColor: THEME.successLight, textColor: THEME.success },
       failed: { bgColor: THEME.errorLight, textColor: THEME.error },
       cancelled: { bgColor: THEME.warningLight, textColor: THEME.warning },
-      stopping: { bgColor: THEME.warningLight, textColor: THEME.warning }
+      stopping: { bgColor: THEME.warningLight, textColor: THEME.warning },
+      paused: { bgColor: '#FFFBEB', textColor: '#B45309' }
     };
     return config[status] || config.pending;
   };
@@ -1651,58 +1725,119 @@ export default function BulkUpload() {
                   boxShadow: '0 10px 30px rgba(0,0,0,0.3)',
                   border: '1px solid #222'
                 }}>
-                  <Box sx={{ position: 'relative', display: 'inline-flex', mb: 2 }}>
-                    {/* Background Circle */}
-                    <CircularProgress
-                      variant="determinate"
-                      value={100}
-                      size={120}
-                      thickness={4}
-                      sx={{ color: '#222' }}
-                    />
-                    {/* Progress Circle (Lime Green) */}
-                    <CircularProgress
-                      variant="determinate"
-                      value={liveProgress}
-                      size={120}
-                      thickness={5}
-                      sx={{
-                        color: status.status === 'failed' ? THEME.error : '#A3E635',
-                        position: 'absolute',
-                        left: 0,
-                        '& .MuiCircularProgress-circle': {
-                          strokeLinecap: 'round',
-                          transition: 'stroke-dashoffset 0.1s linear',
-                        },
-                      }}
-                    />
-                    <Box
-                      sx={{
-                        top: 0,
-                        left: 0,
-                        bottom: 0,
-                        right: 0,
-                        position: 'absolute',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      <Typography variant="h4" component="div" fontWeight="800" sx={{ color: '#FFFFFF' }}>
-                        {liveProgress.toFixed(2)}<Box component="span" sx={{ fontSize: '1rem', ml: 0.5 }}>%</Box>
-                      </Typography>
-                    </Box>
+                  {/* Circular Progress (Neat & Modern Styled) */}
+                  {(() => {
+                    const formattedProgress = liveProgress.toFixed(2);
+                    const [intPart, decPart] = formattedProgress.split('.');
+                    return (
+                      <Box sx={{ position: 'relative', display: 'inline-flex', mb: 2 }}>
+                        {/* Background Track Circle */}
+                        <CircularProgress
+                          variant="determinate"
+                          value={100}
+                          size={144}
+                          thickness={3.8}
+                          sx={{ color: 'rgba(255, 255, 255, 0.08)' }}
+                        />
+                        {/* Animated Progress Circle (Lime Green) */}
+                        <CircularProgress
+                          variant="determinate"
+                          value={liveProgress}
+                          size={144}
+                          thickness={4.5}
+                          sx={{
+                            color: status.status === 'failed' ? THEME.error : '#A3E635',
+                            position: 'absolute',
+                            left: 0,
+                            filter: status.status === 'failed'
+                              ? 'drop-shadow(0 0 8px rgba(239, 68, 68, 0.4))'
+                              : 'drop-shadow(0 0 8px rgba(163, 230, 53, 0.35))',
+                            '& .MuiCircularProgress-circle': {
+                              strokeLinecap: 'round',
+                              transition: 'stroke-dashoffset 0.25s ease-out',
+                            },
+                          }}
+                        />
+                        {/* Centered Percentage Display - Neat & Spacious */}
+                        <Box
+                          sx={{
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            bottom: 0,
+                            right: 0,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            pointerEvents: 'none',
+                          }}
+                        >
+                          <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center' }}>
+                            <Typography
+                              component="span"
+                              sx={{
+                                color: '#FFFFFF',
+                                fontWeight: 800,
+                                fontSize: '1.75rem',
+                                lineHeight: 1,
+                                letterSpacing: '-0.5px',
+                              }}
+                            >
+                              {intPart}
+                            </Typography>
+                            <Typography
+                              component="span"
+                              sx={{
+                                color: 'rgba(255, 255, 255, 0.7)',
+                                fontWeight: 700,
+                                fontSize: '1.05rem',
+                                lineHeight: 1,
+                              }}
+                            >
+                              .{decPart}
+                            </Typography>
+                            <Typography
+                              component="span"
+                              sx={{
+                                color: status.status === 'failed' ? THEME.error : '#A3E635',
+                                fontWeight: 800,
+                                fontSize: '0.85rem',
+                                ml: 0.3,
+                                lineHeight: 1,
+                              }}
+                            >
+                              %
+                            </Typography>
+                          </Box>
+                        </Box>
+                      </Box>
+                    );
+                  })()}
+
+                  <Box
+                    sx={{
+                      px: 1.5,
+                      py: 0.35,
+                      borderRadius: 6,
+                      bgcolor: status.status === 'failed' ? 'rgba(239, 68, 68, 0.12)' : 'rgba(163, 230, 53, 0.12)',
+                      border: `1px solid ${status.status === 'failed' ? 'rgba(239, 68, 68, 0.3)' : 'rgba(163, 230, 53, 0.25)'}`,
+                      mb: status.status === 'processing' ? 1 : 0,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <Typography variant="caption" sx={{ 
+                      color: status.status === 'failed' ? THEME.error : '#A3E635', 
+                      fontWeight: 800, 
+                      letterSpacing: '1px', 
+                      textTransform: 'uppercase',
+                      fontSize: '0.72rem',
+                    }}>
+                      {status.status === 'completed' ? 'BATCH COMPLETE' : status.status?.toUpperCase()}
+                    </Typography>
                   </Box>
-                  <Typography variant="caption" sx={{ 
-                    color: status.status === 'failed' ? THEME.error : '#A3E635', 
-                    fontWeight: 700, 
-                    letterSpacing: '1px', 
-                    textTransform: 'uppercase',
-                    mb: status.status === 'processing' ? 1 : 0
-                  }}>
-                    {status.status === 'completed' ? 'BATCH COMPLETE' : status.status?.toUpperCase()}
-                  </Typography>
+
                   {status.status === 'processing' && (() => {
                     const { remaining, elapsed, secPerUrl } = getTimeInfo();
                     return (
@@ -1924,6 +2059,14 @@ export default function BulkUpload() {
                         Processed: {b.processed_urls || 0} / {b.total_urls || 0} 
                         {b.failed_urls > 0 && ` | Failed: ${b.failed_urls}`}
                       </Typography>
+                      {b.status === 'paused' && (
+                        <Box sx={{ mt: 1, p: 0.75, px: 1.25, bgcolor: '#FFFBEB', borderRadius: 1.5, border: '1px solid #FDE68A', display: 'inline-flex', alignItems: 'center', gap: 0.75 }}>
+                          <Pause sx={{ fontSize: 15, color: '#B45309' }} />
+                          <Typography variant="caption" sx={{ color: '#92400E', fontWeight: 700 }}>
+                            Paused by Master Admin — only this batch is paused.
+                          </Typography>
+                        </Box>
+                      )}
                     </Box>
 
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>

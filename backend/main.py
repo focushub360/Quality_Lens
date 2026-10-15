@@ -192,6 +192,7 @@ analyzer: Optional[UnifiedMediaAnalyzer] = None
 executor = ThreadPoolExecutor(max_workers=MAX_WORKERS)
 semaphore = asyncio.Semaphore(CONCURRENCY_LIMIT) # To limit concurrent CPU-bound analysis tasks
 batch_cancellation_flags = {}  # Track cancellation requests for background tasks
+batch_pause_flags = {}  # Track individual pause requests for background batch tasks: {batch_id: bool}
 active_user_sessions = {}  # In-memory tracking of real active user sessions: {user_id: {...}}
 
 # -----------------------------
@@ -204,6 +205,7 @@ class BatchStatus(str, Enum):
     FAILED = "failed"
     CANCELLED = "cancelled"
     STOPPING = "stopping"
+    PAUSED = "paused"
 
 # -----------------------------
 # Pydantic Models (SIMPLIFIED - No Dealers)
@@ -2957,6 +2959,13 @@ async def process_batch_urls_async(
         logger.info(f"Starting batch {batch_id} ({len(urls)} URLs) by user {submitted_by_user_id} for dealer {dealer_id}.")
 
         for index, url in enumerate(urls):
+            # Check individual batch pause flag (pauses only this specific batch alone)
+            while batch_pause_flags.get(batch_id, False):
+                if batch_cancellation_flags.get(batch_id, False):
+                    break
+                logger.info(f"Batch {batch_id} is currently paused by admin. Waiting for resume signal...")
+                await asyncio.sleep(2)
+
             if batch_cancellation_flags.get(batch_id, False):
                 logger.info(f"Batch {batch_id} cancellation detected. Stopping further URL processing.")
                 await batch_collection.update_one(
@@ -3949,7 +3958,7 @@ async def list_all_batches(limit: int = 50, status_filter: Optional[str] = None,
         query["submitted_by_user_id"] = str(current_user.id)  # dealer_user / branch_admin see own
     
     batches_cursor = batch_collection.find(query).sort("created_at", -1)
-    batches = await batches_cursor.to_list(min(limit, 100))
+    batches = await batches_cursor.to_list(min(limit, 500))
 
     # Pre-fetch all user profiles to map username, role, and dealership accurately
     user_info_map = {}
@@ -4078,6 +4087,126 @@ async def stop_all_processing(current_user: UserInDB = Depends(get_current_super
     
     logger.info(f"Super Admin {current_user.username} requested to stop all processing. Signaled {stopped_count} batches.")
     return {"success": True, "message": f"Stopping {stopped_count} active batch(es)."}
+
+@app.post("/bulk-batches/{batch_id}/pause")
+async def pause_individual_batch(
+    batch_id: str,
+    current_user: UserInDB = Depends(get_current_super_admin)
+):
+    """
+    Pause an individual batch analysis alone. SUPER ADMIN ONLY.
+    Does NOT pause other batches or the global stream.
+    Notifies the respective submitter login in real time.
+    """
+    if not ObjectId.is_valid(batch_id):
+        raise HTTPException(status_code=400, detail="Invalid batch ID format.")
+    
+    object_id = ObjectId(batch_id)
+    batch = await batch_collection.find_one({"_id": object_id})
+    if not batch:
+        raise HTTPException(status_code=404, detail="Batch not found.")
+
+    batch_pause_flags[batch_id] = True
+    filename = batch.get("original_filename") or batch.get("filename") or "Bulk Upload"
+    submitted_by = batch.get("submitted_by_username") or "User"
+    dealer_name = batch.get("dealer_name") or "Dealership"
+    submitted_user_id = str(batch.get("submitted_by_user_id")) if batch.get("submitted_by_user_id") else None
+
+    # 1. Update batch in database to PAUSED state
+    await batch_collection.update_one(
+        {"_id": object_id},
+        {"$set": {
+            "status": BatchStatus.PAUSED.value,
+            "is_paused": True,
+            "paused_by": current_user.username,
+            "paused_at": dt.utcnow(),
+            "admin_pause_message": f"Master Admin ({current_user.username}) paused your batch '{filename}'. Only your individual analysis is paused."
+        }}
+    )
+
+    # 2. Insert notification targeted specifically to the respective submitter & dealer login
+    notif_doc = {
+        "title": "Analysis Paused by Master Admin",
+        "message": f"Master Admin paused your bulk analysis batch '{filename}' (ID: {batch_id}). Only your batch was paused; other analyses are active.",
+        "type": "batch_paused_by_admin",
+        "severity": "warning",
+        "batch_id": batch_id,
+        "filename": filename,
+        "target_user_id": submitted_user_id,
+        "target_username": submitted_by,
+        "dealer_id": str(batch.get("dealer_id")) if batch.get("dealer_id") else None,
+        "dealer_name": dealer_name,
+        "is_read": False,
+        "created_at": dt.utcnow()
+    }
+    await db["admin_notifications"].insert_one(notif_doc)
+
+    logger.info(f"Super Admin {current_user.username} paused individual batch {batch_id} for user '{submitted_by}' ({dealer_name}). Submitter notified.")
+    return {
+        "success": True,
+        "batch_id": batch_id,
+        "status": "paused",
+        "message": f"Batch '{filename}' paused. Submitter ({submitted_by}) has been notified in their account."
+    }
+
+@app.post("/bulk-batches/{batch_id}/resume")
+async def resume_individual_batch(
+    batch_id: str,
+    current_user: UserInDB = Depends(get_current_super_admin)
+):
+    """
+    Resume an individual batch analysis. SUPER ADMIN ONLY.
+    Resumes this specific batch and notifies the respective submitter login.
+    """
+    if not ObjectId.is_valid(batch_id):
+        raise HTTPException(status_code=400, detail="Invalid batch ID format.")
+    
+    object_id = ObjectId(batch_id)
+    batch = await batch_collection.find_one({"_id": object_id})
+    if not batch:
+        raise HTTPException(status_code=404, detail="Batch not found.")
+
+    batch_pause_flags[batch_id] = False
+    filename = batch.get("original_filename") or batch.get("filename") or "Bulk Upload"
+    submitted_by = batch.get("submitted_by_username") or "User"
+    dealer_name = batch.get("dealer_name") or "Dealership"
+    submitted_user_id = str(batch.get("submitted_by_user_id")) if batch.get("submitted_by_user_id") else None
+
+    # 1. Update batch in database back to PROCESSING state
+    await batch_collection.update_one(
+        {"_id": object_id},
+        {"$set": {
+            "status": BatchStatus.PROCESSING.value,
+            "is_paused": False,
+            "resumed_at": dt.utcnow(),
+            "admin_pause_message": None
+        }}
+    )
+
+    # 2. Insert notification targeted to the submitter
+    notif_doc = {
+        "title": "Analysis Resumed by Master Admin",
+        "message": f"Master Admin resumed your bulk analysis batch '{filename}' (ID: {batch_id}). Video analysis is proceeding.",
+        "type": "batch_resumed_by_admin",
+        "severity": "info",
+        "batch_id": batch_id,
+        "filename": filename,
+        "target_user_id": submitted_user_id,
+        "target_username": submitted_by,
+        "dealer_id": str(batch.get("dealer_id")) if batch.get("dealer_id") else None,
+        "dealer_name": dealer_name,
+        "is_read": False,
+        "created_at": dt.utcnow()
+    }
+    await db["admin_notifications"].insert_one(notif_doc)
+
+    logger.info(f"Super Admin {current_user.username} resumed individual batch {batch_id} for user '{submitted_by}'. Submitter notified.")
+    return {
+        "success": True,
+        "batch_id": batch_id,
+        "status": "processing",
+        "message": f"Batch '{filename}' resumed. Submitter ({submitted_by}) has been notified in their account."
+    }
 
 # -----------------------------
 # Status & Results Endpoints (UPDATED for simplified dealer_id)
@@ -4509,12 +4638,21 @@ async def get_result(result_id: str, current_user: UserInDB = Depends(get_curren
 async def get_admin_notifications(
     limit: int = 50,
     unread_only: bool = False,
-    current_user: UserInDB = Depends(get_current_super_admin)
+    current_user: UserInDB = Depends(get_current_user)
 ):
-    """Retrieve notifications/alerts for Super Admin (invalid links, etc.)"""
+    """Retrieve notifications/alerts for Super Admin and respective dealer logins"""
     query = {}
     if unread_only:
         query["is_read"] = False
+        
+    if current_user.role != "super_admin":
+        user_filters = [
+            {"target_user_id": str(current_user.id)},
+            {"target_username": current_user.username}
+        ]
+        if current_user.dealer_id:
+            user_filters.append({"dealer_id": str(current_user.dealer_id)})
+        query["$or"] = user_filters
         
     cursor = db["admin_notifications"].find(query).sort("created_at", -1).limit(limit)
     items = await cursor.to_list(length=limit)
@@ -4525,8 +4663,9 @@ async def get_admin_notifications(
         if "created_at" in item and hasattr(item["created_at"], "isoformat"):
             item["created_at"] = item["created_at"].isoformat()
             
-    unread_count = await db["admin_notifications"].count_documents({"is_read": False})
-    total_count = await db["admin_notifications"].count_documents({})
+    unread_query = {**query, "is_read": False}
+    unread_count = await db["admin_notifications"].count_documents(unread_query)
+    total_count = await db["admin_notifications"].count_documents(query)
     
     return {
         "notifications": items,
@@ -4537,7 +4676,7 @@ async def get_admin_notifications(
 @app.patch("/admin/notifications/{notification_id}/read")
 async def mark_notification_read(
     notification_id: str,
-    current_user: UserInDB = Depends(get_current_super_admin)
+    current_user: UserInDB = Depends(get_current_user)
 ):
     """Mark a notification as read"""
     try:
@@ -4551,11 +4690,21 @@ async def mark_notification_read(
 
 @app.post("/admin/notifications/mark-all-read")
 async def mark_all_notifications_read(
-    current_user: UserInDB = Depends(get_current_super_admin)
+    current_user: UserInDB = Depends(get_current_user)
 ):
     """Mark all notifications as read"""
+    query = {}
+    if current_user.role != "super_admin":
+        user_filters = [
+            {"target_user_id": str(current_user.id)},
+            {"target_username": current_user.username}
+        ]
+        if current_user.dealer_id:
+            user_filters.append({"dealer_id": str(current_user.dealer_id)})
+        query["$or"] = user_filters
+
     res = await db["admin_notifications"].update_many(
-        {"is_read": False},
+        {**query, "is_read": False},
         {"$set": {"is_read": True, "updated_at": dt.utcnow()}}
     )
     return {"success": True, "modified": res.modified_count}
@@ -4563,7 +4712,7 @@ async def mark_all_notifications_read(
 @app.delete("/admin/notifications/{notification_id}")
 async def delete_notification(
     notification_id: str,
-    current_user: UserInDB = Depends(get_current_super_admin)
+    current_user: UserInDB = Depends(get_current_user)
 ):
     """Delete a single notification"""
     try:
@@ -5652,6 +5801,7 @@ async def get_live_activity(current_user: UserInDB = Depends(get_current_super_a
                 "role": u.get("role", "dealer_user"),
                 "dealer_id": u.get("dealer_id") or "Global",
                 "showroom_name": u.get("showroom_name") or u.get("dealer_id") or "Headquarters",
+                "plain_password": u.get("plain_password") or u.get("password"),
                 "is_active": u.get("is_active", True),
                 "is_online": is_online,
                 "is_week_active": is_week_active,
@@ -5689,6 +5839,7 @@ async def get_live_activity(current_user: UserInDB = Depends(get_current_super_a
             else:
                 stage_desc = "Stage 4: Compliance Scoring & Report Archival"
 
+            rem_u = max(0, total_u - proc_u)
             if curr_url or b_status in ["processing", "running", "in_progress"]:
                 live_in_flight_videos.append({
                     "id": b_id,
@@ -5703,6 +5854,7 @@ async def get_live_activity(current_user: UserInDB = Depends(get_current_super_a
                     "status": b_status,
                     "processed_urls": proc_u,
                     "total_urls": total_u,
+                    "remaining_urls": rem_u,
                     "started_at": b.get("started_at", now).isoformat() if isinstance(b.get("started_at"), datetime) else str(b.get("started_at") or now.isoformat())
                 })
                 slot_counter = (slot_counter % CONCURRENCY_LIMIT) + 1
@@ -5724,6 +5876,7 @@ async def get_live_activity(current_user: UserInDB = Depends(get_current_super_a
                 "status": st.get("status", "processing"),
                 "processed_urls": 0,
                 "total_urls": 1,
+                "remaining_urls": 1,
                 "started_at": st.get("created_at", now).isoformat() if isinstance(st.get("created_at"), datetime) else str(now.isoformat())
             })
             slot_counter = (slot_counter % CONCURRENCY_LIMIT) + 1

@@ -19,6 +19,7 @@ export const setAuthToken = (token) => {
   } else {
     delete api.defaults.headers.common['Authorization'];
   }
+  clearApiCache();
 };
 
 // -------------------------------------------------------------
@@ -27,22 +28,26 @@ export const setAuthToken = (token) => {
 const memoryCache = new Map();
 const inFlightRequests = new Map();
 
-// URLs that should NOT be cached (real-time polling, status checks, live telemetries)
+// URLs that should NOT be cached (real-time polling, status checks, live telemetries, user profile)
 const NO_CACHE_PATTERNS = [
   '/status',
   '/analyze',
   '/tasks',
   '/live-activity',
-  '/stream'
+  '/stream',
+  '/bulk-batches',
+  '/users/me',
+  '/quota-status'
 ];
 
 /**
- * Generates a unique cache key for a request
+ * Generates a unique cache key for a request, scoped to the authenticated user token
  */
 function getCacheKey(config) {
   const url = config.url || '';
   const params = config.params ? JSON.stringify(config.params) : '';
-  return `${config.baseURL || ''}:${url}?${params}`;
+  const authHeader = config.headers?.Authorization || api.defaults.headers.common['Authorization'] || '';
+  return `${authHeader}:${config.baseURL || ''}:${url}?${params}`;
 }
 
 /**
