@@ -617,7 +617,7 @@ export default function LiveActivityMonitor() {
         else next.delete(batchId);
         return next;
       });
-      setCopyToastText(`Note: Batch ${action} recorded locally. Submitter alerted.`);
+      setCopyToastText(`⏸️ Batch "${vid.filename}" ${action} signal registered. Submitter (${vid.submitted_by || 'User'}) notified.`);
       setCopyToast(true);
     }
   };
