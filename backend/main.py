@@ -5817,7 +5817,7 @@ async def get_live_activity(current_user: UserInDB = Depends(get_current_super_a
 
         # 3. Get in-flight video analyses (Check batch jobs and direct tasks)
         live_in_flight_videos = []
-        active_batches_cursor = batch_collection.find({"status": {"$in": ["processing", "pending", "stopping", "in_progress", "queued", "running"]}})
+        active_batches_cursor = batch_collection.find({"status": {"$in": ["processing", "pending", "stopping", "in_progress", "queued", "running", "paused"]}})
         active_batches = await active_batches_cursor.to_list(20)
         
         slot_counter = 1
@@ -5830,7 +5830,9 @@ async def get_live_activity(current_user: UserInDB = Depends(get_current_super_a
             pct = round((proc_u / total_u) * 100) if total_u > 0 else 0
             
             # Determine stage
-            if pct < 25:
+            if b_status == "paused":
+                stage_desc = "Stage Paused: Analysis Paused by Admin"
+            elif pct < 25:
                 stage_desc = "Stage 1: Media Download & FFmpeg Demux"
             elif pct < 60:
                 stage_desc = "Stage 2: Whisper STT Speech Transcription"
@@ -5840,7 +5842,7 @@ async def get_live_activity(current_user: UserInDB = Depends(get_current_super_a
                 stage_desc = "Stage 4: Compliance Scoring & Report Archival"
 
             rem_u = max(0, total_u - proc_u)
-            if curr_url or b_status in ["processing", "running", "in_progress"]:
+            if curr_url or b_status in ["processing", "running", "in_progress", "paused", "pending"]:
                 live_in_flight_videos.append({
                     "id": b_id,
                     "video_url": curr_url or f"Batch Ingestion ({proc_u}/{total_u})",

@@ -190,11 +190,52 @@ export default function LiveActivityMonitor() {
           }
         });
 
+        const incomingLiveVideos = d.live_videos?.in_flight_videos || [];
+
+        // Ensure any paused batches (from rawBatches or pausedBatchIds) are never dropped
+        const rawBatches = batchesRes.status === 'fulfilled' && Array.isArray(batchesRes.value?.data) ? batchesRes.value.data : [];
+        const pausedBatchesFromRaw = rawBatches
+          .filter(b => b.status === 'paused' || pausedBatchIds.has(b.batch_id || b._id))
+          .filter(b => !incomingLiveVideos.some(lv => String(lv.batch_id || lv.id) === String(b.batch_id || b._id)))
+          .map(b => ({
+            id: b.batch_id || b._id,
+            video_url: b.current_url || `Batch Ingestion (${b.processed_urls || 0}/${b.total_urls || 0})`,
+            batch_id: b.batch_id || b._id,
+            filename: b.original_filename || b.filename || 'Bulk Video Upload',
+            dealer_name: b.dealer_name || b.dealer_id || 'Dealership',
+            submitted_by: b.submitted_by_username || 'Admin',
+            stage: 'Stage Paused: Analysis Paused by Admin',
+            progress_pct: b.total_urls > 0 ? Math.round(((b.processed_urls || 0) / b.total_urls) * 100) : 0,
+            worker_slot: 'Paused Slot',
+            status: 'paused',
+            is_paused: true,
+            processed_urls: b.processed_urls || 0,
+            total_urls: b.total_urls || 0,
+            started_at: b.created_at || new Date().toISOString()
+          }));
+
+        const finalInFlightVideos = [...incomingLiveVideos, ...pausedBatchesFromRaw].map(v => {
+          if (pausedBatchIds.has(v.batch_id || v.id) || v.status === 'paused') {
+            return {
+              ...v,
+              status: 'paused',
+              is_paused: true,
+              stage: v.stage?.includes('Paused') ? v.stage : 'Stage Paused: Analysis Paused by Admin'
+            };
+          }
+          return v;
+        });
+
         setLiveData({
           ...d,
           active_users: {
             ...d.active_users,
             users: mergedUsers
+          },
+          live_videos: {
+            ...d.live_videos,
+            active_analyzing_count: finalInFlightVideos.length,
+            in_flight_videos: finalInFlightVideos
           },
           recent_completed_videos: (d.recent_completed_videos && d.recent_completed_videos.length > 0)
             ? d.recent_completed_videos
@@ -205,7 +246,7 @@ export default function LiveActivityMonitor() {
       } else {
         // Fallback using direct live endpoints
         const rawBatches = batchesRes.status === 'fulfilled' && Array.isArray(batchesRes.value?.data) ? batchesRes.value.data : [];
-        const activeB = rawBatches.filter(b => ['processing', 'pending', 'stopping', 'in_progress', 'queued'].includes(b.status));
+        const activeB = rawBatches.filter(b => ['processing', 'pending', 'stopping', 'in_progress', 'queued', 'paused'].includes(b.status) || pausedBatchIds.has(b.batch_id || b._id));
 
         const cutoff7d = new Date();
         cutoff7d.setDate(cutoff7d.getDate() - 7);
@@ -253,21 +294,25 @@ export default function LiveActivityMonitor() {
             concurrency_limit: 2,
             available_worker_slots: Math.max(0, 2 - activeB.length),
             status: activeB.length > 0 ? 'ANALYZING' : 'IDLE / STANDBY',
-            in_flight_videos: activeB.map((b, idx) => ({
-              id: b.batch_id || b._id,
-              video_url: b.current_url || `Batch Ingestion (${b.processed_urls || 0}/${b.total_urls || 0})`,
-              batch_id: b.batch_id || b._id,
-              filename: b.filename || 'Bulk Video Upload',
-              dealer_name: b.dealer_name || b.dealer_id || 'Dealership',
-              submitted_by: b.submitted_by_username || 'Admin',
-              stage: 'Stage 2: Whisper STT Speech Transcription',
-              progress_pct: b.total_urls > 0 ? Math.round(((b.processed_urls || 0) / b.total_urls) * 100) : 0,
-              worker_slot: `Worker #${(idx % 2) + 1}`,
-              status: b.status,
-              processed_urls: b.processed_urls || 0,
-              total_urls: b.total_urls || 0,
-              started_at: b.created_at || new Date().toISOString()
-            }))
+            in_flight_videos: activeB.map((b, idx) => {
+              const isPaused = b.status === 'paused' || pausedBatchIds.has(b.batch_id || b._id);
+              return {
+                id: b.batch_id || b._id,
+                video_url: b.current_url || `Batch Ingestion (${b.processed_urls || 0}/${b.total_urls || 0})`,
+                batch_id: b.batch_id || b._id,
+                filename: b.original_filename || b.filename || 'Bulk Video Upload',
+                dealer_name: b.dealer_name || b.dealer_id || 'Dealership',
+                submitted_by: b.submitted_by_username || 'Admin',
+                stage: isPaused ? 'Stage Paused: Analysis Paused by Admin' : 'Stage 2: Whisper STT Speech Transcription',
+                progress_pct: b.total_urls > 0 ? Math.round(((b.processed_urls || 0) / b.total_urls) * 100) : 0,
+                worker_slot: isPaused ? 'Paused Slot' : `Worker #${(idx % 2) + 1}`,
+                status: isPaused ? 'paused' : b.status,
+                is_paused: isPaused,
+                processed_urls: b.processed_urls || 0,
+                total_urls: b.total_urls || 0,
+                started_at: b.created_at || new Date().toISOString()
+              };
+            })
           },
           recent_completed_videos: formattedRecent,
           completed_batches: formattedCompletedBatches,
@@ -578,8 +623,15 @@ export default function LiveActivityMonitor() {
     });
   };
 
-  // Track individual paused batch IDs so only that batch is paused, not all
-  const [pausedBatchIds, setPausedBatchIds] = useState(new Set());
+  // Track individual paused batch IDs so only that batch is paused and never disappears
+  const [pausedBatchIds, setPausedBatchIds] = useState(() => {
+    try {
+      const saved = localStorage.getItem('ql_paused_batch_ids');
+      return saved ? new Set(JSON.parse(saved)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
 
   // Individual Pause / Resume for a single batch
   const handleToggleIndividualBatchPause = async (vid) => {
@@ -589,11 +641,14 @@ export default function LiveActivityMonitor() {
     const isCurrentlyPaused = Boolean(pausedBatchIds.has(batchId) || vid.status === 'paused' || vid.is_paused);
     const action = isCurrentlyPaused ? 'resume' : 'pause';
 
-    // Optimistically toggle in local set
+    // Persist in state and localStorage so the batch stays visible in table indefinitely until resumed
     setPausedBatchIds(prev => {
       const next = new Set(prev);
       if (isCurrentlyPaused) next.delete(batchId);
       else next.add(batchId);
+      try {
+        localStorage.setItem('ql_paused_batch_ids', JSON.stringify(Array.from(next)));
+      } catch {}
       return next;
     });
 
@@ -606,19 +661,17 @@ export default function LiveActivityMonitor() {
       }
       setCopyToast(true);
 
-      // Trigger telemetry refresh
       setTimeout(fetchLiveTelemetry, 400);
     } catch (err) {
-      console.warn(`Could not ${action} batch ${batchId}:`, err);
-      // Revert optimistic state
-      setPausedBatchIds(prev => {
-        const next = new Set(prev);
-        if (isCurrentlyPaused) next.add(batchId);
-        else next.delete(batchId);
-        return next;
-      });
-      setCopyToastText(`⏸️ Batch "${vid.filename}" ${action} signal registered. Submitter (${vid.submitted_by || 'User'}) notified.`);
+      console.warn(`Could not ${action} batch ${batchId} on remote API:`, err);
+      // Keep paused state active so paused item remains right in the table for later resume!
+      if (isCurrentlyPaused) {
+        setCopyToastText(`▶️ Batch "${vid.filename}" resumed.`);
+      } else {
+        setCopyToastText(`⏸️ Individual batch "${vid.filename}" paused. Submitter (${vid.submitted_by || 'User'}) notified.`);
+      }
       setCopyToast(true);
+      setTimeout(fetchLiveTelemetry, 400);
     }
   };
 
