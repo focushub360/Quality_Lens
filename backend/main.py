@@ -193,6 +193,7 @@ executor = ThreadPoolExecutor(max_workers=MAX_WORKERS)
 semaphore = asyncio.Semaphore(CONCURRENCY_LIMIT) # To limit concurrent CPU-bound analysis tasks
 batch_cancellation_flags = {}  # Track cancellation requests for background tasks
 batch_pause_flags = {}  # Track individual pause requests for background batch tasks: {batch_id: bool}
+active_batch_tasks: Dict[str, asyncio.Task] = {}  # In-memory registry of running batch tasks: {batch_id: Task}
 active_user_sessions = {}  # In-memory tracking of real active user sessions: {user_id: {...}}
 
 # -----------------------------
@@ -2948,6 +2949,12 @@ async def process_batch_urls_async(
         return
 
     try:
+        active_batch_tasks[batch_id] = asyncio.current_task()
+        current_b_doc = await batch_collection.find_one({"_id": ObjectId(batch_id)})
+        already_processed = 0
+        if current_b_doc:
+            already_processed = (current_b_doc.get("processed_urls") or 0) + (current_b_doc.get("failed_urls") or 0)
+
         await batch_collection.update_one(
             {"_id": ObjectId(batch_id)}, 
             {"$set": {
@@ -2956,9 +2963,13 @@ async def process_batch_urls_async(
                 "updated_at": dt.utcnow()
             }}
         )
-        logger.info(f"Starting batch {batch_id} ({len(urls)} URLs) by user {submitted_by_user_id} for dealer {dealer_id}.")
+        logger.info(f"Starting/resuming batch {batch_id} ({len(urls)} URLs, skipping {already_processed} already processed) by user {submitted_by_user_id} for dealer {dealer_id}.")
 
         for index, url in enumerate(urls):
+            # When resuming, skip items that were already analysed
+            if index < already_processed:
+                continue
+
             # Check individual batch pause flag (pauses only this specific batch alone)
             while batch_pause_flags.get(batch_id, False):
                 if batch_cancellation_flags.get(batch_id, False):
@@ -2976,6 +2987,7 @@ async def process_batch_urls_async(
                     }}
                 )
                 batch_cancellation_flags.pop(batch_id, None)
+                active_batch_tasks.pop(batch_id, None)
                 return
             
             await _process_single_batch_url_item(
@@ -2991,6 +3003,7 @@ async def process_batch_urls_async(
             await asyncio.sleep(0.1)
 
         batch_cancellation_flags.pop(batch_id, None)
+        active_batch_tasks.pop(batch_id, None)
         
         await batch_collection.update_one(
             {"_id": ObjectId(batch_id)}, 
@@ -3005,6 +3018,7 @@ async def process_batch_urls_async(
     except Exception as e:
         logger.exception(f"Batch processing for {batch_id} failed unexpectedly at a high level.")
         batch_cancellation_flags.pop(batch_id, None)
+        active_batch_tasks.pop(batch_id, None)
         await batch_collection.update_one(
             {"_id": ObjectId(batch_id)}, 
             {"$set": {
@@ -4183,6 +4197,23 @@ async def resume_individual_batch(
         }}
     )
 
+    # 1.5 Ensure active background asyncio task is running
+    existing_task = active_batch_tasks.get(batch_id)
+    if not existing_task or existing_task.done():
+        urls = batch.get("urls", [])
+        if urls:
+            active_batch_tasks[batch_id] = asyncio.create_task(
+                process_batch_urls_async(
+                    batch_id=batch_id,
+                    urls=urls,
+                    transcription_language=batch.get("transcription_language", "en"),
+                    target_language=batch.get("target_language", "en"),
+                    submitted_by_user_id=str(batch.get("submitted_by_user_id") or ""),
+                    dealer_id=batch.get("dealer_id")
+                )
+            )
+            logger.info(f"Launched background asyncio worker task for resumed batch {batch_id}.")
+
     # 2. Insert notification targeted to the submitter
     notif_doc = {
         "title": "Analysis Resumed by Master Admin",
@@ -4206,6 +4237,81 @@ async def resume_individual_batch(
         "batch_id": batch_id,
         "status": "processing",
         "message": f"Batch '{filename}' resumed. Submitter ({submitted_by}) has been notified in their account."
+    }
+
+@app.post("/bulk-batches/resume-all")
+async def resume_all_batches(
+    current_user: UserInDB = Depends(get_current_super_admin)
+):
+    """
+    Resume ALL paused batches at once. SUPER ADMIN ONLY.
+    """
+    paused_batches = await batch_collection.find({"status": "paused"}).to_list(100)
+    resumed_ids = []
+    for b in paused_batches:
+        b_id = str(b["_id"])
+        batch_pause_flags[b_id] = False
+        await batch_collection.update_one(
+            {"_id": b["_id"]},
+            {"$set": {
+                "status": BatchStatus.PROCESSING.value,
+                "is_paused": False,
+                "resumed_at": dt.utcnow(),
+                "admin_pause_message": None
+            }}
+        )
+        existing_task = active_batch_tasks.get(b_id)
+        if not existing_task or existing_task.done():
+            urls = b.get("urls", [])
+            if urls:
+                active_batch_tasks[b_id] = asyncio.create_task(
+                    process_batch_urls_async(
+                        batch_id=b_id,
+                        urls=urls,
+                        transcription_language=b.get("transcription_language", "en"),
+                        target_language=b.get("target_language", "en"),
+                        submitted_by_user_id=str(b.get("submitted_by_user_id") or ""),
+                        dealer_id=b.get("dealer_id")
+                    )
+                )
+        resumed_ids.append(b_id)
+
+    logger.info(f"Super Admin {current_user.username} resumed all {len(resumed_ids)} paused batches.")
+    return {
+        "success": True,
+        "resumed_count": len(resumed_ids),
+        "batch_ids": resumed_ids,
+        "message": f"Successfully resumed {len(resumed_ids)} batches."
+    }
+
+@app.post("/bulk-batches/pause-all")
+async def pause_all_batches(
+    current_user: UserInDB = Depends(get_current_super_admin)
+):
+    """
+    Pause ALL active batches at once. SUPER ADMIN ONLY.
+    """
+    active_batches = await batch_collection.find({"status": {"$in": ["processing", "running", "in_progress", "pending", "queued"]}}).to_list(100)
+    paused_ids = []
+    for b in active_batches:
+        b_id = str(b["_id"])
+        batch_pause_flags[b_id] = True
+        await batch_collection.update_one(
+            {"_id": b["_id"]},
+            {"$set": {
+                "status": BatchStatus.PAUSED.value,
+                "is_paused": True,
+                "paused_at": dt.utcnow()
+            }}
+        )
+        paused_ids.append(b_id)
+
+    logger.info(f"Super Admin {current_user.username} paused all {len(paused_ids)} active batches.")
+    return {
+        "success": True,
+        "paused_count": len(paused_ids),
+        "batch_ids": paused_ids,
+        "message": f"Successfully paused {len(paused_ids)} batches."
     }
 
 # -----------------------------

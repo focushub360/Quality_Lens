@@ -10,7 +10,7 @@ import {
   Sensors, Videocam, People, Speed, Refresh, PlayArrow, Pause,
   Search, Launch, CheckCircle, AvTimer, TrendingUp,
   HourglassTop, DoneAll, Business, Person, Layers,
-  Info, VpnKey, ContentCopy, Schedule, Close, CheckCircleOutline
+  Info, VpnKey, ContentCopy, Schedule, Close, CheckCircleOutline, Sync
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
@@ -496,6 +496,9 @@ export default function LiveActivityMonitor() {
     const uploaders = new Set();
     const dealers = new Set();
 
+    let executingCount = 0;
+    let pausedCount = 0;
+
     list.forEach(v => {
       const tot = Number(v.total_urls) || 0;
       const proc = Number(v.processed_urls) || 0;
@@ -503,6 +506,11 @@ export default function LiveActivityMonitor() {
       totalProcessedUrls += proc;
       if (v.submitted_by) uploaders.add(v.submitted_by);
       if (v.dealer_name) dealers.add(v.dealer_name);
+
+      const bId = v.batch_id || v.id;
+      const isPaused = Boolean(pausedBatchIds.has(bId) || v.status === 'paused' || v.is_paused);
+      if (isPaused) pausedCount++;
+      else executingCount++;
     });
 
     const totalRemainingUrls = Math.max(0, totalQueueUrls - totalProcessedUrls);
@@ -516,6 +524,8 @@ export default function LiveActivityMonitor() {
 
     return {
       activeCount: list.length,
+      executingCount,
+      pausedCount,
       totalQueueUrls,
       totalProcessedUrls,
       totalRemainingUrls,
@@ -524,7 +534,7 @@ export default function LiveActivityMonitor() {
       uploadersList: Array.from(uploaders),
       dealersCount: dealers.size
     };
-  }, [liveData.live_videos?.in_flight_videos]);
+  }, [liveData.live_videos?.in_flight_videos, pausedBatchIds]);
 
   // Batch Diagnostics & Credentials Lookup
   const [selectedBatchInfo, setSelectedBatchInfo] = useState(null);
@@ -672,6 +682,45 @@ export default function LiveActivityMonitor() {
       }
       setCopyToast(true);
       setTimeout(fetchLiveTelemetry, 400);
+    }
+  };
+
+  // Resume All Paused Batches at once
+  const handleResumeAllBatches = async () => {
+    setPausedBatchIds(new Set());
+    try {
+      localStorage.removeItem('ql_paused_batch_ids');
+    } catch {}
+    try {
+      await api.post('/bulk-batches/resume-all');
+      setCopyToastText('▶️ All paused batches resumed! Live queue video analysis proceeding.');
+      setCopyToast(true);
+      setTimeout(fetchLiveTelemetry, 300);
+    } catch (err) {
+      console.warn('Failed to resume all batches on remote API:', err);
+      setCopyToastText('▶️ Resumed batches locally.');
+      setCopyToast(true);
+      setTimeout(fetchLiveTelemetry, 300);
+    }
+  };
+
+  // Pause All Active Batches at once
+  const handlePauseAllBatches = async () => {
+    const allIds = new Set((liveData.live_videos?.in_flight_videos || []).map(v => v.batch_id || v.id));
+    setPausedBatchIds(allIds);
+    try {
+      localStorage.setItem('ql_paused_batch_ids', JSON.stringify(Array.from(allIds)));
+    } catch {}
+    try {
+      await api.post('/bulk-batches/pause-all');
+      setCopyToastText('⏸️ All active batches paused by Master Admin.');
+      setCopyToast(true);
+      setTimeout(fetchLiveTelemetry, 300);
+    } catch (err) {
+      console.warn('Failed to pause all batches on remote API:', err);
+      setCopyToastText('⏸️ Paused batches locally.');
+      setCopyToast(true);
+      setTimeout(fetchLiveTelemetry, 300);
     }
   };
 
@@ -1175,16 +1224,78 @@ Projected Finish Time: ~${finishEta.toLocaleTimeString([], { hour: '2-digit', mi
 
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                   <Chip
+                    icon={<Sync sx={{ fontSize: '15px !important', animation: 'spin 4s linear infinite', '@keyframes spin': { '100%': { transform: 'rotate(360deg)' } } }} />}
+                    label="Live Sync: Real MongoDB (5s)"
+                    size="small"
+                    sx={{ fontWeight: 800, bgcolor: '#ECFDF5', color: '#047857', border: '1px solid #A7F3D0', fontSize: '0.73rem' }}
+                  />
+                  <Chip
                     icon={<AvTimer sx={{ fontSize: '16px !important' }} />}
-                    label={`Est. ~${queueStats.timeEstString} to empty queue @ 1.95 v/min`}
+                    label={`Est. ~${queueStats.timeEstString} to empty queue @ 1.95 v/min (~30s/video)`}
                     size="small"
                     sx={{ fontWeight: 700, bgcolor: '#DBEAFE', color: '#1E40AF', fontSize: '0.75rem' }}
                   />
                   <Chip
-                    label={`${queueStats.activeCount} Active Batches In Flight`}
+                    label={
+                      queueStats.pausedCount > 0 && queueStats.executingCount > 0
+                        ? `${queueStats.executingCount} Executing • ${queueStats.pausedCount} Paused`
+                        : queueStats.pausedCount > 0
+                          ? `${queueStats.activeCount} Batches Paused by Admin`
+                          : `${queueStats.activeCount} Active Batches In Flight`
+                    }
                     size="small"
-                    sx={{ fontWeight: 800, bgcolor: THEME.primaryDark, color: '#fff', fontSize: '0.72rem' }}
+                    sx={{
+                      fontWeight: 800,
+                      bgcolor: queueStats.pausedCount > 0 ? '#FEF3C7' : THEME.primaryDark,
+                      color: queueStats.pausedCount > 0 ? '#92400E' : '#fff',
+                      border: queueStats.pausedCount > 0 ? '1px solid #FDE68A' : 'none',
+                      fontSize: '0.72rem'
+                    }}
                   />
+                  {queueStats.pausedCount > 0 && (
+                    <Button
+                      size="small"
+                      variant="contained"
+                      startIcon={<PlayArrow sx={{ fontSize: '15px !important' }} />}
+                      onClick={handleResumeAllBatches}
+                      sx={{
+                        bgcolor: '#059669',
+                        color: '#FFFFFF',
+                        fontWeight: 800,
+                        fontSize: '0.73rem',
+                        py: 0.4,
+                        px: 1.2,
+                        borderRadius: 2,
+                        textTransform: 'none',
+                        boxShadow: '0 2px 6px rgba(5, 150, 105, 0.35)',
+                        '&:hover': { bgcolor: '#047857' }
+                      }}
+                    >
+                      Resume All ({queueStats.pausedCount})
+                    </Button>
+                  )}
+                  {queueStats.executingCount > 0 && (
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      startIcon={<Pause sx={{ fontSize: '15px !important' }} />}
+                      onClick={handlePauseAllBatches}
+                      sx={{
+                        borderColor: '#F59E0B',
+                        color: '#B45309',
+                        bgcolor: '#FFFBEB',
+                        fontWeight: 800,
+                        fontSize: '0.73rem',
+                        py: 0.4,
+                        px: 1.2,
+                        borderRadius: 2,
+                        textTransform: 'none',
+                        '&:hover': { bgcolor: '#FEF3C7' }
+                      }}
+                    >
+                      Pause All
+                    </Button>
+                  )}
                 </Box>
               </Box>
 
@@ -1283,7 +1394,7 @@ Projected Finish Time: ~${finishEta.toLocaleTimeString([], { hour: '2-digit', mi
             }}>
               <Box sx={{ p: 2, bgcolor: '#F0F9FF', borderBottom: `1px solid ${THEME.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}>
                 <Typography variant="subtitle2" sx={{ fontWeight: 800, color: THEME.primaryDark, display: 'flex', alignItems: 'center', gap: 1 }}>
-                  ⚡ Active In-Flight Video Analyses ({liveData.live_videos.in_flight_videos.length} Currently Executing)
+                  ⚡ Active In-Flight Video Analyses ({queueStats.executingCount} Executing{queueStats.pausedCount > 0 ? `, ${queueStats.pausedCount} Paused by Admin` : ''})
                 </Typography>
                 <Chip
                   label="LIVE PIPELINE"
