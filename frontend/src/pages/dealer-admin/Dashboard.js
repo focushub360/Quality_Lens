@@ -606,9 +606,9 @@ export default function DealerAdminDashboard() {
           }}
         />
         <Legend verticalAlign="top" align="right" iconType="circle" />
-        <Line type="monotone" dataKey="score" name="Overall" stroke={THEME.primary} strokeWidth={4} dot={{ r: 4 }} activeDot={{ r: 6 }} />
-        <Line type="monotone" dataKey="video" name="Video" stroke={THEME.accent} strokeWidth={2} strokeDasharray="5 5" dot={false} />
-        <Line type="monotone" dataKey="audio" name="Audio" stroke={THEME.success} strokeWidth={2} strokeDasharray="5 5" dot={false} />
+        <Line type="monotone" dataKey="score" name="Overall" stroke={THEME.primary} strokeWidth={4} dot={{ r: 4 }} activeDot={{ r: 6 }}  connectNulls={true} />
+        <Line type="monotone" dataKey="video" name="Video" stroke={THEME.accent} strokeWidth={2} strokeDasharray="5 5" dot={false}  connectNulls={true} />
+        <Line type="monotone" dataKey="audio" name="Audio" stroke={THEME.success} strokeWidth={2} strokeDasharray="5 5" dot={false}  connectNulls={true} />
       </LineChart>
     </ResponsiveContainer>
   );
@@ -1374,21 +1374,33 @@ export default function DealerAdminDashboard() {
                           </Typography>
                         </Box>
                       </Box>
-                      <ResponsiveContainer width="100%" height={200}>
-                        <LineChart data={dashboardData.dailyPerformance} margin={{ top: 12, right: 24, left: -20, bottom: 12 }}>
-                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={CN.grid} />
-                          <XAxis dataKey="name" stroke={THEME.textTertiary} fontSize={11} tickLine={false} axisLine={false} />
-                          <YAxis domain={[0, 10]} stroke={THEME.textTertiary} fontSize={11} tickLine={false} axisLine={false} />
-                          <RechartsTooltip 
-                            contentStyle={{ borderRadius: 10, border: `1px solid ${CN.navy}30`, boxShadow: '0 8px 24px rgba(28,63,170,0.12)' }} 
-                            formatter={(v, n) => [`${v}/10`, n]} 
-                          />
-                          <Legend iconType="circle" verticalAlign="top" height={36}/>
-                          <Line type="monotone" dataKey="score" name="Overall Quality" stroke={CN.navy} strokeWidth={3} dot={{ r: 4, fill: CN.navy, stroke: '#fff', strokeWidth: 2 }} activeDot={{ r: 6, fill: CN.orange }} />
-                          <Line type="monotone" dataKey="video" name="Video Quality" stroke={CN.gold} strokeWidth={2} strokeDasharray="5 5" dot={{ r: 3, fill: CN.gold, stroke: '#fff', strokeWidth: 1 }} />
-                          <Line type="monotone" dataKey="audio" name="Audio Quality" stroke={THEME.success} strokeWidth={2} strokeDasharray="5 5" dot={{ r: 3, fill: THEME.success, stroke: '#fff', strokeWidth: 1 }} />
-                        </LineChart>
-                      </ResponsiveContainer>
+                      {(() => {
+                        const qualityDailyData = (dashboardData.dailyPerformance || [])
+                          .filter(d => (Number(d.score || 0) > 0 || Number(d.video || 0) > 0 || Number(d.audio || 0) > 0))
+                          .map(d => ({
+                            ...d,
+                            score: Number(d.score || 0) > 0 ? d.score : null,
+                            video: Number(d.video || 0) > 0 ? d.video : null,
+                            audio: Number(d.audio || 0) > 0 ? d.audio : null,
+                          }));
+                        return (
+                          <ResponsiveContainer width="100%" height={200}>
+                            <LineChart data={qualityDailyData} margin={{ top: 12, right: 24, left: -20, bottom: 12 }}>
+                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={CN.grid} />
+                              <XAxis dataKey="name" stroke={THEME.textTertiary} fontSize={11} tickLine={false} axisLine={false} />
+                              <YAxis domain={[0, 10]} stroke={THEME.textTertiary} fontSize={11} tickLine={false} axisLine={false} />
+                              <RechartsTooltip 
+                                contentStyle={{ borderRadius: 10, border: `1px solid ${CN.navy}30`, boxShadow: '0 8px 24px rgba(28,63,170,0.12)' }} 
+                                formatter={(v, n) => [v != null ? `${v}/10` : 'N/A', n]} 
+                              />
+                              <Legend iconType="circle" verticalAlign="top" height={36}/>
+                              <Line type="monotone" dataKey="score" name="Overall Quality" stroke={CN.navy} strokeWidth={3} connectNulls={true} dot={{ r: 4, fill: CN.navy, stroke: '#fff', strokeWidth: 2 }} activeDot={{ r: 6, fill: CN.orange }} />
+                              <Line type="monotone" dataKey="video" name="Video Quality" stroke={CN.gold} strokeWidth={2} strokeDasharray="5 5" connectNulls={true} dot={{ r: 3, fill: CN.gold, stroke: '#fff', strokeWidth: 1 }} />
+                              <Line type="monotone" dataKey="audio" name="Audio Quality" stroke={THEME.success} strokeWidth={2} strokeDasharray="5 5" connectNulls={true} dot={{ r: 3, fill: THEME.success, stroke: '#fff', strokeWidth: 1 }} />
+                            </LineChart>
+                          </ResponsiveContainer>
+                        );
+                      })()}
                     </CardContent>
                   </Card>
                 </Grid>
@@ -1584,17 +1596,28 @@ export default function DealerAdminDashboard() {
                           </Typography>
                         </Box>
                       </Box>
-                      <ResponsiveContainer width="100%" height={200}>
-                        <LineChart data={dashboardData.dailyPerformance} margin={{ top: 12, right: 24, left: -20, bottom: 12 }}>
-                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={CN.grid} />
-                          <XAxis dataKey="name" stroke={THEME.textTertiary} fontSize={11} tickLine={false} axisLine={false} />
-                          <YAxis domain={[0, 10]} stroke={THEME.textTertiary} fontSize={11} tickLine={false} axisLine={false} />
-                          <RechartsTooltip contentStyle={{ borderRadius: 10, border: `1px solid ${CN.navy}20`, boxShadow: '0 8px 24px rgba(28,63,170,0.10)' }} formatter={(v, n) => [`${v}/10`, n]} />
-                          <Legend iconType="circle" wrapperStyle={{ fontSize: '12px' }} />
-                          <Line type="monotone" dataKey="audio" name="Audio" stroke={CN.navy} strokeWidth={3} dot={{ r: 4, fill: CN.navy, stroke: '#fff', strokeWidth: 2 }} activeDot={{ r: 6 }} />
-                          <Line type="monotone" dataKey="video" name="Video" stroke={CN.gold} strokeWidth={3} strokeDasharray="6 3" dot={{ r: 4, fill: CN.gold, stroke: '#fff', strokeWidth: 2 }} activeDot={{ r: 6 }} />
-                        </LineChart>
-                      </ResponsiveContainer>
+                      {(() => {
+                        const qualityDailyData = (dashboardData.dailyPerformance || [])
+                          .filter(d => (Number(d.score || 0) > 0 || Number(d.video || 0) > 0 || Number(d.audio || 0) > 0))
+                          .map(d => ({
+                            ...d,
+                            video: Number(d.video || 0) > 0 ? d.video : null,
+                            audio: Number(d.audio || 0) > 0 ? d.audio : null,
+                          }));
+                        return (
+                          <ResponsiveContainer width="100%" height={200}>
+                            <LineChart data={qualityDailyData} margin={{ top: 12, right: 24, left: -20, bottom: 12 }}>
+                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={CN.grid} />
+                              <XAxis dataKey="name" stroke={THEME.textTertiary} fontSize={11} tickLine={false} axisLine={false} />
+                              <YAxis domain={[0, 10]} stroke={THEME.textTertiary} fontSize={11} tickLine={false} axisLine={false} />
+                              <RechartsTooltip contentStyle={{ borderRadius: 10, border: `1px solid ${CN.navy}20`, boxShadow: '0 8px 24px rgba(28,63,170,0.10)' }} formatter={(v, n) => [v != null ? `${v}/10` : 'N/A', n]} />
+                              <Legend iconType="circle" wrapperStyle={{ fontSize: '12px' }} />
+                              <Line type="monotone" dataKey="audio" name="Audio" stroke={CN.navy} strokeWidth={3} connectNulls={true} dot={{ r: 4, fill: CN.navy, stroke: '#fff', strokeWidth: 2 }} activeDot={{ r: 6 }} />
+                              <Line type="monotone" dataKey="video" name="Video" stroke={CN.gold} strokeWidth={3} strokeDasharray="6 3" connectNulls={true} dot={{ r: 4, fill: CN.gold, stroke: '#fff', strokeWidth: 2 }} activeDot={{ r: 6 }} />
+                            </LineChart>
+                          </ResponsiveContainer>
+                        );
+                      })()}
                     </CardContent>
                   </Card>
                 </Grid>

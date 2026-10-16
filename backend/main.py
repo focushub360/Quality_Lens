@@ -5700,6 +5700,9 @@ async def get_dealer_dashboard_overview(
     daily_tuples.sort(key=lambda x: x[0])
     
     for dt_obj, k, v in daily_tuples:
+        # Exclude days with no valid analyzed scores to eliminate zero-score drops in quality charts
+        if not v["scores"] and not v["v_scores"] and not v["a_scores"]:
+            continue
         avg_score = sum(v["scores"])/len(v["scores"]) if v["scores"] else 0
         avg_v = sum(v["v_scores"])/len(v["v_scores"]) if v["v_scores"] else 0
         avg_a = sum(v["a_scores"])/len(v["a_scores"]) if v["a_scores"] else 0
