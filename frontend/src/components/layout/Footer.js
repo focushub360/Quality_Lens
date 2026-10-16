@@ -78,8 +78,8 @@ export default function Footer() {
                 </Box>
                 <Box sx={{ width: '1px', height: 75, bgcolor: '#e0e0e0', flexShrink: 0 }} />
                 <img
-                  src="/focus-technologies-logo.png"
-                  alt="Focus Technologies"
+                  src="/focus-engineering-logo.png"
+                  alt="Focus Engineering"
                   style={{ height: '90px', width: 'auto', objectFit: 'contain' }}
                 />
               </Box>
