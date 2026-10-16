@@ -5706,6 +5706,8 @@ async def get_dealer_dashboard_overview(
         avg_score = sum(v["scores"])/len(v["scores"]) if v["scores"] else 0
         avg_v = sum(v["v_scores"])/len(v["v_scores"]) if v["v_scores"] else 0
         avg_a = sum(v["a_scores"])/len(v["a_scores"]) if v["a_scores"] else 0
+        if avg_score <= 0 and avg_v <= 0 and avg_a <= 0:
+            continue
         video_count = v.get("videos", len(v["scores"]))
         dailyPerformance.append(DailyPerformance(
             name=k, score=round(avg_score, 1), video=round(avg_v, 1), audio=round(avg_a, 1), videos=video_count

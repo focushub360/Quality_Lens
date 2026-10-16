@@ -60,12 +60,28 @@ import { formatDate } from '../../utils/dateFormatter';
 
 
 // Module-level and localStorage persistent cache for 0ms instant load and reload persistence
-const DEALER_CACHE_KEY = 'ql_dealer_dashboard_cache';
+const DEALER_CACHE_KEY = 'ql_dealer_dashboard_cache_v5';
+
+// Immediately purge stale/zero-containing legacy cache entries from browser storage
+try {
+  if (typeof localStorage !== 'undefined') {
+    ['ql_dealer_dashboard_cache', 'ql_dealer_dashboard_cache_v1', 'ql_dealer_dashboard_cache_v2', 'ql_dealer_dashboard_cache_v3', 'ql_dealer_dashboard_cache_v4'].forEach(k => {
+      localStorage.removeItem(k);
+    });
+  }
+} catch (e) {}
+
 let _globalDealerDashboardCache = null;
 try {
   const _saved = typeof localStorage !== 'undefined' ? localStorage.getItem(DEALER_CACHE_KEY) : null;
   if (_saved) {
-    _globalDealerDashboardCache = JSON.parse(_saved);
+    const _parsed = JSON.parse(_saved);
+    if (_parsed && Array.isArray(_parsed.dailyPerformance)) {
+      _parsed.dailyPerformance = _parsed.dailyPerformance.filter(
+        d => (Number(d.score || 0) > 0 || Number(d.video || 0) > 0 || Number(d.audio || 0) > 0)
+      );
+    }
+    _globalDealerDashboardCache = _parsed;
   }
 } catch (e) {}
 
@@ -628,11 +644,11 @@ export default function DealerAdminDashboard() {
 
       let response;
       try {
-        response = await api.get(endpoint, { headers, cacheTTL: 5000 });
+        response = await api.get(endpoint, { headers, skipCache: true, forceRefresh: true });
       } catch (reqErr) {
         // If backend fails on empty range (500), gracefully fallback to year/all
         if (timeRange !== 'all' && timeRange !== 'year') {
-          response = await api.get('/dashboard/dealer/overview?timeRange=year', { headers, cacheTTL: 60000 });
+          response = await api.get('/dashboard/dealer/overview?timeRange=year', { headers, skipCache: true, forceRefresh: true });
         } else {
           throw reqErr;
         }
@@ -656,12 +672,17 @@ export default function DealerAdminDashboard() {
       const recentRaw = data.recent_analyses || [];
       setAllResults(recentRaw);
 
-      const rawDaily = (data.dailyPerformance || []).map(d => ({
-        ...d,
-        videos: typeof d.videos === 'number' && !isNaN(d.videos)
-          ? d.videos
-          : (typeof d.count === 'number' && !isNaN(d.count) ? d.count : 0)
-      }));
+      const rawDaily = (data.dailyPerformance || [])
+        .filter(d => (Number(d.score || 0) > 0 || Number(d.video || 0) > 0 || Number(d.audio || 0) > 0))
+        .map(d => ({
+          ...d,
+          score: Number(d.score || 0) > 0 ? Number(d.score) : null,
+          video: Number(d.video || 0) > 0 ? Number(d.video) : null,
+          audio: Number(d.audio || 0) > 0 ? Number(d.audio) : null,
+          videos: typeof d.videos === 'number' && !isNaN(d.videos)
+            ? d.videos
+            : (typeof d.count === 'number' && !isNaN(d.count) ? d.count : 0)
+        }));
 
       // Filter daily data based on selected timeRange
       const now = new Date();
@@ -913,19 +934,21 @@ export default function DealerAdminDashboard() {
       }
     });
 
-    return Object.values(dailyData).map(day => ({
-      name: day.name,
-      score: day.scores.length > 0
-        ? Math.round((day.scores.reduce((sum, score) => sum + score, 0) / day.scores.length) * 10) / 10
-        : 0,
-      video: day.videoScores.length > 0
-        ? Math.round((day.videoScores.reduce((sum, score) => sum + score, 0) / day.videoScores.length) * 10) / 10
-        : 0,
-      audio: day.audioScores.length > 0
-        ? Math.round((day.audioScores.reduce((sum, score) => sum + score, 0) / day.audioScores.length) * 10) / 10
-        : 0,
-      videos: day.count
-    }));
+    return Object.values(dailyData)
+      .filter(day => day.scores.length > 0 || day.videoScores.length > 0 || day.audioScores.length > 0)
+      .map(day => ({
+        name: day.name,
+        score: day.scores.length > 0
+          ? Math.round((day.scores.reduce((sum, score) => sum + score, 0) / day.scores.length) * 10) / 10
+          : null,
+        video: day.videoScores.length > 0
+          ? Math.round((day.videoScores.reduce((sum, score) => sum + score, 0) / day.videoScores.length) * 10) / 10
+          : null,
+        audio: day.audioScores.length > 0
+          ? Math.round((day.audioScores.reduce((sum, score) => sum + score, 0) / day.audioScores.length) * 10) / 10
+          : null,
+        videos: day.count
+      }));
   };
 
   // Main function to process all dashboard data
@@ -1391,7 +1414,7 @@ export default function DealerAdminDashboard() {
                               <YAxis domain={[0, 10]} stroke={THEME.textTertiary} fontSize={11} tickLine={false} axisLine={false} />
                               <RechartsTooltip 
                                 contentStyle={{ borderRadius: 10, border: `1px solid ${CN.navy}30`, boxShadow: '0 8px 24px rgba(28,63,170,0.12)' }} 
-                                formatter={(v, n) => [v != null ? `${v}/10` : 'N/A', n]} 
+                                formatter={(v, n) => [v != null && Number(v) > 0 ? `${Number(v).toFixed(1)}/10` : 'N/A', n]} 
                               />
                               <Legend iconType="circle" verticalAlign="top" height={36}/>
                               <Line type="monotone" dataKey="score" name="Overall Quality" stroke={CN.navy} strokeWidth={3} connectNulls={true} dot={{ r: 4, fill: CN.navy, stroke: '#fff', strokeWidth: 2 }} activeDot={{ r: 6, fill: CN.orange }} />
@@ -1610,7 +1633,7 @@ export default function DealerAdminDashboard() {
                               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={CN.grid} />
                               <XAxis dataKey="name" stroke={THEME.textTertiary} fontSize={11} tickLine={false} axisLine={false} />
                               <YAxis domain={[0, 10]} stroke={THEME.textTertiary} fontSize={11} tickLine={false} axisLine={false} />
-                              <RechartsTooltip contentStyle={{ borderRadius: 10, border: `1px solid ${CN.navy}20`, boxShadow: '0 8px 24px rgba(28,63,170,0.10)' }} formatter={(v, n) => [v != null ? `${v}/10` : 'N/A', n]} />
+                              <RechartsTooltip contentStyle={{ borderRadius: 10, border: `1px solid ${CN.navy}20`, boxShadow: '0 8px 24px rgba(28,63,170,0.10)' }} formatter={(v, n) => [v != null && Number(v) > 0 ? `${Number(v).toFixed(1)}/10` : 'N/A', n]} />
                               <Legend iconType="circle" wrapperStyle={{ fontSize: '12px' }} />
                               <Line type="monotone" dataKey="audio" name="Audio" stroke={CN.navy} strokeWidth={3} connectNulls={true} dot={{ r: 4, fill: CN.navy, stroke: '#fff', strokeWidth: 2 }} activeDot={{ r: 6 }} />
                               <Line type="monotone" dataKey="video" name="Video" stroke={CN.gold} strokeWidth={3} strokeDasharray="6 3" connectNulls={true} dot={{ r: 4, fill: CN.gold, stroke: '#fff', strokeWidth: 2 }} activeDot={{ r: 6 }} />
