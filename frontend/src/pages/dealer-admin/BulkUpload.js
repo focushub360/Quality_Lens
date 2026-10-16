@@ -201,18 +201,23 @@ export default function BulkUpload() {
       return;
     }
 
+        const attempted = (status.processed_urls || 0) + (status.failed_urls || 0);
+    const total = status.total_urls || 0;
+    const computedPct = total > 0 ? (attempted / total) * 100 : 0;
+    const resolvedPct = (typeof status.progress_percentage === 'number' && status.progress_percentage > 0)
+      ? status.progress_percentage
+      : computedPct;
+
     if (status.status !== 'processing') {
-      const finalPct = status.progress_percentage || 0;
-      setLiveProgress(finalPct);
-      liveProgressRef.current = finalPct;
+      setLiveProgress(resolvedPct);
+      liveProgressRef.current = resolvedPct;
       return;
     }
 
-    // Use the server value as floor (never go below it)
-    const serverPct = status.progress_percentage || 0;
-    if (serverPct > liveProgressRef.current) {
-      liveProgressRef.current = serverPct;
-      setLiveProgress(serverPct);
+    // Use the server/computed value as floor (never go below it)
+    if (resolvedPct > liveProgressRef.current) {
+      liveProgressRef.current = resolvedPct;
+      setLiveProgress(resolvedPct);
     }
 
     let activeUrl = status.current_url;
@@ -394,15 +399,25 @@ export default function BulkUpload() {
       // convert Date-ish object to ISO (Mongo returns datetime objects)
       try { created_at = new Date(created_at).toISOString(); } catch { created_at = null; }
     }
+        const total_urls = Number(b.total_urls || 0);
+    const processed_urls = Number(b.processed_urls || b.processed || 0);
+    const failed_urls = Number(b.failed_urls || 0);
+    const attempted = processed_urls + failed_urls;
+    const computedProgress = total_urls > 0 ? (attempted / total_urls) * 100 : 0;
+    const progress_percentage = (typeof b.progress_percentage === 'number' && b.progress_percentage > 0)
+      ? b.progress_percentage
+      : computedProgress;
+
     return {
       ...b,
       batchId: batchIdVal,
       batch_id: b.batch_id || batchIdVal,
       filename,
       created_at,
-      total_urls: Number(b.total_urls || 0),
-      processed_urls: Number(b.processed_urls || b.processed || 0),
-      failed_urls: Number(b.failed_urls || 0),
+      total_urls,
+      processed_urls,
+      failed_urls,
+      progress_percentage,
       dealer_id: b.dealer_id || b.dealerId || null,
     };
   };
@@ -1713,7 +1728,13 @@ export default function BulkUpload() {
                     <Box sx={{ textAlign: 'center' }}>
                       <Typography variant="body2" sx={{ color: THEME.textSecondary, mb: 1 }}>Progress</Typography>
                       <Typography variant="h4" sx={{ color: THEME.success, fontWeight: 700 }}>
-                        {liveProgress.toFixed(2)}%
+                        {(() => {
+                          const attempted = (status.processed_urls || 0) + (status.failed_urls || 0);
+                          const total = status.total_urls || 0;
+                          const computedPct = total > 0 ? (attempted / total) * 100 : 0;
+                          const displayVal = liveProgress > 0 ? liveProgress : ((typeof status.progress_percentage === 'number' && status.progress_percentage > 0) ? status.progress_percentage : computedPct);
+                          return displayVal.toFixed(2);
+                        })()}%
                       </Typography>
                     </Box>
                   </Grid>
@@ -1734,7 +1755,11 @@ export default function BulkUpload() {
                 }}>
                   {/* Circular Progress (Neat & Modern Styled) */}
                   {(() => {
-                    const formattedProgress = liveProgress.toFixed(2);
+                    const attempted = (status.processed_urls || 0) + (status.failed_urls || 0);
+                    const total = status.total_urls || 0;
+                    const computedPct = total > 0 ? (attempted / total) * 100 : 0;
+                    const displayVal = liveProgress > 0 ? liveProgress : ((typeof status.progress_percentage === 'number' && status.progress_percentage > 0) ? status.progress_percentage : computedPct);
+                    const formattedProgress = displayVal.toFixed(2);
                     const [intPart, decPart] = formattedProgress.split('.');
                     return (
                       <Box sx={{ position: 'relative', display: 'inline-flex', mb: 2 }}>
@@ -1749,7 +1774,7 @@ export default function BulkUpload() {
                         {/* Animated Progress Circle (Lime Green) */}
                         <CircularProgress
                           variant="determinate"
-                          value={liveProgress}
+                          value={displayVal}
                           size={144}
                           thickness={4.5}
                           sx={{

@@ -303,6 +303,7 @@ class BatchCreateResponse(BaseModel):
     status: Optional[str] = None
     processed_urls: Optional[int] = None
     failed_urls: Optional[int] = None
+    progress_percentage: Optional[float] = None
     created_at: Optional[dt] = None
     updated_at: Optional[dt] = None
     filename: Optional[str] = None
@@ -4058,13 +4059,20 @@ async def list_all_batches(limit: int = 50, status_filter: Optional[str] = None,
         sub_role = batch.get("submitted_by_user_role") or u_info.get("role") or "Dealer Admin"
         d_name = batch.get("dealer_name") or u_info.get("showroom_name") or (user_dealer_map.get(submitted_id) if submitted_id else None) or (user_dealer_map.get(d_id) if d_id else None) or "Dealership"
 
+        tot = batch.get("total_urls", 0)
+        proc = batch.get("processed_urls", 0)
+        fail = batch.get("failed_urls", 0)
+        att = proc + fail
+        pct = round((att / tot * 100), 2) if tot > 0 else 0.0
+
         result.append(BatchCreateResponse(
             success=True,
             batch_id=str(batch["_id"]),
             status=batch.get("status"),
-            total_urls=batch.get("total_urls", 0),
-            processed_urls=batch.get("processed_urls", 0),
-            failed_urls=batch.get("failed_urls", 0),
+            total_urls=tot,
+            processed_urls=proc,
+            failed_urls=fail,
+            progress_percentage=pct,
             created_at=batch.get("created_at"),
             updated_at=batch.get("updated_at"),
             filename=batch.get("original_filename", "Unknown"),
