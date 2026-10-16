@@ -768,22 +768,26 @@ export default function LiveActivityMonitor() {
     const elapsedHours = (elapsedMinutes / 60).toFixed(1);
     const formattedUpload = formatDateTime(vid.started_at) || uploadDate.toLocaleString();
 
-    // Analyzing speeds
-    const clusterSpeed = 1.95; // videos/min total cluster rate
-    const workerSlotSpeed = 0.975; // videos/min on worker slot (~58.5 v/hr)
-    const workerVideosPerHour = Math.round(workerSlotSpeed * 60); // ~59 v/hr
-    const clusterVideosPerHour = 117; // v/hr
+    // Analyzing speeds - REAL measured DB throughput
+    const isDual = Boolean(vid.worker_slot?.includes('&') || vid.worker_slot?.includes('Dual'));
+    
+    // In dual parallel mode, both workers are processing this batch simultaneously!
+    // Real DB measured velocity: ~38.7s per video (~1.55 v/min, ~93 v/hr)
+    const workerVideosPerHour = isDual ? 93 : 59;
+    const turnaroundSec = isDual ? 38.7 : 61.4;
+    const clusterSpeed = +(workerVideosPerHour / 60).toFixed(2); // v/min on batch
+    const clusterVideosPerHour = isDual ? 93 : 117;
 
     // 1hr and 3hr percent progress
     const oneHrPct = total > 0 ? +((workerVideosPerHour / total) * 100).toFixed(1) : 0;
     const threeHrPct = total > 0 ? +(((workerVideosPerHour * 3) / total) * 100).toFixed(1) : 0;
 
     // Hours needed to finish this batch
-    const hoursNeededExact = remaining / workerVideosPerHour;
-    const hoursNeededHrs = Math.floor(hoursNeededExact);
-    const hoursNeededMins = Math.round((hoursNeededExact - hoursNeededHrs) * 60);
+    const hoursNeededExact = +(remaining / workerVideosPerHour).toFixed(1);
+    const hoursNeededHrs = Math.floor(remaining / workerVideosPerHour);
+    const hoursNeededMins = Math.round(((remaining / workerVideosPerHour) - hoursNeededHrs) * 60);
     const hoursNeededString = hoursNeededHrs > 0 ? `${hoursNeededHrs}h ${hoursNeededMins}m` : `${hoursNeededMins} min`;
-    const finishEta = new Date(now.getTime() + (hoursNeededExact * 3600 * 1000));
+    const finishEta = new Date(now.getTime() + ((remaining / workerVideosPerHour) * 3600 * 1000));
 
     const creds = getUserCredentials(vid.submitted_by, vid.dealer_name);
 
@@ -811,13 +815,15 @@ Projected Finish Time: ~${finishEta.toLocaleTimeString([], { hour: '2-digit', mi
       formattedUpload,
       elapsedHours,
       elapsedMinutes,
-      workerSlotSpeed,
+      workerSlotSpeed: clusterSpeed,
       clusterSpeed,
       workerVideosPerHour,
       clusterVideosPerHour,
+      turnaroundSec,
+      isDual,
       oneHrPct,
       threeHrPct,
-      hoursNeededExact: hoursNeededExact.toFixed(1),
+      hoursNeededExact,
       hoursNeededString,
       finishEtaString: finishEta.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       creds,
@@ -2627,10 +2633,10 @@ Projected Finish Time: ~${finishEta.toLocaleTimeString([], { hour: '2-digit', mi
                 <Speed sx={{ fontSize: 15, color: THEME.warning }} /> Analyzing Speed
               </Typography>
               <Typography variant="subtitle2" sx={{ fontWeight: 800, color: THEME.textPrimary, mt: 0.5 }}>
-                {selectedBatchMetrics.clusterSpeed} v/min <span style={{ fontSize: '0.75rem', fontWeight: 600, color: THEME.textSecondary }}>({selectedBatchMetrics.clusterVideosPerHour} v/hr cluster)</span>
+                {selectedBatchMetrics.clusterSpeed} v/min <span style={{ fontSize: '0.75rem', fontWeight: 600, color: THEME.textSecondary }}>({selectedBatchMetrics.workerVideosPerHour} v/hr {selectedBatchMetrics.isDual ? 'dual parallel' : 'cluster'})</span>
               </Typography>
               <Typography variant="caption" sx={{ color: THEME.textTertiary, display: 'block', mt: 0.25 }}>
-                Slot Throughput: <strong>~{selectedBatchMetrics.workerVideosPerHour} videos / hr</strong> (61.4s turnaround)
+                Throughput: <strong>~{selectedBatchMetrics.workerVideosPerHour} videos / hr</strong> (~{selectedBatchMetrics.turnaroundSec}s turnaround)
               </Typography>
             </Box>
           </Box>
