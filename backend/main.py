@@ -5972,6 +5972,7 @@ async def get_live_activity(current_user: UserInDB = Depends(get_current_super_a
         active_batches_cursor = batch_collection.find({"status": {"$in": ["processing", "pending", "stopping", "in_progress", "queued", "running", "paused"]}})
         active_batches = await active_batches_cursor.to_list(20)
         
+        active_running_batches = [b for b in active_batches if b.get("status") in ["processing", "running", "in_progress"]]
         slot_counter = 1
         for b in active_batches:
             b_id = str(b["_id"])
@@ -5984,14 +5985,22 @@ async def get_live_activity(current_user: UserInDB = Depends(get_current_super_a
             # Determine stage
             if b_status == "paused":
                 stage_desc = "Stage Paused: Analysis Paused by Admin"
-            elif pct < 25:
-                stage_desc = "Stage 1: Media Download & FFmpeg Demux"
-            elif pct < 60:
-                stage_desc = "Stage 2: Whisper STT Speech Transcription"
-            elif pct < 85:
-                stage_desc = "Stage 3: OpenCV Video Walkaround Quality Analysis"
+                worker_slot_label = "Paused Slot"
             else:
-                stage_desc = "Stage 4: Compliance Scoring & Report Archival"
+                if pct < 25:
+                    stage_desc = "Stage 1: Media Download & FFmpeg Demux"
+                elif pct < 60:
+                    stage_desc = "Stage 2: Whisper STT Speech Transcription"
+                elif pct < 85:
+                    stage_desc = "Stage 3: OpenCV Video Walkaround Quality Analysis"
+                else:
+                    stage_desc = "Stage 4: Compliance Scoring & Report Archival"
+                
+                if len(active_running_batches) == 1 and CONCURRENCY_LIMIT >= 2:
+                    worker_slot_label = "Worker #1 & #2 (Dual Parallel)"
+                else:
+                    worker_slot_label = f"Worker #{slot_counter}"
+                    slot_counter = (slot_counter % CONCURRENCY_LIMIT) + 1
 
             rem_u = max(0, total_u - proc_u)
             if curr_url or b_status in ["processing", "running", "in_progress", "paused", "pending"]:
@@ -6004,14 +6013,13 @@ async def get_live_activity(current_user: UserInDB = Depends(get_current_super_a
                     "submitted_by": b.get("submitted_by_username") or "Admin",
                     "stage": stage_desc,
                     "progress_pct": pct,
-                    "worker_slot": f"Worker #{slot_counter}",
+                    "worker_slot": worker_slot_label,
                     "status": b_status,
                     "processed_urls": proc_u,
                     "total_urls": total_u,
                     "remaining_urls": rem_u,
                     "started_at": b.get("started_at", now).isoformat() if isinstance(b.get("started_at"), datetime) else str(b.get("started_at") or now.isoformat())
                 })
-                slot_counter = (slot_counter % CONCURRENCY_LIMIT) + 1
 
         # Check single tasks collection
         single_tasks_cursor = db["analysis_tasks"].find({"status": {"$in": ["processing", "in_progress", "pending", "queued", "running"]}})

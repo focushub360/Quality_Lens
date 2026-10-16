@@ -225,16 +225,26 @@ export default function LiveActivityMonitor() {
             started_at: b.created_at || new Date().toISOString()
           }));
 
+        const runningVideos = [...incomingLiveVideos, ...pausedBatchesFromRaw].filter(
+          v => !pausedBatchIds.has(v.batch_id || v.id) && v.status !== 'paused'
+        );
+
         const finalInFlightVideos = [...incomingLiveVideos, ...pausedBatchesFromRaw].map(v => {
-          if (pausedBatchIds.has(v.batch_id || v.id) || v.status === 'paused') {
+          const isPaused = pausedBatchIds.has(v.batch_id || v.id) || v.status === 'paused';
+          if (isPaused) {
             return {
               ...v,
               status: 'paused',
               is_paused: true,
+              worker_slot: 'Paused Slot',
               stage: v.stage?.includes('Paused') ? v.stage : 'Stage Paused: Analysis Paused by Admin'
             };
           }
-          return v;
+          const activeSlotLabel = runningVideos.length === 1 ? 'Worker #1 & #2 (Dual Parallel)' : (v.worker_slot || 'Worker #1');
+          return {
+            ...v,
+            worker_slot: activeSlotLabel
+          };
         });
 
         setLiveData({
@@ -316,7 +326,7 @@ export default function LiveActivityMonitor() {
                 submitted_by: b.submitted_by_username || 'Admin',
                 stage: isPaused ? 'Stage Paused: Analysis Paused by Admin' : 'Stage 2: Whisper STT Speech Transcription',
                 progress_pct: b.total_urls > 0 ? Math.round(((b.processed_urls || 0) / b.total_urls) * 100) : 0,
-                worker_slot: isPaused ? 'Paused Slot' : `Worker #${(idx % 2) + 1}`,
+                worker_slot: isPaused ? 'Paused Slot' : (activeB.filter(x => x.status !== 'paused' && !pausedBatchIds.has(x.batch_id || x._id)).length === 1 ? 'Worker #1 & #2 (Dual Parallel)' : `Worker #${(idx % 2) + 1}`),
                 status: isPaused ? 'paused' : b.status,
                 is_paused: isPaused,
                 processed_urls: b.processed_urls || 0,
@@ -1559,7 +1569,13 @@ Projected Finish Time: ~${finishEta.toLocaleTimeString([], { hour: '2-digit', mi
                             <Chip
                               label={vid.worker_slot}
                               size="small"
-                              sx={{ fontWeight: 700, fontSize: '0.7rem', bgcolor: 'rgba(124, 58, 237, 0.1)', color: THEME.accent }}
+                              sx={{
+                                fontWeight: 800,
+                                fontSize: '0.7rem',
+                                bgcolor: vid.is_paused ? 'rgba(148, 163, 184, 0.12)' : (vid.worker_slot?.includes('&') ? 'rgba(16, 185, 129, 0.15)' : 'rgba(124, 58, 237, 0.1)'),
+                                color: vid.is_paused ? '#64748B' : (vid.worker_slot?.includes('&') ? '#059669' : THEME.accent),
+                                border: vid.is_paused ? '1px dashed #CBD5E1' : (vid.worker_slot?.includes('&') ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(124, 58, 237, 0.2)')
+                              }}
                             />
                           </TableCell>
 
