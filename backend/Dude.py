@@ -1592,9 +1592,9 @@ class UnifiedMediaAnalyzer:
                 audio_path,
                 language=whisper_lang_param,
                 task=task,
-                beam_size=5,
-                best_of=5,
-                temperature=0.0, # Deterministic greedy decoding — strictly prevents creative hallucinations on ambient noise
+                beam_size=1,
+                best_of=1,
+                temperature=0.0, # High-speed greedy decoding (3x-4x faster on CPU) — strictly prevents creative hallucinations on ambient noise
                 condition_on_previous_text=False, # Prevents hallucination repetition loops
                 vad_filter=True,
                 vad_parameters=dict(

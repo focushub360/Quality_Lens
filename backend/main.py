@@ -856,6 +856,32 @@ async def lifespan(app: FastAPI):
     # 4. Start background cleanup task
     cleanup_task = asyncio.create_task(periodic_cleanup())
 
+    # 4.5 Auto-resume any active processing batch (e.g. Bird) with high-speed dual workers after deploy/restart
+    async def _auto_resume_processing_batches():
+        await asyncio.sleep(6)
+        try:
+            active_batches = await batch_collection.find({"status": BatchStatus.PROCESSING.value}).to_list(10)
+            for b in active_batches:
+                b_id = str(b["_id"])
+                if b_id not in active_batch_tasks or active_batch_tasks[b_id].done():
+                    urls = b.get("urls", [])
+                    if urls:
+                        logger.info(f"Auto-resuming active batch {b_id} ({b.get('dealer_id')}) with fast dual-worker pipeline...")
+                        active_batch_tasks[b_id] = asyncio.create_task(
+                            process_batch_urls_async(
+                                batch_id=b_id,
+                                urls=urls,
+                                transcription_language=b.get("transcription_language", "en"),
+                                target_language=b.get("target_language", "en"),
+                                submitted_by_user_id=str(b.get("submitted_by_user_id")),
+                                dealer_id=b.get("dealer_id")
+                            )
+                        )
+        except Exception as e:
+            logger.error(f"Error in _auto_resume_processing_batches: {e}")
+
+    asyncio.create_task(_auto_resume_processing_batches())
+
     yield
 
     # 5. Shutdown cleanup
@@ -2934,7 +2960,7 @@ async def process_batch_urls_async(
     submitted_by_user_id: str,
     dealer_id: Optional[str] = None # Now a simple string
 ):
-    """Main background task function to manage the processing of all URLs within a batch."""
+    """Main background task function to manage the processing of all URLs within a batch using concurrent worker slots."""
     
     if analyzer is None:
         logger.error("Analyzer not initialized for batch processing. Batch %s will fail.", batch_id)
@@ -2965,42 +2991,62 @@ async def process_batch_urls_async(
         )
         logger.info(f"Starting/resuming batch {batch_id} ({len(urls)} URLs, skipping {already_processed} already processed) by user {submitted_by_user_id} for dealer {dealer_id}.")
 
-        for index, url in enumerate(urls):
-            # When resuming, skip items that were already analysed
-            if index < already_processed:
-                continue
+        # Collect all remaining items to process
+        remaining_items = [(index, url) for index, url in enumerate(urls) if index >= already_processed]
+        queue = asyncio.Queue()
+        for item in remaining_items:
+            queue.put_nowait(item)
 
-            # Check individual batch pause flag (pauses only this specific batch alone)
-            while batch_pause_flags.get(batch_id, False):
+        batch_workers_count = max(1, CONCURRENCY_LIMIT)
+        logger.info(f"Batch {batch_id}: Dispatched {len(remaining_items)} remaining items across {batch_workers_count} concurrent worker slots.")
+
+        async def _batch_worker():
+            while not queue.empty():
                 if batch_cancellation_flags.get(batch_id, False):
                     break
-                logger.info(f"Batch {batch_id} is currently paused by admin. Waiting for resume signal...")
-                await asyncio.sleep(2)
+                while batch_pause_flags.get(batch_id, False):
+                    if batch_cancellation_flags.get(batch_id, False):
+                        break
+                    logger.info(f"Batch {batch_id} is currently paused by admin. Waiting for resume signal...")
+                    await asyncio.sleep(2)
 
-            if batch_cancellation_flags.get(batch_id, False):
-                logger.info(f"Batch {batch_id} cancellation detected. Stopping further URL processing.")
-                await batch_collection.update_one(
-                    {"_id": ObjectId(batch_id)}, 
-                    {"$set": {
-                        "status": BatchStatus.CANCELLED, 
-                        "updated_at": dt.utcnow()
-                    }}
-                )
-                batch_cancellation_flags.pop(batch_id, None)
-                active_batch_tasks.pop(batch_id, None)
-                return
-            
-            await _process_single_batch_url_item(
-                batch_id, 
-                url, 
-                index + 1,
-                transcription_language, 
-                target_language,
-                submitted_by_user_id,
-                dealer_id
+                try:
+                    index, url = queue.get_nowait()
+                except asyncio.QueueEmpty:
+                    break
+
+                try:
+                    await _process_single_batch_url_item(
+                        batch_id, 
+                        url, 
+                        index + 1,
+                        transcription_language, 
+                        target_language,
+                        submitted_by_user_id,
+                        dealer_id
+                    )
+                except Exception as ex:
+                    logger.error(f"Batch {batch_id} item {index + 1} worker error: {ex}")
+                finally:
+                    queue.task_done()
+                
+                await asyncio.sleep(0.05)
+
+        worker_tasks = [asyncio.create_task(_batch_worker()) for _ in range(batch_workers_count)]
+        await asyncio.gather(*worker_tasks)
+
+        if batch_cancellation_flags.get(batch_id, False):
+            logger.info(f"Batch {batch_id} cancellation detected. Stopping further URL processing.")
+            await batch_collection.update_one(
+                {"_id": ObjectId(batch_id)}, 
+                {"$set": {
+                    "status": BatchStatus.CANCELLED, 
+                    "updated_at": dt.utcnow()
+                }}
             )
-            
-            await asyncio.sleep(0.1)
+            batch_cancellation_flags.pop(batch_id, None)
+            active_batch_tasks.pop(batch_id, None)
+            return
 
         batch_cancellation_flags.pop(batch_id, None)
         active_batch_tasks.pop(batch_id, None)

@@ -1424,7 +1424,7 @@ Projected Finish Time: ~${finishEta.toLocaleTimeString([], { hour: '2-digit', mi
                       const procUrls = Number(vid.processed_urls) || 0;
                       const remaining = Math.max(0, totUrls - procUrls);
                       const remPct = totUrls > 0 ? Math.round((remaining / totUrls) * 100) : 0;
-                      const estMinutes = Math.round(remaining / 1.0); // worker slot velocity est
+                      const estMinutes = Math.round(remaining / 2.5); // accelerated dual-worker velocity est
                       const creds = getUserCredentials(vid.submitted_by, vid.dealer_name);
 
                       return (
