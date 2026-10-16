@@ -385,6 +385,10 @@ class DealerAdminDashboardOverview(BaseModel):
     serviceAdvisors: List[ServiceAdvisorPerformance]
     dailyPerformance: List[DailyPerformance]
     last_updated: dt
+    total_videos_change: Optional[str] = None
+    total_videos_change_type: Optional[str] = "neutral"
+    average_score_change: Optional[str] = None
+    average_score_change_type: Optional[str] = "neutral"
 
 class ProfileUpdate(BaseModel):
     username: Optional[str] = None
@@ -5509,33 +5513,83 @@ async def get_dealer_dashboard_overview(
     # Fetch ALL results to show "All-over" data in Analytics & Insights charts / lists
     results = await results_collection.find(dealer_status_match, projection).to_list(None)
 
+    # Normalize _parsed_date for ALL results first to guarantee no KeyError on sorting or filtering
+    for r in results:
+        created_at = r.get("created_at")
+        if isinstance(created_at, str):
+            try:
+                created_at = dt.fromisoformat(created_at.replace("Z", "+00:00"))
+            except ValueError:
+                created_at = dt.min
+        if isinstance(created_at, dt):
+            created_at = created_at.replace(tzinfo=None)
+        r["_parsed_date"] = created_at if isinstance(created_at, dt) else dt.min
+
     # Fetch all user emails to map advisor names if missing in metadata
-    # Use the async Motor collection (users_collection) — NOT the sync get_collection() from auth.py
     user_emails = {}
     async for u in users_collection.find({}, {"email": 1}):
         user_emails[str(u["_id"])] = u.get("email", "")
 
-    # Calculate Overview cards (Only these change based on timeRange selection)
-    overview_results = results
-    if start_date:
-        overview_results = []
-        for r in results:
-            created_at = r.get("created_at")
-            if isinstance(created_at, str):
-                try:
-                    created_at = dt.fromisoformat(created_at.replace("Z", "+00:00"))
-                except ValueError:
-                    created_at = dt.min
-            if isinstance(created_at, dt):
-                created_at = created_at.replace(tzinfo=None)
-            
-            if created_at and created_at >= start_date:
-                overview_results.append(r)
-
+    # Calculate Overview cards based on selected timeRange
+    overview_results = [r for r in results if r["_parsed_date"] >= start_date] if start_date else results
     total_videos = len(overview_results)
     
     valid_scores = [r["overall_quality_score"] for r in overview_results if r.get("overall_quality_score") is not None]
     avg_overall_quality = sum(valid_scores) / len(valid_scores) if valid_scores else 0.0
+
+    # Calculate real trend metrics (vs previous period)
+    total_videos_change = "All time total"
+    total_videos_change_type = "neutral"
+    average_score_change = "All time average"
+    average_score_change_type = "neutral"
+
+    if start_date:
+        now_dt = dt.utcnow()
+        period_delta = now_dt - start_date
+        prev_start = start_date - period_delta
+        prev_results = [r for r in results if prev_start <= r["_parsed_date"] < start_date]
+        
+        curr_count = len(overview_results)
+        prev_count = len(prev_results)
+        count_diff = curr_count - prev_count
+        
+        period_label = {
+            "today": "vs yesterday",
+            "week": "vs last week",
+            "month": "vs last month",
+            "quarter": "vs last quarter",
+            "year": "vs last year"
+        }.get(timeRange.lower() if timeRange else "", "vs previous period")
+
+        if prev_count == 0 and curr_count > 0:
+            total_videos_change = f"{curr_count} new {period_label}"
+            total_videos_change_type = "positive"
+        elif count_diff > 0:
+            total_videos_change = f"+{count_diff} {period_label}"
+            total_videos_change_type = "positive"
+        elif count_diff < 0:
+            total_videos_change = f"{count_diff} {period_label}"
+            total_videos_change_type = "negative"
+        else:
+            total_videos_change = f"No change {period_label}"
+            total_videos_change_type = "neutral"
+
+        prev_scores = [r["overall_quality_score"] for r in prev_results if r.get("overall_quality_score") is not None]
+        prev_avg = sum(prev_scores) / len(prev_scores) if prev_scores else 0.0
+        score_diff = round(avg_overall_quality - prev_avg, 1)
+
+        if prev_count == 0 and curr_count > 0:
+            average_score_change = f"{avg_overall_quality:.1f} avg {period_label}"
+            average_score_change_type = "positive"
+        elif score_diff > 0:
+            average_score_change = f"+{score_diff:.1f} {period_label}"
+            average_score_change_type = "positive"
+        elif score_diff < 0:
+            average_score_change = f"{score_diff:.1f} {period_label}"
+            average_score_change_type = "negative"
+        else:
+            average_score_change = f"No change {period_label}"
+            average_score_change_type = "neutral"
 
     low_quality_videos = 0
     low_quality_audio = 0
@@ -5655,7 +5709,7 @@ async def get_dealer_dashboard_overview(
         ))
 
     # Recent videos
-    results.sort(key=lambda x: x["_parsed_date"], reverse=True)
+    results.sort(key=lambda x: x.get("_parsed_date", dt.min), reverse=True)
     recent_analyses = []
     for r in results[:5]:
         try:
@@ -5678,7 +5732,11 @@ async def get_dealer_dashboard_overview(
         recent_analyses=recent_analyses,
         serviceAdvisors=serviceAdvisors,
         dailyPerformance=dailyPerformance,
-        last_updated=dt.utcnow()
+        last_updated=dt.utcnow(),
+        total_videos_change=total_videos_change,
+        total_videos_change_type=total_videos_change_type,
+        average_score_change=average_score_change,
+        average_score_change_type=average_score_change_type
     )
     try:
         await cache_manager.set(cache_key, response.model_dump_json(), expire=300)

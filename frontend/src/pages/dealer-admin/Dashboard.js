@@ -628,7 +628,7 @@ export default function DealerAdminDashboard() {
 
       let response;
       try {
-        response = await api.get(endpoint, { headers, cacheTTL: 60000 });
+        response = await api.get(endpoint, { headers, cacheTTL: 5000 });
       } catch (reqErr) {
         // If backend fails on empty range (500), gracefully fallback to year/all
         if (timeRange !== 'all' && timeRange !== 'year') {
@@ -684,20 +684,28 @@ export default function DealerAdminDashboard() {
         }
       }
 
-      const activeTotalVideos = timeRange === 'month' && activeDaily.length > 0
-        ? activeDaily.reduce((sum, d) => sum + (d.videos || 0), 0)
-        : (data.total_videos_analyzed || 0);
+      const activeTotalVideos = typeof data.total_videos_analyzed === 'number'
+        ? data.total_videos_analyzed
+        : (timeRange === 'month' && activeDaily.length > 0
+            ? activeDaily.reduce((sum, d) => sum + (d.videos || 0), 0)
+            : 0);
 
-      const activeAvgScore = timeRange === 'month' && activeDaily.length > 0
-        ? Number((activeDaily.reduce((sum, d) => sum + (d.score || 0), 0) / activeDaily.length).toFixed(1))
-        : (data.average_overall_quality || 0);
+      const activeAvgScore = typeof data.average_overall_quality === 'number'
+        ? data.average_overall_quality
+        : (timeRange === 'month' && activeDaily.length > 0
+            ? Number((activeDaily.reduce((sum, d) => sum + (d.score || 0), 0) / activeDaily.length).toFixed(1))
+            : 0);
 
       const freshDashboard = {
         overview: {
           totalVideos: activeTotalVideos,
           averageScore: activeAvgScore,
           serviceAdvisors: (data.serviceAdvisors || []).length,
-          completionRate: completionRate
+          completionRate: completionRate,
+          totalVideosChange: data.total_videos_change,
+          totalVideosChangeType: data.total_videos_change_type,
+          averageScoreChange: data.average_score_change,
+          averageScoreChangeType: data.average_score_change_type
         },
         dailyPerformance: activeDaily,
         serviceAdvisors: data.serviceAdvisors || [],
@@ -1250,8 +1258,8 @@ export default function DealerAdminDashboard() {
               <DealerStatCard
                 title="Total Videos"
                 value={dashboardData.overview.totalVideos}
-                change={trends.totalVideosChange}
-                changeType={trends.totalVideosChangeType || 'positive'}
+                change={dashboardData.overview.totalVideosChange || trends.totalVideosChange}
+                changeType={dashboardData.overview.totalVideosChangeType || trends.totalVideosChangeType || "positive"}
                 icon={<VideoLibrary />}
                 color={THEME.primary}
                 onClick={() => handleViewDetails('videos')}
@@ -1261,8 +1269,8 @@ export default function DealerAdminDashboard() {
               <DealerStatCard
                 title="Average Quality Score"
                 value={dashboardData.overview.averageScore.toFixed(1)}
-                change={trends.averageScoreChange}
-                changeType={trends.averageScoreChangeType || 'positive'}
+                change={dashboardData.overview.averageScoreChange || trends.averageScoreChange}
+                changeType={dashboardData.overview.averageScoreChangeType || trends.averageScoreChangeType || "positive"}
                 icon={<Star />}
                 color={THEME.warning}
                 subtitle="out of 10"
