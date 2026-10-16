@@ -177,9 +177,8 @@ export default function BulkUpload() {
     const attempted = (status.processed_urls || 0) + (status.failed_urls || 0);
     const remaining = status.total_urls - attempted;
 
-    // Use a realistic fixed estimate (45s per URL) instead of historical average
-    // to prevent paused/restarted batches from artificially inflating the ETA to 60+ hours.
-    const secPerUrl = 45;           
+    // Use realistic dual parallel worker estimate (~11s per URL) with greedy INT8 Whisper
+    const secPerUrl = 11;           
     const remainingSec = Math.ceil(secPerUrl * remaining);
     
     return {
@@ -1920,9 +1919,24 @@ export default function BulkUpload() {
                       )}
                     </Box>
 
-                    <Typography variant="body2" sx={{ color: THEME.textPrimary, fontWeight: 600, mb: 0.5 }}>
-                      🎥 {status.status === 'completed' ? 'Last Processed URL:' : 'Currently Processing:'}
-                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5, flexWrap: 'wrap', gap: 1 }}>
+                      <Typography variant="body2" sx={{ color: THEME.textPrimary, fontWeight: 600 }}>
+                        🎥 {status.status === 'completed' ? 'Last Processed URL:' : 'Currently Processing:'}
+                      </Typography>
+                      {status.status === 'processing' && (
+                        <Chip
+                          label="⚡ Dual Parallel Workers (Worker #1 & #2 Active)"
+                          size="small"
+                          sx={{
+                            fontWeight: 800,
+                            fontSize: '0.68rem',
+                            bgcolor: 'rgba(16, 185, 129, 0.12)',
+                            color: '#059669',
+                            border: '1px solid rgba(16, 185, 129, 0.25)'
+                          }}
+                        />
+                      )}
+                    </Box>
                     <Typography variant="body2" sx={{
                       color: THEME.primary,
                       fontFamily: 'monospace',
