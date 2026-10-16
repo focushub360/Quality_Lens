@@ -1590,7 +1590,7 @@ export default function BulkUpload() {
                   <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
                     <Chip 
                       icon={getStatusIcon(status.status)} 
-                      label={status.status?.toUpperCase()} 
+                      label={status.status === 'paused' ? 'PAUSED FROM ADMIN SIDE' : status.status?.toUpperCase()} 
                       sx={
                         status.status === 'processing'
                         ? {
@@ -1604,6 +1604,14 @@ export default function BulkUpload() {
                               'from': { boxShadow: '0 0 5px rgba(0,212,255,0.2), inset 0 0 2px rgba(0,212,255,0.1)' },
                               'to': { boxShadow: '0 0 15px rgba(0,212,255,0.6), inset 0 0 8px rgba(0,212,255,0.3)' }
                             }
+                          }
+                        : status.status === 'paused'
+                        ? {
+                            backgroundColor: '#FEF3C7',
+                            color: '#92400E',
+                            fontWeight: 800,
+                            border: '1.5px solid #F59E0B',
+                            boxShadow: '0 2px 8px rgba(245, 158, 11, 0.25)'
                           }
                         : {
                             backgroundColor: getStatusConfig(status.status).bgColor,
@@ -1827,15 +1835,26 @@ export default function BulkUpload() {
                     }}
                   >
                     <Typography variant="caption" sx={{ 
-                      color: status.status === 'failed' ? THEME.error : '#A3E635', 
+                      color: status.status === 'paused' ? '#FCD34D' : (status.status === 'failed' ? THEME.error : '#A3E635'), 
                       fontWeight: 800, 
                       letterSpacing: '1px', 
                       textTransform: 'uppercase',
                       fontSize: '0.72rem',
                     }}>
-                      {status.status === 'completed' ? 'BATCH COMPLETE' : status.status?.toUpperCase()}
+                      {status.status === 'completed' ? 'BATCH COMPLETE' : (status.status === 'paused' ? 'PAUSED BY ADMIN' : status.status?.toUpperCase())}
                     </Typography>
                   </Box>
+
+                  {status.status === 'paused' && (
+                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.3, mt: 0.5 }}>
+                      <Typography variant="caption" sx={{ color: '#FDE68A', fontWeight: 800, fontSize: '0.74rem' }}>
+                        ⏸ Paused your activity from admin side
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.6)', fontWeight: 500, fontSize: '0.65rem' }}>
+                        Progress saved · Auto-resumes when released
+                      </Typography>
+                    </Box>
+                  )}
 
                   {status.status === 'processing' && (() => {
                     const { remaining, elapsed, secPerUrl } = getTimeInfo();
@@ -1948,6 +1967,33 @@ export default function BulkUpload() {
                   </Paper>
                 )}
 
+
+                {/* Paused by Admin Banner */}
+                {status.status === 'paused' && (
+                  <Alert 
+                    severity="warning" 
+                    icon={<Pause sx={{ color: '#B45309', mt: 0.25 }} />}
+                    sx={{ 
+                      mt: 2,
+                      mb: 2,
+                      borderRadius: 2.5,
+                      border: '1.5px solid #FDE68A',
+                      backgroundColor: '#FFFBEB',
+                      color: '#92400E',
+                      boxShadow: '0 4px 15px rgba(245, 158, 11, 0.08)',
+                      '& .MuiAlert-message': { width: '100%' }
+                    }}
+                  >
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#92400E', display: 'flex', alignItems: 'center', gap: 1 }}>
+                        ⏸️ Paused your activity from admin side
+                      </Typography>
+                      <Typography variant="body2" sx={{ color: '#B45309', fontSize: '0.85rem', lineHeight: 1.5 }}>
+                        Your bulk video analysis is currently on hold by Master Admin. All progress ({status.processed_urls || 0} of {status.total_urls || 0} videos analysed) is securely saved in the database. Analysis will resume automatically from where it paused once released by admin.
+                      </Typography>
+                    </Box>
+                  </Alert>
+                )}
 
                 {/* Status Messages */}
                 {status.status === 'completed' && (
@@ -2077,7 +2123,7 @@ export default function BulkUpload() {
                         <Box sx={{ mt: 1, p: 0.75, px: 1.25, bgcolor: '#FFFBEB', borderRadius: 1.5, border: '1px solid #FDE68A', display: 'inline-flex', alignItems: 'center', gap: 0.75 }}>
                           <Pause sx={{ fontSize: 15, color: '#B45309' }} />
                           <Typography variant="caption" sx={{ color: '#92400E', fontWeight: 700 }}>
-                            Paused by Master Admin — only this batch is paused.
+                            Paused your activity from admin side
                           </Typography>
                         </Box>
                       )}
