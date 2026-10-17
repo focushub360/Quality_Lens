@@ -656,7 +656,7 @@ async def get_dealer_link_usage_today(dealer_id: str) -> int:
     start_utc, end_utc = get_ist_today_range()
     filter_query = get_dealer_id_filter(dealer_id)
     query = {
-        **filter_query,
+        "dealer_id": filter_query,
         "created_at": {"$gte": start_utc, "$lt": end_utc}
     }
     try:
