@@ -4986,6 +4986,7 @@ async def get_all_dealer_quotas(current_user: UserInDB = Depends(get_current_sup
 
         used_today = await get_dealer_link_usage_today(did)
         remaining = max(0, limit - used_today)
+        pct = round((used_today / limit * 100), 1) if limit > 0 else 0.0
         if not d_enabled or not capping_enabled:
             status_label = "UNCAPPED"
         elif used_today >= limit and limit > 0:
