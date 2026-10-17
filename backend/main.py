@@ -4772,6 +4772,30 @@ async def get_all_results(
         
     # Fetch paginated results
     results = await results_collection.find(query, projection).sort("_id", -1).skip(skip).limit(per_page).to_list(length=per_page)
+
+    # Resolve submitted_by_username for results missing username
+    user_ids_to_resolve = set()
+    for r in results:
+        if not r.get("submitted_by_username") and r.get("submitted_by_user_id"):
+            user_ids_to_resolve.add(str(r["submitted_by_user_id"]))
+
+    if user_ids_to_resolve:
+        obj_ids = [ObjectId(uid) for uid in user_ids_to_resolve if ObjectId.is_valid(uid)]
+        str_ids = list(user_ids_to_resolve)
+        users_found = await users_collection.find(
+            {"$or": [{"_id": {"$in": obj_ids}}, {"id": {"$in": str_ids}}]},
+            {"_id": 1, "username": 1, "name": 1, "email": 1}
+        ).to_list(length=len(user_ids_to_resolve) + 10)
+        user_name_map = {}
+        for u in users_found:
+            disp_name = u.get("username") or u.get("name") or (u.get("email", "").split("@")[0] if u.get("email") else None)
+            user_name_map[str(u["_id"])] = disp_name
+            if u.get("id"):
+                user_name_map[str(u["id"])] = disp_name
+        for r in results:
+            if not r.get("submitted_by_username") and r.get("submitted_by_user_id"):
+                r["submitted_by_username"] = user_name_map.get(str(r["submitted_by_user_id"]))
+
     return {
         "results": [clean_results(r) for r in results],
         "total": total_count,
@@ -4791,6 +4815,15 @@ async def get_result(result_id: str, current_user: UserInDB = Depends(get_curren
 
     if current_user.role in ("dealer_admin", "dealer_user") and current_user.dealer_id != result.get("dealer_id"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to view this result.")
+
+    if not result.get("submitted_by_username") and result.get("submitted_by_user_id"):
+        uid = str(result["submitted_by_user_id"])
+        u_doc = await users_collection.find_one(
+            {"$or": [{"_id": ObjectId(uid) if ObjectId.is_valid(uid) else None}, {"id": uid}]},
+            {"username": 1, "name": 1, "email": 1}
+        )
+        if u_doc:
+            result["submitted_by_username"] = u_doc.get("username") or u_doc.get("name") or (u_doc.get("email", "").split("@")[0] if u_doc.get("email") else None)
 
     return clean_results(result)
 

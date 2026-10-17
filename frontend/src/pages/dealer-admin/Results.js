@@ -406,8 +406,6 @@ export default function Results() {
           setHasMore(finalResults.length === rowsPerPage);
       }
 
-      setUserStats([]);
-
     } catch (error) {
       console.error('Error loading results:', error);
       setRows([]);
@@ -431,6 +429,35 @@ export default function Results() {
       clearInterval(interval);
     };
   }, [page, rowsPerPage, searchTerm, dateRange, dealershipFilter, refreshCounter]);
+
+  // Fetch dealer users once on mount to populate user stats & submitter names
+  useEffect(() => {
+    api.get('/users/my-dealer')
+      .then(res => {
+        const uList = Array.isArray(res.data) ? res.data : (res.data?.users || []);
+        if (uList.length > 0) {
+          setUserStats(uList.map(u => ({
+            user_id: String(u._id || u.id),
+            _id: String(u._id || u.id),
+            id: String(u._id || u.id),
+            username: u.username || u.name || u.email
+          })));
+        }
+      })
+      .catch(() => {
+        api.get('/users/').then(res => {
+          const uList = Array.isArray(res.data) ? res.data : (res.data?.users || []);
+          if (uList.length > 0) {
+            setUserStats(uList.map(u => ({
+              user_id: String(u._id || u.id),
+              _id: String(u._id || u.id),
+              id: String(u._id || u.id),
+              username: u.username || u.name || u.email
+            })));
+          }
+        }).catch(() => {});
+      });
+  }, []);
 
   // Auto-open target result modal if navigated from completion notification (?id=...)
   useEffect(() => {
@@ -672,10 +699,11 @@ export default function Results() {
   };
 
   const getUserName = (userId) => {
-    //  Add array check
-    if (!Array.isArray(userStats)) return null;
-    const user = userStats.find(u => u.user_id === userId);
-    return user ? user.username : null;
+    if (!userId) return null;
+    const strId = String(userId).trim();
+    if (!Array.isArray(userStats) || userStats.length === 0) return null;
+    const user = userStats.find(u => String(u.user_id) === strId || String(u._id) === strId || String(u.id) === strId);
+    return user ? (user.username || user.name || user.email) : null;
   };
 
   const handleCloseDialog = () => {
@@ -1329,17 +1357,18 @@ export default function Results() {
                               </Box>
                             </TableCell>
 
-                            <TableCell>
+                                                        <TableCell>
                               <Box sx={{ display: 'flex', alignItems: 'center' }}>
                                 <Person sx={{
-                                  color: THEME.textSecondary,
-                                  mr: 1.5,
+                                  color: THEME.primary,
+                                  mr: 1,
                                   fontSize: 18
                                 }} />
                                 <Typography variant="body2" sx={{
-                                  color: THEME.textPrimary
+                                  color: THEME.textPrimary,
+                                  fontWeight: 600
                                 }}>
-                                  {getUserName(r.submitted_by_user_id) || '—'}
+                                  {r.submitted_by_username || getUserName(r.submitted_by_user_id) || r.submitted_by_name || r.submitted_by || (r.citnow_metadata?.service_advisor ? r.citnow_metadata.service_advisor.split(',')[0].trim() : null) || '—'}
                                 </Typography>
                               </Box>
                             </TableCell>
