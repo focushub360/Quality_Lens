@@ -15,7 +15,7 @@ services:
       # Redis Cache Configuration
       - REDIS_URL=redis://redis:6379/0
       # Database connection (MongoDB Atlas URI)
-      - MONGODB_URI=mongodb+srv://appu:Prasanna460@scanner.8qogm7e.mongodb.net/citnow_analyzer?retryWrites=true&w=majority
+      - MONGODB_URI=mongodb+srv://focushub360db_db_user:QualityLens2026!@cluster0.v9v5op1.mongodb.net/citnow_analyzer?retryWrites=true&w=majority
       - MONGODB_DB_NAME=citnow_analyzer
       # AWS S3 Configuration
       - USE_S3_STORAGE=true
