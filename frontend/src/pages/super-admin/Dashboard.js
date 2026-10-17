@@ -3840,10 +3840,13 @@ const DealerDetailDialog = ({ open, onClose, dealer }) => {
   );
 };
 
-// Module-level persistent cache for 0ms instant tab switching
+// Module-level persistent multi-period cache for 0ms ultra-fast time switching
+const _globalPeriodCache = {}; // { [timeRange]: { dashboardData, allResults, timestamp } }
 let _globalDashboardCache = null;
 let _globalAllResultsCache = [];
 let _globalUsersCache = [];
+
+
 
 // Main Dashboard Component
 export default function SuperAdminDashboard() {
@@ -4015,6 +4018,74 @@ export default function SuperAdminDashboard() {
     });
   };
 
+  // Pure helper function to process raw overview into structured dashboard stats
+  const processDashboardOverview = (data, resultsArray, usersArray) => {
+    const dealerMap = {};
+    (data.dealers_summary || []).forEach(d => {
+      const rawId = String(d.dealer_id || '').trim();
+      if (!rawId || rawId.toLowerCase() === 'sample' || rawId.toLowerCase() === 'demo') return;
+      const normId = normalizeDealerId(rawId);
+      if (!normId) return;
+
+      if (!dealerMap[normId]) {
+        dealerMap[normId] = {
+          id: normId,
+          name: getDealerDisplayName(normId),
+          videos: d.total_videos || 0,
+          overall: d.avg_overall_quality || 0,
+          video: d.avg_video_quality || 0,
+          audio: d.avg_audio_quality || 0,
+          users: 0
+        };
+      } else {
+        const existing = dealerMap[normId];
+        const totalV = existing.videos + (d.total_videos || 0);
+        if (totalV > 0) {
+          existing.overall = Number((((existing.overall * existing.videos) + ((d.avg_overall_quality || 0) * (d.total_videos || 0))) / totalV).toFixed(1));
+          existing.video = Number((((existing.video * existing.videos) + ((d.avg_video_quality || 0) * (d.total_videos || 0))) / totalV).toFixed(1));
+          existing.audio = Number((((existing.audio * existing.videos) + ((d.avg_audio_quality || 0) * (d.total_videos || 0))) / totalV).toFixed(1));
+        }
+        existing.videos = totalV;
+      }
+    });
+
+    (usersArray || []).forEach(u => {
+      const rawId = String(u.dealer_id || u.dealership || u.dealership_name || '').trim();
+      const normId = normalizeDealerId(rawId);
+      if (normId && dealerMap[normId]) {
+        if (u.is_active !== false && u.status !== 'inactive') {
+          dealerMap[normId].users = (dealerMap[normId].users || 0) + 1;
+        }
+      }
+    });
+
+    const dealerPerformance = Object.values(dealerMap)
+      .filter(d => d.videos > 0)
+      .sort((a, b) => b.overall - a.overall);
+
+    const totalServerVideos = data.total_videos_analyzed || dealerPerformance.reduce((sum, d) => sum + d.videos, 0);
+    const qualityDist = Object.entries(data.quality_distribution || {}).map(([name, value]) => ({ name, value }));
+
+    return {
+      overview: {
+        totalDealers: dealerPerformance.length,
+        totalVideos: totalServerVideos,
+        totalUsers: usersArray.length,
+        averageScore: Number((data.average_overall_quality || 7.0).toFixed(1)),
+        performanceChange: 0
+      },
+      performanceTrend: calculateDealerPerformanceTrend(dealerPerformance),
+      dealerRankings: dealerPerformance,
+      qualityDistribution: qualityDist,
+      topPerformers: {
+        overall: [...dealerPerformance].sort((a, b) => b.overall - a.overall).slice(0, 5).map((d, i) => ({ ...d, rank: i + 1 })),
+        video: [...dealerPerformance].sort((a, b) => b.video - a.video).slice(0, 5).map((d, i) => ({ ...d, rank: i + 1 })),
+        audio: [...dealerPerformance].sort((a, b) => b.audio - a.audio).slice(0, 5).map((d, i) => ({ ...d, rank: i + 1 }))
+      },
+      recentActivity: []
+    };
+  };
+
   const PAN_INDIA_WEEKLY_DATA = [
     { name: 'Jun W1', weekLabel: 'June Week 1 (Jun 1–7)', month: 'June', overall: 5.65, panIndiaOverall: 5.65, video: 5.80, audio: 5.45, protocol: 5.65, audits: 1820, target: 8.0, wow: 0.00, phase: 'after' },
     { name: 'Jun W2', weekLabel: 'June Week 2 (Jun 8–14)', month: 'June', overall: 5.80, panIndiaOverall: 5.80, video: 5.95, audio: 5.60, protocol: 5.80, audits: 1790, target: 8.0, wow: 0.15, phase: 'after' },
@@ -4151,133 +4222,125 @@ export default function SuperAdminDashboard() {
     }
   };
 
-    const loadDashboardData = async (isManualRefresh = false) => {
-    // Only show full loading indicator if no cached data exists or explicit user refresh
-    if (isManualRefresh || (!_globalDashboardCache && !dashboardData.overview.totalVideos)) {
-      setLoading(true);
-    }
-    setError(null);
+    // Preload remaining periods in background for instantaneous 0ms tab switching
+    const preloadRemainingRanges = (activeRange) => {
+      const allRanges = ['year', 'month', 'week', 'quarter', 'day'];
+      const pending = allRanges.filter(r => r !== activeRange && !_globalPeriodCache[r]);
+      if (pending.length === 0) return;
 
-    try {
-      const token = localStorage.getItem('auth_token');
-      const headers = token ? { Authorization: `Bearer ${token}` } : {};
-
-      let endpoint = '/dashboard/super-admin/overview';
-      if (timeRange && timeRange !== 'all') {
-         endpoint += `?timeRange=${timeRange}`;
-      }
-      let resultsUrl = '/results?limit=1000&minimal=true';
-      if (timeRange && timeRange !== 'all') {
-        resultsUrl += `&timeRange=${timeRange}`;
-      }
-
-      // Concurrently fetch all 3 endpoints in parallel (3x faster than sequential await)
-      const [usersRes, overviewRes, resultsRes] = await Promise.all([
-        api.get('/users/', { headers, forceRefresh: isManualRefresh }).catch((userErr) => {
-          console.warn('Could not fetch user list for dashboard count:', userErr);
-          return { data: _globalUsersCache || [] };
-        }),
-        api.get(endpoint, { headers, forceRefresh: isManualRefresh }),
-        api.get(resultsUrl, { headers, forceRefresh: isManualRefresh }).catch((err) => {
-          console.error('Error fetching recent results for charts:', err);
-          return { data: _globalAllResultsCache || [] };
-        })
-      ]);
-
-      const usersArray = Array.isArray(usersRes.data) ? usersRes.data : [];
-      _globalUsersCache = usersArray;
-      setUsers(usersArray);
-
-      const data = overviewRes.data || {};
-      const resData = resultsRes.data;
-      const resultsArray = Array.isArray(resData) ? resData : (resData?.results || []);
-      _globalAllResultsCache = resultsArray;
-      setAllResults(resultsArray);
-
-      // Group and aggregate dealer summaries
-      const dealerMap = {};
-      (data.dealers_summary || []).forEach(d => {
-        const rawId = String(d.dealer_id || '').trim();
-        if (!rawId || rawId.toLowerCase() === 'sample' || rawId.toLowerCase() === 'demo') return;
-        const normId = normalizeDealerId(rawId);
-        if (!normId) return;
-
-        if (!dealerMap[normId]) {
-          dealerMap[normId] = {
-            id: normId,
-            name: getDealerDisplayName(normId),
-            videos: d.total_videos || 0,
-            overall: d.avg_overall_quality || 0,
-            video: d.avg_video_quality || 0,
-            audio: d.avg_audio_quality || 0,
-            users: 0
-          };
-        } else {
-          const existing = dealerMap[normId];
-          const totalV = existing.videos + (d.total_videos || 0);
-          if (totalV > 0) {
-            existing.overall = Number((((existing.overall * existing.videos) + ((d.avg_overall_quality || 0) * (d.total_videos || 0))) / totalV).toFixed(1));
-            existing.video = Number((((existing.video * existing.videos) + ((d.avg_video_quality || 0) * (d.total_videos || 0))) / totalV).toFixed(1));
-            existing.audio = Number((((existing.audio * existing.videos) + ((d.avg_audio_quality || 0) * (d.total_videos || 0))) / totalV).toFixed(1));
-          }
-          existing.videos = totalV;
-        }
-      });
-
-      // Count users per dealership from usersArray
-      (usersArray || []).forEach(u => {
-        const rawId = String(u.dealer_id || u.dealership || u.dealership_name || '').trim();
-        const normId = normalizeDealerId(rawId);
-        if (normId && dealerMap[normId]) {
-          if (u.is_active !== false && u.status !== 'inactive') {
-            dealerMap[normId].users = (dealerMap[normId].users || 0) + 1;
+      setTimeout(async () => {
+        const token = localStorage.getItem('auth_token');
+        const headers = token ? { Authorization: `Bearer ${token}` } : {};
+        for (const r of pending) {
+          if (_globalPeriodCache[r]) continue;
+          try {
+            const [overviewRes, resultsRes] = await Promise.all([
+              api.get(`/dashboard/super-admin/overview?timeRange=${r}`, { headers }),
+              api.get(`/results?limit=1000&minimal=true&timeRange=${r}`, { headers }).catch(() => ({ data: [] }))
+            ]);
+            const data = overviewRes.data || {};
+            const resData = resultsRes.data;
+            const resultsArray = Array.isArray(resData) ? resData : (resData?.results || []);
+            const fresh = processDashboardOverview(data, resultsArray, _globalUsersCache || []);
+            _globalPeriodCache[r] = {
+              dashboardData: fresh,
+              allResults: resultsArray,
+              timestamp: Date.now()
+            };
+          } catch (err) {
+            // Non-critical background preload
           }
         }
-      });
+      }, 350);
+    };
 
-      const dealerPerformance = Object.values(dealerMap)
-        .filter(d => d.videos > 0)
-        .sort((a, b) => b.overall - a.overall);
+    const loadDashboardData = async (isManualRefresh = false, targetRange = timeRange) => {
+      // 0ms Cache Hit: If cached and fresh (< 3 mins), load immediately with zero spinner
+      const cached = _globalPeriodCache[targetRange];
+      const isFresh = cached && (Date.now() - (cached.timestamp || 0) < 180000);
 
-      // Total videos is accurate full total from server overview
-      const totalServerVideos = data.total_videos_analyzed || dealerPerformance.reduce((sum, d) => sum + d.videos, 0);
+      if (cached && !isManualRefresh) {
+        setDashboardData(cached.dashboardData);
+        setAllResults(cached.allResults);
+        setLoading(false);
+        if (isFresh) {
+          preloadRemainingRanges(targetRange);
+          return;
+        }
+      }
 
-      // Map quality distribution from server overview
-      const qualityDist = Object.entries(data.quality_distribution || {}).map(([name, value]) => ({ name, value }));
+      // Only show spinner if we don't have any data rendered yet
+      if (isManualRefresh || (!cached && !dashboardData.overview.totalVideos)) {
+        setLoading(true);
+      }
+      setError(null);
 
-      const freshDashboardData = {
-        overview: {
-          totalDealers: dealerPerformance.length,
-          totalVideos: totalServerVideos,
-          totalUsers: usersArray.length,
-          averageScore: Number((data.average_overall_quality || 7.0).toFixed(1)),
-          performanceChange: 0
-        },
-        performanceTrend: calculateDealerPerformanceTrend(dealerPerformance),
-        dealerRankings: dealerPerformance,
-        qualityDistribution: qualityDist,
-        topPerformers: {
-          overall: [...dealerPerformance].sort((a,b) => b.overall - a.overall).slice(0, 5).map((d, i) => ({ ...d, rank: i + 1 })),
-          video: [...dealerPerformance].sort((a,b) => b.video - a.video).slice(0, 5).map((d, i) => ({ ...d, rank: i + 1 })),
-          audio: [...dealerPerformance].sort((a,b) => b.audio - a.audio).slice(0, 5).map((d, i) => ({ ...d, rank: i + 1 }))
-        },
-        recentActivity: []
-      };
-
-      _globalDashboardCache = freshDashboardData;
       try {
-        sessionStorage.setItem('ql_super_admin_dashboard', JSON.stringify(freshDashboardData));
-      } catch (e) {}
+        const token = localStorage.getItem('auth_token');
+        const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
-      setDashboardData(freshDashboardData);
+        let endpoint = '/dashboard/super-admin/overview';
+        if (targetRange && targetRange !== 'all') {
+          endpoint += `?timeRange=${targetRange}`;
+        }
+        let resultsUrl = '/results?limit=1000&minimal=true';
+        if (targetRange && targetRange !== 'all') {
+          resultsUrl += `&timeRange=${targetRange}`;
+        }
 
-    } catch (error) {
-      console.error('Error loading dashboard data:', error);
-      setError('Failed to load dashboard data. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
+        // Optimization: Users do not change per time period! Only fetch users on initial load or manual refresh
+        const needUsersFetch = isManualRefresh || !_globalUsersCache || _globalUsersCache.length === 0;
+        const usersPromise = needUsersFetch
+          ? api.get('/users/', { headers, forceRefresh: isManualRefresh }).catch((userErr) => {
+              console.warn('Could not fetch user list for dashboard count:', userErr);
+              return { data: _globalUsersCache || [] };
+            })
+          : Promise.resolve({ data: _globalUsersCache });
+
+        const [usersRes, overviewRes, resultsRes] = await Promise.all([
+          usersPromise,
+          api.get(endpoint, { headers, forceRefresh: isManualRefresh }),
+          api.get(resultsUrl, { headers, forceRefresh: isManualRefresh }).catch((err) => {
+            console.error('Error fetching recent results for charts:', err);
+            return { data: _globalAllResultsCache || [] };
+          })
+        ]);
+
+        const usersArray = Array.isArray(usersRes.data) ? usersRes.data : (_globalUsersCache || []);
+        _globalUsersCache = usersArray;
+        setUsers(usersArray);
+
+        const data = overviewRes.data || {};
+        const resData = resultsRes.data;
+        const resultsArray = Array.isArray(resData) ? resData : (resData?.results || []);
+        _globalAllResultsCache = resultsArray;
+        setAllResults(resultsArray);
+
+        const freshDashboardData = processDashboardOverview(data, resultsArray, usersArray);
+
+        // Save into high-speed memory cache
+        _globalPeriodCache[targetRange] = {
+          dashboardData: freshDashboardData,
+          allResults: resultsArray,
+          timestamp: Date.now()
+        };
+        _globalDashboardCache = freshDashboardData;
+        try {
+          sessionStorage.setItem('ql_super_admin_dashboard', JSON.stringify(freshDashboardData));
+        } catch (e) {}
+
+        setDashboardData(freshDashboardData);
+
+        // Preload other time ranges in background for 0ms future clicks
+        preloadRemainingRanges(targetRange);
+
+      } catch (error) {
+        console.error('Error loading dashboard data:', error);
+        setError('Failed to load dashboard data. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+    };
 
   useEffect(() => {
     loadDashboardData();
@@ -4493,7 +4556,18 @@ export default function SuperAdminDashboard() {
                 return (
                   <Button
                     key={range}
-                    onClick={() => setTimeRange(range)}
+                    onClick={() => {
+                      if (range === timeRange) return;
+                      setTimeRange(range);
+                      if (_globalPeriodCache[range]) {
+                        // 0ms ULTRA-FAST INSTANT SWITCH!
+                        setDashboardData(_globalPeriodCache[range].dashboardData);
+                        setAllResults(_globalPeriodCache[range].allResults);
+                        setLoading(false);
+                      } else {
+                        setLoading(true);
+                      }
+                    }}
                     sx={{
                       borderRadius: 50,
                       px: 3,
