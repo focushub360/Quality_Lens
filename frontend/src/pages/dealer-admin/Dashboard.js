@@ -628,6 +628,81 @@ export default function DealerAdminDashboard() {
       </LineChart>
     </ResponsiveContainer>
   );
+
+  // ─── Top Detected Issues Component ───────────────────────────────────────────
+  const TopDetectedIssues = ({ allResults = [] }) => {
+    const issueCounts = { video: {}, audio: {}, overall: {} };
+
+    allResults.forEach(r => {
+      // Video issues
+      const vScore = r.video_quality_score || 0;
+      if (vScore > 0 && vScore < 5) { 
+        issueCounts.video['Poor Video Quality'] = (issueCounts.video['Poor Video Quality'] || 0) + 1; 
+      } else if (vScore >= 5 && vScore < 7) { 
+        issueCounts.video['Below Average Video'] = (issueCounts.video['Below Average Video'] || 0) + 1; 
+      }
+
+      // Audio issues – inferred from audio score
+      const aScore = r.audio_quality_score || 0;
+      if (aScore > 0 && aScore < 4) { 
+        issueCounts.audio['Inaudible / No Speech'] = (issueCounts.audio['Inaudible / No Speech'] || 0) + 1; 
+      } else if (aScore >= 4 && aScore < 6) { 
+        issueCounts.audio['Background Noise'] = (issueCounts.audio['Background Noise'] || 0) + 1; 
+      } else if (aScore >= 6 && aScore < 7) { 
+        issueCounts.audio['Low Audio Clarity'] = (issueCounts.audio['Low Audio Clarity'] || 0) + 1; 
+      }
+
+      // Overall issues
+      const oScore = r.overall_quality_score || 0;
+      const label = r.overall_quality_label || '';
+      if (label === 'Poor' || (oScore > 0 && oScore < 5)) { 
+        issueCounts.overall['Poor Overall Score'] = (issueCounts.overall['Poor Overall Score'] || 0) + 1; 
+      } else if (label === 'Fair' || (oScore >= 5 && oScore < 7)) { 
+        issueCounts.overall['Needs Improvement'] = (issueCounts.overall['Needs Improvement'] || 0) + 1; 
+      }
+    });
+
+    const topIssues = (obj) => Object.entries(obj).sort((a, b) => b[1] - a[1]).slice(0, 4);
+
+    const categories = [
+      { key: 'video', label: '📹 Video Issues', color: '#0ea5e9', bg: '#f0f9ff', issues: topIssues(issueCounts.video) },
+      { key: 'audio', label: '🎙️ Audio Issues', color: '#10b981', bg: '#f0fdf4', issues: topIssues(issueCounts.audio) },
+      { key: 'overall', label: '⭐ Overall Issues', color: '#f59e0b', bg: '#fffbeb', issues: topIssues(issueCounts.overall) }
+    ];
+
+    if (allResults.length === 0) return null;
+
+    return (
+      <Card sx={{ background: THEME.surfaceElevated, border: `1px solid ${THEME.border}`, borderRadius: 3, boxShadow: THEME.shadowSm, mb: 4 }}>
+        <CardContent sx={{ p: 3 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
+            <Assessment sx={{ color: '#ef4444', mr: 1.5, fontSize: 24 }} />
+            <Typography variant="h6" sx={{ color: THEME.textPrimary, fontWeight: 700 }}>
+              Top Detected Issues
+            </Typography>
+          </Box>
+          <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 3, width: '100%' }}>
+            {categories.map(cat => (
+              <Box key={cat.key} sx={{ flex: 1, display: 'flex' }}>
+                <Box sx={{ background: cat.bg, borderRadius: 2, p: 2, border: `1px solid ${cat.color}20`, width: '100%', display: 'flex', flexDirection: 'column' }}>
+                  <Typography variant="subtitle2" sx={{ color: cat.color, fontWeight: 700, mb: 1.5 }}>{cat.label}</Typography>
+                  {cat.issues.length === 0 ? (
+                    <Typography variant="caption" sx={{ color: THEME.textTertiary }}>No issues detected 🎉</Typography>
+                  ) : cat.issues.map(([issue, count]) => (
+                    <Box key={issue} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                      <Typography variant="caption" sx={{ color: THEME.textPrimary, fontWeight: 500, flex: 1 }}>{issue}</Typography>
+                      <Chip label={count} size="small" sx={{ ml: 1, fontWeight: 700, minWidth: 36, background: cat.color, color: '#fff', fontSize: '0.7rem', height: 20 }} />
+                    </Box>
+                  ))}
+                </Box>
+              </Box>
+            ))}
+          </Box>
+        </CardContent>
+      </Card>
+    );
+  };
+
     const loadDashboardData = async (isManualRefresh = false) => {
     if (isManualRefresh || (!_globalDealerDashboardCache && !dashboardData.overview.totalVideos)) {
       setLoading(true);
@@ -642,18 +717,27 @@ export default function DealerAdminDashboard() {
          endpoint += `?timeRange=${timeRange}`;
       }
 
-      let response;
-      try {
-        response = await api.get(endpoint, { headers, skipCache: true, forceRefresh: true });
-      } catch (reqErr) {
-        // If backend fails on empty range (500), gracefully fallback to year/all
-        if (timeRange !== 'all' && timeRange !== 'year') {
-          response = await api.get('/dashboard/dealer/overview?timeRange=year', { headers, skipCache: true, forceRefresh: true });
-        } else {
-          throw reqErr;
-        }
+      let resultsUrl = '/results?limit=1000&minimal=true';
+      if (timeRange && timeRange !== 'all') {
+        resultsUrl += `&timeRange=${timeRange}`;
       }
-      const data = response.data;
+
+      const [overviewRes, resultsRes] = await Promise.all([
+        api.get(endpoint, { headers, skipCache: true, forceRefresh: true }).catch(async (reqErr) => {
+          if (timeRange !== 'all' && timeRange !== 'year') {
+            return await api.get('/dashboard/dealer/overview?timeRange=year', { headers, skipCache: true, forceRefresh: true });
+          }
+          throw reqErr;
+        }),
+        api.get(resultsUrl, { headers, forceRefresh: isManualRefresh }).catch((err) => {
+          console.warn('Could not fetch results for dealer detected issues:', err);
+          return { data: [] };
+        })
+      ]);
+
+      const data = overviewRes.data;
+      const resData = resultsRes.data;
+      const resultsArray = Array.isArray(resData) ? resData : (resData?.results || []);
 
       // Update dealer info
       setDealerInfo({
@@ -668,9 +752,10 @@ export default function DealerAdminDashboard() {
 
       const qualityBreakdown = Object.entries(data.quality_distribution || {}).map(([name, value]) => ({ name, value }));
 
-      // Populate allResults from recent_analyses so calculateTrends() has data to work with
+      // Populate allResults from results endpoint (or recent_analyses fallback) for issue counts & trend calculations
       const recentRaw = data.recent_analyses || [];
-      setAllResults(recentRaw);
+      const combinedResults = resultsArray.length > 0 ? resultsArray : recentRaw;
+      setAllResults(combinedResults);
 
       const rawDaily = (data.dailyPerformance || [])
         .filter(d => (Number(d.score || 0) > 0 || Number(d.video || 0) > 0 || Number(d.audio || 0) > 0))
@@ -1651,6 +1736,11 @@ export default function DealerAdminDashboard() {
             );
           })()}
 
+        </Box>
+
+        {/* Top Detected Issues Section */}
+        <Box sx={{ width: '100%', mb: 4 }}>
+          <TopDetectedIssues allResults={allResults} />
         </Box>
 
         {/* Recent Activity Section */}
