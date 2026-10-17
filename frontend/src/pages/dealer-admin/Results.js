@@ -179,7 +179,13 @@ export default function Results() {
   const [loading, setLoading] = useState(() => !_globalResultsCache.rows);
   const [selectedResult, setSelectedResult] = useState(null);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState(() => {
+    try {
+      return new URLSearchParams(window.location.search).get('search') || '';
+    } catch (e) {
+      return '';
+    }
+  });
   const [refreshCounter, setRefreshCounter] = useState(0);
   const [userStats, setUserStats] = useState([]);
   const [dealershipFilter, setDealershipFilter] = useState(''); // '' = All

@@ -25,7 +25,12 @@ import {
   Link,
   Divider,
   Menu,
-  MenuItem
+  MenuItem,
+  Avatar,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions
 } from '@mui/material';
 import {
   TrendingUp,
@@ -51,7 +56,8 @@ import {
   CalendarToday,
   DateRange,
   AllInclusive,
-  TrackChanges
+  TrackChanges,
+  InfoOutlined
 } from '@mui/icons-material';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart as RechartsBarChart, Bar, PieChart as RechartsPieChart, Pie, Cell, Legend, ComposedChart, LabelList, ReferenceLine } from 'recharts';
 import { dashboardApi } from '../../services/dashboardapi';
@@ -131,6 +137,7 @@ export default function DealerAdminDashboard() {
     };
   });
   const [benchmarkTarget, setBenchmarkTarget] = useState(7.5);
+  const [selectedAdvisorModal, setSelectedAdvisorModal] = useState(null);
   const [allResults, setAllResults] = useState(() => {
     return _globalDealerDashboardCache?.recentVideos || [];
   });
@@ -153,6 +160,17 @@ export default function DealerAdminDashboard() {
   });
 
   const theme = useTheme();
+
+  const CN = {
+    navy: '#1C3FAA',
+    navyLight: '#EEF2FF',
+    gold: '#F5B800',
+    goldLight: '#FFFBEB',
+    orange: '#FF6600',
+    orangeLight: '#FFF0E6',
+    grid: '#E8EDF5',
+  };
+
   
   const THEME = {
     primary: '#0DA1B8',
@@ -2123,6 +2141,166 @@ export default function DealerAdminDashboard() {
             </CardContent>
           </Card>
         </Box>
+
+
+      {/* Personalized Service Advisor Performance Modal */}
+      <Dialog
+        open={Boolean(selectedAdvisorModal)}
+        onClose={() => setSelectedAdvisorModal(null)}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 3.5,
+            p: 1,
+            border: `1.5px solid ${CN.orange}30`,
+            boxShadow: '0 20px 40px rgba(255, 102, 0, 0.18)'
+          }
+        }}
+      >
+        {selectedAdvisorModal && (() => {
+          const adv = selectedAdvisorModal;
+          const scoreNum = Number(adv.score || 0);
+          let badgeBg = '#FEF2F2';
+          let badgeColor = '#DC2626';
+          let badgeBorder = '#FCA5A5';
+          if (scoreNum >= 7.5) {
+            badgeBg = '#F0FDF4';
+            badgeColor = '#16A34A';
+            badgeBorder = '#86EFAC';
+          } else if (scoreNum >= 6.0) {
+            badgeBg = '#FFF7ED';
+            badgeColor = '#EA580C';
+            badgeBorder = '#FDBA74';
+          }
+
+          return (
+            <>
+              <DialogTitle sx={{ pb: 1 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                    <Avatar sx={{ bgcolor: CN.orangeLight, color: '#C2410C', fontWeight: 800 }}>
+                      {(adv.name || 'A')[0].toUpperCase()}
+                    </Avatar>
+                    <Box>
+                      <Typography variant="h6" sx={{ fontWeight: 800, color: THEME.textPrimary, lineHeight: 1.2 }}>
+                        {adv.fullName || adv.name}
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: THEME.textSecondary, fontWeight: 600 }}>
+                        Service Advisor • {adv.videos ? `${adv.videos} videos analyzed so far` : 'Active Advisor'}
+                      </Typography>
+                    </Box>
+                  </Box>
+                  <Chip
+                    label={`${scoreNum.toFixed(1)} / 10`}
+                    sx={{
+                      fontWeight: 800,
+                      fontSize: '0.9rem',
+                      bgcolor: badgeBg,
+                      color: badgeColor,
+                      border: `1.5px solid ${badgeBorder}`,
+                      px: 1,
+                      height: 32
+                    }}
+                  />
+                </Box>
+              </DialogTitle>
+
+              <DialogContent sx={{ py: 2 }}>
+                {/* Score Summary Metrics */}
+                <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1.5, my: 1.5, p: 2, bgcolor: '#FFF7ED', borderRadius: 2.5, border: '1px solid #FED7AA' }}>
+                  <Box sx={{ textAlign: 'center' }}>
+                    <Typography variant="caption" sx={{ color: THEME.textTertiary, fontWeight: 700, display: 'block', mb: 0.5 }}>
+                      ⭐ OVERALL SCORE
+                    </Typography>
+                    <Typography variant="h5" sx={{ fontWeight: 800, color: '#EA580C' }}>
+                      {scoreNum.toFixed(1)}
+                    </Typography>
+                  </Box>
+                  <Box sx={{ textAlign: 'center', borderLeft: '1px solid #FED7AA', borderRight: '1px solid #FED7AA' }}>
+                    <Typography variant="caption" sx={{ color: THEME.textTertiary, fontWeight: 700, display: 'block', mb: 0.5 }}>
+                      📹 VIDEO SCORE
+                    </Typography>
+                    <Typography variant="h5" sx={{ fontWeight: 800, color: THEME.textPrimary }}>
+                      {adv.videoScore != null ? Number(adv.videoScore).toFixed(1) : '—'}
+                    </Typography>
+                  </Box>
+                  <Box sx={{ textAlign: 'center' }}>
+                    <Typography variant="caption" sx={{ color: THEME.textTertiary, fontWeight: 700, display: 'block', mb: 0.5 }}>
+                      🎙️ AUDIO SCORE
+                    </Typography>
+                    <Typography variant="h5" sx={{ fontWeight: 800, color: THEME.textPrimary }}>
+                      {adv.audioScore != null ? Number(adv.audioScore).toFixed(1) : '—'}
+                    </Typography>
+                  </Box>
+                </Box>
+
+                {/* Top Detected Issues for this Advisor */}
+                <Box sx={{ mt: 3, mb: 1 }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#9A3412', mb: 1.5, display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Assessment sx={{ fontSize: 20, color: '#EA580C' }} /> Top Detected Issues from Analyzed Videos
+                  </Typography>
+
+                  {(!adv.topIssues || adv.topIssues.length === 0) ? (
+                    <Box sx={{ bgcolor: '#F0FDF4', p: 2, borderRadius: 2, border: '1px solid #86EFAC', textAlign: 'center' }}>
+                      <Typography variant="body2" sx={{ color: '#16A34A', fontWeight: 700 }}>
+                        🎉 Outstanding Quality Performance!
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: '#15803D' }}>
+                        No recurring quality issues detected in this advisor's analyzed videos.
+                      </Typography>
+                    </Box>
+                  ) : (
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                      {adv.topIssues.map(([issue, count]) => (
+                        <Box key={issue} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 1.5, bgcolor: '#FEF2F2', borderRadius: 2, border: '1px solid #FECACA' }}>
+                          <Typography variant="body2" sx={{ fontWeight: 700, color: '#991B1B' }}>
+                            • {issue}
+                          </Typography>
+                          <Chip
+                            label={`${count} Occurrence${count > 1 ? 's' : ''}`}
+                            size="small"
+                            sx={{ height: 22, fontWeight: 800, fontSize: '0.72rem', bgcolor: '#EF4444', color: '#fff' }}
+                          />
+                        </Box>
+                      ))}
+                    </Box>
+                  )}
+                </Box>
+              </DialogContent>
+
+              <DialogActions sx={{ p: 2.5, pt: 1, display: 'flex', gap: 1.5 }}>
+                <Button
+                  onClick={() => setSelectedAdvisorModal(null)}
+                  variant="outlined"
+                  sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 600, color: THEME.textSecondary, borderColor: THEME.border }}
+                >
+                  Close
+                </Button>
+                <Button
+                  onClick={() => {
+                    const searchName = adv.fullName || adv.name;
+                    window.location.href = `/dealer/results?search=${encodeURIComponent(searchName)}`;
+                  }}
+                  variant="contained"
+                  startIcon={<OpenInNew />}
+                  sx={{
+                    flex: 1,
+                    borderRadius: 2,
+                    textTransform: 'none',
+                    fontWeight: 800,
+                    bgcolor: CN.orange,
+                    '&:hover': { bgcolor: '#C2410C' },
+                    boxShadow: '0 4px 14px rgba(255, 102, 0, 0.3)'
+                  }}
+                >
+                  View Personalized Results for {adv.name}
+                </Button>
+              </DialogActions>
+            </>
+          );
+        })()}
+      </Dialog>
 
       </Container>
     </Box>
