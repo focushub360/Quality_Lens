@@ -716,121 +716,6 @@ export default function DealerAdminDashboard() {
     return Object.entries(issueCounts).sort((a, b) => b[1] - a[1]).slice(0, 3);
   };
 
-  // ─── Personalized Advisor Hover Tooltip ─────────────────────────────────────
-  const CustomAdvisorTooltip = ({ active, payload }) => {
-    if (!active || !payload || !payload.length) return null;
-    const d = payload[0].payload;
-    if (!d) return null;
-
-    const scoreNum = Number(d.score || 0);
-    let scoreBadgeBg = '#FEF2F2';
-    let scoreBadgeColor = '#DC2626';
-    let scoreBadgeBorder = '#FCA5A5';
-    if (scoreNum >= 7.5) {
-      scoreBadgeBg = '#F0FDF4';
-      scoreBadgeColor = '#16A34A';
-      scoreBadgeBorder = '#86EFAC';
-    } else if (scoreNum >= 6.0) {
-      scoreBadgeBg = '#FFF7ED';
-      scoreBadgeColor = '#EA580C';
-      scoreBadgeBorder = '#FDBA74';
-    }
-
-    return (
-      <Box sx={{
-        bgcolor: '#FFFFFF',
-        border: '1.5px solid rgba(255, 102, 0, 0.35)',
-        borderRadius: 2.5,
-        p: 2,
-        boxShadow: '0 12px 30px -4px rgba(255, 102, 0, 0.22), 0 4px 12px rgba(0,0,0,0.08)',
-        minWidth: 230,
-        maxWidth: 300,
-        pointerEvents: 'none'
-      }}>
-        {/* Header with Advisor Name & Videos count */}
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5, pb: 1, borderBottom: '1px solid #FFEDD5' }}>
-          <Box sx={{ pr: 1, minWidth: 0, flex: 1 }}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#7A2E00', fontSize: '0.9rem', lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {d.fullName || d.name}
-            </Typography>
-            <Typography variant="caption" sx={{ color: THEME.textSecondary, fontSize: '0.72rem', display: 'block', mt: 0.25 }}>
-              {d.videos ? `${d.videos} videos analyzed` : 'Service Advisor'}
-            </Typography>
-          </Box>
-          <Chip
-            label={`${scoreNum.toFixed(1)}/10`}
-            size="small"
-            sx={{
-              fontWeight: 800,
-              fontSize: '0.75rem',
-              bgcolor: scoreBadgeBg,
-              color: scoreBadgeColor,
-              border: `1px solid ${scoreBadgeBorder}`,
-              height: 24
-            }}
-          />
-        </Box>
-
-        {/* Sub-Scores (Overall, Video, Audio) */}
-        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 0.75, mb: 1.5, bgcolor: '#FFF7ED', p: 1, borderRadius: 1.5, border: '1px solid #FED7AA' }}>
-          <Box sx={{ textAlign: 'center' }}>
-            <Typography variant="caption" sx={{ color: THEME.textTertiary, display: 'block', fontSize: '0.65rem', fontWeight: 600 }}>
-              ⭐ Overall
-            </Typography>
-            <Typography variant="body2" sx={{ fontWeight: 800, color: '#EA580C', fontSize: '0.82rem' }}>
-              {scoreNum.toFixed(1)}
-            </Typography>
-          </Box>
-          <Box sx={{ textAlign: 'center', borderLeft: '1px solid #FED7AA', borderRight: '1px solid #FED7AA' }}>
-            <Typography variant="caption" sx={{ color: THEME.textTertiary, display: 'block', fontSize: '0.65rem', fontWeight: 600 }}>
-              📹 Video
-            </Typography>
-            <Typography variant="body2" sx={{ fontWeight: 800, color: THEME.textPrimary, fontSize: '0.82rem' }}>
-              {d.videoScore != null ? Number(d.videoScore).toFixed(1) : '—'}
-            </Typography>
-          </Box>
-          <Box sx={{ textAlign: 'center' }}>
-            <Typography variant="caption" sx={{ color: THEME.textTertiary, display: 'block', fontSize: '0.65rem', fontWeight: 600 }}>
-              🎙️ Audio
-            </Typography>
-            <Typography variant="body2" sx={{ fontWeight: 800, color: THEME.textPrimary, fontSize: '0.82rem' }}>
-              {d.audioScore != null ? Number(d.audioScore).toFixed(1) : '—'}
-            </Typography>
-          </Box>
-        </Box>
-
-        {/* Personalized Top Issues */}
-        <Box>
-          <Typography variant="caption" sx={{ fontWeight: 800, color: '#C2410C', display: 'block', mb: 0.75, fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-            Top Detected Issues
-          </Typography>
-          {(!d.topIssues || d.topIssues.length === 0) ? (
-            <Box sx={{ bgcolor: '#F0FDF4', px: 1, py: 0.5, borderRadius: 1, border: '1px solid #BBF7D0' }}>
-              <Typography variant="caption" sx={{ color: '#16A34A', fontWeight: 700, fontSize: '0.72rem', display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                🎉 Top Performer — No critical issues!
-              </Typography>
-            </Box>
-          ) : (
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-              {d.topIssues.map(([issue, count]) => (
-                <Box key={issue} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', bgcolor: '#FEF2F2', px: 1, py: 0.35, borderRadius: 1, border: '1px solid #FECACA' }}>
-                  <Typography variant="caption" sx={{ color: '#991B1B', fontWeight: 600, fontSize: '0.72rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', pr: 1 }}>
-                    • {issue}
-                  </Typography>
-                  <Chip
-                    label={count > 1 ? `${count}x` : 'Flagged'}
-                    size="small"
-                    sx={{ height: 16, fontSize: '0.62rem', fontWeight: 800, bgcolor: '#EF4444', color: '#FFFFFF', minWidth: 22, px: 0.3 }}
-                  />
-                </Box>
-              ))}
-            </Box>
-          )}
-        </Box>
-      </Box>
-    );
-  };
-
   // ─── Top Detected Issues Component ───────────────────────────────────────────
   const TopDetectedIssues = ({ allResults = [] }) => {
     const issueCounts = { video: {}, audio: {}, overall: {} };
@@ -1889,20 +1774,73 @@ export default function DealerAdminDashboard() {
                         });
 
                         return (
-                          <ResponsiveContainer width="100%" height={200}>
-                            <RechartsBarChart
-                              data={advisorChartData}
-                              margin={{ top: 12, right: 24, left: -20, bottom: 12 }}
-                              barSize={22}
-                            >
-                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={CN.grid} />
-                              <XAxis dataKey="name" stroke={THEME.textTertiary} fontSize={11} tickLine={false} axisLine={false} />
-                              <YAxis domain={[0, 10]} stroke={THEME.textTertiary} fontSize={11} tickLine={false} axisLine={false} />
-                              <RechartsTooltip content={<CustomAdvisorTooltip />} />
-                              <Legend iconType="circle" wrapperStyle={{ fontSize: '12px' }} />
-                              <Bar dataKey="score" name="Overall Score" fill={CN.orange} radius={[5, 5, 0, 0]} />
-                            </RechartsBarChart>
-                          </ResponsiveContainer>
+                          <>
+                            <ResponsiveContainer width="100%" height={175}>
+                              <RechartsBarChart
+                                data={advisorChartData}
+                                margin={{ top: 8, right: 20, left: -22, bottom: 4 }}
+                                barSize={22}
+                              >
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={CN.grid} />
+                                <XAxis dataKey="name" stroke={THEME.textTertiary} fontSize={11} tickLine={false} axisLine={false} />
+                                <YAxis domain={[0, 10]} stroke={THEME.textTertiary} fontSize={11} tickLine={false} axisLine={false} />
+                                <RechartsTooltip 
+                                  contentStyle={{ 
+                                    borderRadius: 8, 
+                                    border: `1px solid ${CN.orange}30`, 
+                                    boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+                                    fontSize: '12px',
+                                    padding: '6px 12px',
+                                    backgroundColor: '#FFFFFF',
+                                    fontWeight: 700
+                                  }} 
+                                  formatter={(v) => [`${Number(v).toFixed(1)}/10`, 'Overall Score']} 
+                                />
+                                <Legend iconType="circle" wrapperStyle={{ fontSize: '11px', paddingTop: '4px' }} />
+                                <Bar 
+                                  dataKey="score" 
+                                  name="Overall Score" 
+                                  fill={CN.orange} 
+                                  radius={[5, 5, 0, 0]} 
+                                  cursor="pointer"
+                                  onClick={(entry) => setSelectedAdvisorModal(entry)}
+                                />
+                              </RechartsBarChart>
+                            </ResponsiveContainer>
+
+                            {/* Clean (i) Info Click Bar for Personalized Advisor Performance */}
+                            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap', gap: 0.75, mt: 'auto', pt: 1, borderTop: `1px dashed ${CN.orange}35` }}>
+                              <Typography variant="caption" sx={{ color: THEME.textTertiary, fontWeight: 700, fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: 0.3 }}>
+                                <InfoOutlined sx={{ fontSize: 13, color: CN.orange }} /> Advisor Details:
+                              </Typography>
+                              {advisorChartData.map(adv => (
+                                <Tooltip key={adv.name} title={`Click to view personalized results & issues for ${adv.fullName || adv.name}`} arrow>
+                                  <Chip
+                                    icon={<InfoOutlined sx={{ fontSize: '13px !important', color: `${CN.orange} !important` }} />}
+                                    label={adv.name}
+                                    size="small"
+                                    onClick={() => setSelectedAdvisorModal(adv)}
+                                    sx={{
+                                      height: 22,
+                                      fontSize: '0.7rem',
+                                      fontWeight: 700,
+                                      bgcolor: '#FFF7ED',
+                                      border: '1px solid #FED7AA',
+                                      color: '#7A2E00',
+                                      cursor: 'pointer',
+                                      transition: 'all 0.2s ease',
+                                      '&:hover': {
+                                        bgcolor: '#FFEDD5',
+                                        borderColor: CN.orange,
+                                        transform: 'translateY(-1px)',
+                                        boxShadow: '0 2px 8px rgba(255, 102, 0, 0.2)'
+                                      }
+                                    }}
+                                  />
+                                </Tooltip>
+                              ))}
+                            </Box>
+                          </>
                         );
                       })()}
                     </CardContent>
