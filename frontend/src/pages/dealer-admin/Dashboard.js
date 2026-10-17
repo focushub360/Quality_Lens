@@ -1773,74 +1773,89 @@ export default function DealerAdminDashboard() {
                           };
                         });
 
-                        return (
-                          <>
-                            <ResponsiveContainer width="100%" height={175}>
-                              <RechartsBarChart
-                                data={advisorChartData}
-                                margin={{ top: 8, right: 20, left: -22, bottom: 4 }}
-                                barSize={22}
-                              >
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={CN.grid} />
-                                <XAxis dataKey="name" stroke={THEME.textTertiary} fontSize={11} tickLine={false} axisLine={false} />
-                                <YAxis domain={[0, 10]} stroke={THEME.textTertiary} fontSize={11} tickLine={false} axisLine={false} />
-                                <RechartsTooltip 
-                                  contentStyle={{ 
-                                    borderRadius: 8, 
-                                    border: `1px solid ${CN.orange}30`, 
-                                    boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
-                                    fontSize: '12px',
-                                    padding: '6px 12px',
-                                    backgroundColor: '#FFFFFF',
-                                    fontWeight: 700
-                                  }} 
-                                  formatter={(v) => [`${Number(v).toFixed(1)}/10`, 'Overall Score']} 
-                                />
-                                <Legend iconType="circle" wrapperStyle={{ fontSize: '11px', paddingTop: '4px' }} />
-                                <Bar 
-                                  dataKey="score" 
-                                  name="Overall Score" 
-                                  fill={CN.orange} 
-                                  radius={[5, 5, 0, 0]} 
-                                  cursor="pointer"
-                                  onClick={(entry) => setSelectedAdvisorModal(entry)}
-                                />
-                              </RechartsBarChart>
-                            </ResponsiveContainer>
+                                                const AdvisorBarTooltip = ({ active, payload }) => {
+                          if (!active || !payload || !payload.length) return null;
+                          const data = payload[0].payload;
+                          if (!data) return null;
 
-                            {/* Clean (i) Info Click Bar for Personalized Advisor Performance */}
-                            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap', gap: 0.75, mt: 'auto', pt: 1, borderTop: `1px dashed ${CN.orange}35` }}>
-                              <Typography variant="caption" sx={{ color: THEME.textTertiary, fontWeight: 700, fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: 0.3 }}>
-                                <InfoOutlined sx={{ fontSize: 13, color: CN.orange }} /> Advisor Details:
+                          return (
+                            <Box
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedAdvisorModal(data);
+                              }}
+                              sx={{
+                                bgcolor: '#FFFFFF',
+                                border: `1.5px solid ${CN.orange}`,
+                                borderRadius: 2.5,
+                                px: 2,
+                                py: 1.2,
+                                boxShadow: '0 8px 24px rgba(255,102,0,0.18)',
+                                cursor: 'pointer',
+                                textAlign: 'center',
+                                userSelect: 'none',
+                                transition: 'all 0.15s ease',
+                                '&:hover': {
+                                  bgcolor: '#FFF7ED',
+                                  transform: 'scale(1.02)'
+                                }
+                              }}
+                            >
+                              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.75, mb: 0.25 }}>
+                                <Typography variant="subtitle2" sx={{ fontWeight: 800, color: THEME.textPrimary, fontSize: '0.88rem' }}>
+                                  {data.name}
+                                </Typography>
+                                <Box sx={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  width: 17,
+                                  height: 17,
+                                  borderRadius: '50%',
+                                  bgcolor: CN.orange,
+                                  color: '#fff',
+                                  fontSize: '11px',
+                                  fontWeight: 800,
+                                  lineHeight: 1
+                                }}>
+                                  i
+                                </Box>
+                              </Box>
+                              <Typography variant="body2" sx={{ color: CN.orange, fontWeight: 700, fontSize: '0.82rem' }}>
+                                Overall Score : {Number(data.score).toFixed(1)}/10
                               </Typography>
-                              {advisorChartData.map(adv => (
-                                <Tooltip key={adv.name} title={`Click to view personalized results & issues for ${adv.fullName || adv.name}`} arrow>
-                                  <Chip
-                                    icon={<InfoOutlined sx={{ fontSize: '13px !important', color: `${CN.orange} !important` }} />}
-                                    label={adv.name}
-                                    size="small"
-                                    onClick={() => setSelectedAdvisorModal(adv)}
-                                    sx={{
-                                      height: 22,
-                                      fontSize: '0.7rem',
-                                      fontWeight: 700,
-                                      bgcolor: '#FFF7ED',
-                                      border: '1px solid #FED7AA',
-                                      color: '#7A2E00',
-                                      cursor: 'pointer',
-                                      transition: 'all 0.2s ease',
-                                      '&:hover': {
-                                        bgcolor: '#FFEDD5',
-                                        borderColor: CN.orange,
-                                        transform: 'translateY(-1px)',
-                                        boxShadow: '0 2px 8px rgba(255, 102, 0, 0.2)'
-                                      }
-                                    }}
-                                  />
-                                </Tooltip>
-                              ))}
+                              <Typography variant="caption" sx={{ color: THEME.textTertiary, fontSize: '0.67rem', display: 'block', mt: 0.25 }}>
+                                Click to view personalized results →
+                              </Typography>
                             </Box>
-                          </>
+                          );
+                        };
+
+                        return (
+                          <ResponsiveContainer width="100%" height={200}>
+                            <RechartsBarChart
+                              data={advisorChartData}
+                              margin={{ top: 12, right: 24, left: -20, bottom: 12 }}
+                              barSize={22}
+                            >
+                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={CN.grid} />
+                              <XAxis dataKey="name" stroke={THEME.textTertiary} fontSize={11} tickLine={false} axisLine={false} />
+                              <YAxis domain={[0, 10]} stroke={THEME.textTertiary} fontSize={11} tickLine={false} axisLine={false} />
+                              <RechartsTooltip 
+                                content={<AdvisorBarTooltip />} 
+                                wrapperStyle={{ pointerEvents: 'auto' }}
+                              />
+                              <Legend iconType="circle" wrapperStyle={{ fontSize: '12px' }} />
+                              <Bar 
+                                dataKey="score" 
+                                name="Overall Score" 
+                                fill={CN.orange} 
+                                radius={[5, 5, 0, 0]} 
+                                cursor="pointer"
+                                onClick={(entry) => setSelectedAdvisorModal(entry)}
+                              />
+                            </RechartsBarChart>
+                          </ResponsiveContainer>
                         );
                       })()}
                     </CardContent>
