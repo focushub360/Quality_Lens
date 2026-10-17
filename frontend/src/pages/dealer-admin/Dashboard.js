@@ -1780,70 +1780,107 @@ export default function DealerAdminDashboard() {
 
                           return (
                             <Box
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedAdvisorModal(data);
-                              }}
                               sx={{
                                 bgcolor: '#FFFFFF',
                                 border: `1.5px solid ${CN.orange}`,
                                 borderRadius: 2.5,
                                 px: 2,
-                                py: 1.2,
+                                py: 1,
                                 boxShadow: '0 8px 24px rgba(255,102,0,0.18)',
-                                cursor: 'pointer',
                                 textAlign: 'center',
                                 userSelect: 'none',
-                                transition: 'all 0.15s ease',
-                                '&:hover': {
-                                  bgcolor: '#FFF7ED',
-                                  transform: 'scale(1.02)'
-                                }
+                                pointerEvents: 'none'
                               }}
                             >
-                              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.75, mb: 0.25 }}>
-                                <Typography variant="subtitle2" sx={{ fontWeight: 800, color: THEME.textPrimary, fontSize: '0.88rem' }}>
-                                  {data.name}
-                                </Typography>
-                                <Box sx={{
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  width: 17,
-                                  height: 17,
-                                  borderRadius: '50%',
-                                  bgcolor: CN.orange,
-                                  color: '#fff',
-                                  fontSize: '11px',
-                                  fontWeight: 800,
-                                  lineHeight: 1
-                                }}>
-                                  i
-                                </Box>
-                              </Box>
-                              <Typography variant="body2" sx={{ color: CN.orange, fontWeight: 700, fontSize: '0.82rem' }}>
+                              <Typography variant="subtitle2" sx={{ fontWeight: 800, color: THEME.textPrimary, fontSize: '0.88rem' }}>
+                                {data.name}
+                              </Typography>
+                              <Typography variant="body2" sx={{ color: CN.orange, fontWeight: 700, fontSize: '0.82rem', mt: 0.25 }}>
                                 Overall Score : {Number(data.score).toFixed(1)}/10
                               </Typography>
-                              <Typography variant="caption" sx={{ color: THEME.textTertiary, fontSize: '0.67rem', display: 'block', mt: 0.25 }}>
-                                Click to view personalized results →
+                              <Typography variant="caption" sx={{ color: THEME.textTertiary, fontSize: '0.68rem', display: 'block', mt: 0.25, fontWeight: 600 }}>
+                                Click bar or ⓘ icon for personalized results
                               </Typography>
                             </Box>
                           );
                         };
 
+                        const renderAdvisorAxisTick = (props) => {
+                          const { x, y, payload } = props;
+                          const name = payload.value || '';
+                          const adv = advisorChartData.find(a => a.name === name) || { name };
+                          return (
+                            <g
+                              transform={`translate(${x},${y})`}
+                              style={{ cursor: 'pointer' }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedAdvisorModal(adv);
+                              }}
+                            >
+                              <rect
+                                x={-34}
+                                y={4}
+                                width={68}
+                                height={22}
+                                rx={11}
+                                fill="#FFF7ED"
+                                stroke="#FFEDD5"
+                                strokeWidth={1}
+                              />
+                              <text
+                                x={-5}
+                                y={19}
+                                textAnchor="middle"
+                                fill="#1C3FAA"
+                                fontSize={10.5}
+                                fontWeight={700}
+                              >
+                                {name.length > 7 ? name.slice(0, 6) + '.' : name}
+                              </text>
+                              <circle cx={22} cy={15} r={6} fill={CN.orange} />
+                              <text
+                                x={22}
+                                y={18.5}
+                                textAnchor="middle"
+                                fill="#FFFFFF"
+                                fontSize={8.5}
+                                fontWeight={800}
+                                fontFamily="sans-serif"
+                              >
+                                i
+                              </text>
+                            </g>
+                          );
+                        };
+
                         return (
-                          <ResponsiveContainer width="100%" height={200}>
+                          <ResponsiveContainer width="100%" height={215}>
                             <RechartsBarChart
                               data={advisorChartData}
-                              margin={{ top: 12, right: 24, left: -20, bottom: 12 }}
-                              barSize={22}
+                              margin={{ top: 22, right: 24, left: -20, bottom: 18 }}
+                              barSize={24}
+                              style={{ cursor: 'pointer' }}
+                              onClick={(state) => {
+                                if (state && state.activePayload && state.activePayload.length) {
+                                  setSelectedAdvisorModal(state.activePayload[0].payload);
+                                }
+                              }}
                             >
                               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={CN.grid} />
-                              <XAxis dataKey="name" stroke={THEME.textTertiary} fontSize={11} tickLine={false} axisLine={false} />
+                              <XAxis 
+                                dataKey="name" 
+                                stroke={THEME.textTertiary} 
+                                fontSize={11} 
+                                tickLine={false} 
+                                axisLine={false}
+                                tick={renderAdvisorAxisTick}
+                                height={34}
+                              />
                               <YAxis domain={[0, 10]} stroke={THEME.textTertiary} fontSize={11} tickLine={false} axisLine={false} />
                               <RechartsTooltip 
                                 content={<AdvisorBarTooltip />} 
-                                wrapperStyle={{ pointerEvents: 'auto' }}
+                                wrapperStyle={{ pointerEvents: 'none' }}
                               />
                               <Legend iconType="circle" wrapperStyle={{ fontSize: '12px' }} />
                               <Bar 
@@ -1853,7 +1890,45 @@ export default function DealerAdminDashboard() {
                                 radius={[5, 5, 0, 0]} 
                                 cursor="pointer"
                                 onClick={(entry) => setSelectedAdvisorModal(entry)}
-                              />
+                              >
+                                <LabelList
+                                  content={(props) => {
+                                    const { x, y, width, index } = props;
+                                    const adv = advisorChartData[index];
+                                    if (!adv) return null;
+                                    const badgeY = Math.max(10, y - 13);
+                                    return (
+                                      <g
+                                        style={{ cursor: 'pointer' }}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setSelectedAdvisorModal(adv);
+                                        }}
+                                      >
+                                        <circle
+                                          cx={x + width / 2}
+                                          cy={badgeY}
+                                          r={8.5}
+                                          fill={CN.orange}
+                                          stroke="#FFFFFF"
+                                          strokeWidth={1.5}
+                                        />
+                                        <text
+                                          x={x + width / 2}
+                                          y={badgeY + 3.5}
+                                          textAnchor="middle"
+                                          fill="#FFFFFF"
+                                          fontSize={10}
+                                          fontWeight={800}
+                                          fontFamily="sans-serif"
+                                        >
+                                          i
+                                        </text>
+                                      </g>
+                                    );
+                                  }}
+                                />
+                              </Bar>
                             </RechartsBarChart>
                           </ResponsiveContainer>
                         );
