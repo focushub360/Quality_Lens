@@ -50,7 +50,8 @@ import {
   CalendarMonth,
   CalendarToday,
   DateRange,
-  AllInclusive
+  AllInclusive,
+  TrackChanges
 } from '@mui/icons-material';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart as RechartsBarChart, Bar, PieChart as RechartsPieChart, Pie, Cell, Legend, ComposedChart, LabelList, ReferenceLine } from 'recharts';
 import { dashboardApi } from '../../services/dashboardapi';
@@ -85,6 +86,33 @@ try {
   }
 } catch (e) {}
 
+
+// Benchmark target quality score per dealership (standard automotive benchmark is 7.5/10)
+const DEALER_BENCHMARK_TARGETS = {
+  'bmw-kun': 7.5,
+  'evmautokraft': 7.5,
+  'kun-exclusive': 7.5,
+  'navnit-mumbai': 7.5,
+  'eminent': 7.5,
+  'deutsche-motoren': 7.5,
+  'bird-automotive': 7.5,
+  'gallops-autohaus': 7.2,
+  'krishna-automobiles': 7.5,
+  'infinity-cars': 7.5,
+  'bavaria-motors': 7.5,
+};
+
+const getDealerTargetScore = (dealerId, dealerName) => {
+  if (!dealerId && !dealerName) return 7.5;
+  const cleanId = String(dealerId || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  for (const [key, val] of Object.entries(DEALER_BENCHMARK_TARGETS)) {
+    if (cleanId.includes(key.replace(/[^a-z0-9]/g, '')) || (dealerName && dealerName.toLowerCase().includes(key))) {
+      return val;
+    }
+  }
+  return 7.5;
+};
+
 export default function DealerAdminDashboard() {
   const [dashboardData, setDashboardData] = useState(() => {
     if (_globalDealerDashboardCache) return _globalDealerDashboardCache;
@@ -102,6 +130,7 @@ export default function DealerAdminDashboard() {
       performanceTrend: []
     };
   });
+  const [benchmarkTarget, setBenchmarkTarget] = useState(7.5);
   const [allResults, setAllResults] = useState(() => {
     return _globalDealerDashboardCache?.recentVideos || [];
   });
@@ -745,6 +774,8 @@ export default function DealerAdminDashboard() {
         location: 'Your Location',
         id: data.dealer_id || 'current'
       });
+      const resolvedTarget = data.target_score || data.benchmark_target || getDealerTargetScore(data.dealer_id || authUser?.dealer_id, authUser?.showroom_name);
+      setBenchmarkTarget(Number(resolvedTarget) || 7.5);
       
       const completionRate = data.total_videos_analyzed > 0 
           ? Math.round(((data.total_videos_analyzed - data.low_quality_video_count) / data.total_videos_analyzed) * 100)
@@ -1362,7 +1393,7 @@ export default function DealerAdminDashboard() {
 
           {/* Overview Stats - Dealer Focused */}
           <Grid container spacing={3} sx={{ mb: 6 }} justifyContent="center">
-            <Grid item xs={12} sm={6} md={3}>
+            <Grid item xs={12} sm={6} md={4}>
               <DealerStatCard
                 title="Total Videos"
                 value={dashboardData.overview.totalVideos}
@@ -1373,7 +1404,7 @@ export default function DealerAdminDashboard() {
                 onClick={() => handleViewDetails('videos')}
               />
             </Grid>
-            <Grid item xs={12} sm={6} md={3}>
+            <Grid item xs={12} sm={6} md={4}>
               <DealerStatCard
                 title="Average Quality Score"
                 value={dashboardData.overview.averageScore.toFixed(1)}
@@ -1385,8 +1416,26 @@ export default function DealerAdminDashboard() {
                 onClick={() => handleViewDetails('quality')}
               />
             </Grid>
-
-
+            <Grid item xs={12} sm={6} md={4}>
+              <DealerStatCard
+                title="Benchmark Target"
+                value={benchmarkTarget.toFixed(1)}
+                subtitle="Expected Target (out of 10)"
+                change={
+                  dashboardData.overview.averageScore >= benchmarkTarget
+                    ? `+${(dashboardData.overview.averageScore - benchmarkTarget).toFixed(1)} above target`
+                    : `${(benchmarkTarget - dashboardData.overview.averageScore).toFixed(1)} to reach target`
+                }
+                changeType={
+                  dashboardData.overview.averageScore >= benchmarkTarget
+                    ? "positive"
+                    : "negative"
+                }
+                icon={<TrackChanges />}
+                color="#10B981"
+                onClick={() => handleViewDetails('benchmark')}
+              />
+            </Grid>
           </Grid>
         </Box>
 
