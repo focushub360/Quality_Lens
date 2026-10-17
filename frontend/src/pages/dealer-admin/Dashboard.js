@@ -658,6 +658,161 @@ export default function DealerAdminDashboard() {
     </ResponsiveContainer>
   );
 
+
+  // ─── Helper: Extract personalized top issues for a specific advisor ─────────
+  const getAdvisorTopIssues = (advisorName, results = []) => {
+    if (!advisorName || !results || results.length === 0) return [];
+    const cleanName = advisorName.toLowerCase().trim();
+    const firstWord = cleanName.split(',')[0].split(' ')[0].trim();
+
+    const matchingResults = results.filter(r => {
+      const raw = (r.citnow_service_advisor || r.citnow_metadata?.service_advisor || r.advisor || '').toLowerCase().trim();
+      if (!raw) return false;
+      return raw.includes(cleanName) || cleanName.includes(raw) || (firstWord.length >= 3 && raw.includes(firstWord));
+    });
+
+    const issueCounts = {};
+    matchingResults.forEach(r => {
+      const v = r.video_quality_score != null ? r.video_quality_score : null;
+      if (v != null && v > 0) {
+        if (v < 5) issueCounts['Poor Video Quality'] = (issueCounts['Poor Video Quality'] || 0) + 1;
+        else if (v < 7) issueCounts['Below Average Video'] = (issueCounts['Below Average Video'] || 0) + 1;
+      }
+
+      const a = r.audio_quality_score != null ? r.audio_quality_score : null;
+      if (a != null && a > 0) {
+        if (a < 4) issueCounts['Inaudible / Low Audio'] = (issueCounts['Inaudible / Low Audio'] || 0) + 1;
+        else if (a < 6) issueCounts['Background Noise'] = (issueCounts['Background Noise'] || 0) + 1;
+        else if (a < 7) issueCounts['Low Audio Clarity'] = (issueCounts['Low Audio Clarity'] || 0) + 1;
+      }
+
+      const o = r.overall_quality_score != null ? r.overall_quality_score : null;
+      const label = r.overall_quality_label || '';
+      if (label === 'Poor' || (o != null && o > 0 && o < 5)) {
+        issueCounts['Poor Overall Score'] = (issueCounts['Poor Overall Score'] || 0) + 1;
+      } else if (label === 'Fair' || (o != null && o >= 5 && o < 7)) {
+        issueCounts['Needs Improvement'] = (issueCounts['Needs Improvement'] || 0) + 1;
+      }
+    });
+
+    return Object.entries(issueCounts).sort((a, b) => b[1] - a[1]).slice(0, 3);
+  };
+
+  // ─── Personalized Advisor Hover Tooltip ─────────────────────────────────────
+  const CustomAdvisorTooltip = ({ active, payload }) => {
+    if (!active || !payload || !payload.length) return null;
+    const d = payload[0].payload;
+    if (!d) return null;
+
+    const scoreNum = Number(d.score || 0);
+    let scoreBadgeBg = '#FEF2F2';
+    let scoreBadgeColor = '#DC2626';
+    let scoreBadgeBorder = '#FCA5A5';
+    if (scoreNum >= 7.5) {
+      scoreBadgeBg = '#F0FDF4';
+      scoreBadgeColor = '#16A34A';
+      scoreBadgeBorder = '#86EFAC';
+    } else if (scoreNum >= 6.0) {
+      scoreBadgeBg = '#FFF7ED';
+      scoreBadgeColor = '#EA580C';
+      scoreBadgeBorder = '#FDBA74';
+    }
+
+    return (
+      <Box sx={{
+        bgcolor: '#FFFFFF',
+        border: '1.5px solid rgba(255, 102, 0, 0.35)',
+        borderRadius: 2.5,
+        p: 2,
+        boxShadow: '0 12px 30px -4px rgba(255, 102, 0, 0.22), 0 4px 12px rgba(0,0,0,0.08)',
+        minWidth: 230,
+        maxWidth: 300,
+        pointerEvents: 'none'
+      }}>
+        {/* Header with Advisor Name & Videos count */}
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5, pb: 1, borderBottom: '1px solid #FFEDD5' }}>
+          <Box sx={{ pr: 1, minWidth: 0, flex: 1 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#7A2E00', fontSize: '0.9rem', lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {d.fullName || d.name}
+            </Typography>
+            <Typography variant="caption" sx={{ color: THEME.textSecondary, fontSize: '0.72rem', display: 'block', mt: 0.25 }}>
+              {d.videos ? `${d.videos} videos analyzed` : 'Service Advisor'}
+            </Typography>
+          </Box>
+          <Chip
+            label={`${scoreNum.toFixed(1)}/10`}
+            size="small"
+            sx={{
+              fontWeight: 800,
+              fontSize: '0.75rem',
+              bgcolor: scoreBadgeBg,
+              color: scoreBadgeColor,
+              border: `1px solid ${scoreBadgeBorder}`,
+              height: 24
+            }}
+          />
+        </Box>
+
+        {/* Sub-Scores (Overall, Video, Audio) */}
+        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 0.75, mb: 1.5, bgcolor: '#FFF7ED', p: 1, borderRadius: 1.5, border: '1px solid #FED7AA' }}>
+          <Box sx={{ textAlign: 'center' }}>
+            <Typography variant="caption" sx={{ color: THEME.textTertiary, display: 'block', fontSize: '0.65rem', fontWeight: 600 }}>
+              ⭐ Overall
+            </Typography>
+            <Typography variant="body2" sx={{ fontWeight: 800, color: '#EA580C', fontSize: '0.82rem' }}>
+              {scoreNum.toFixed(1)}
+            </Typography>
+          </Box>
+          <Box sx={{ textAlign: 'center', borderLeft: '1px solid #FED7AA', borderRight: '1px solid #FED7AA' }}>
+            <Typography variant="caption" sx={{ color: THEME.textTertiary, display: 'block', fontSize: '0.65rem', fontWeight: 600 }}>
+              📹 Video
+            </Typography>
+            <Typography variant="body2" sx={{ fontWeight: 800, color: THEME.textPrimary, fontSize: '0.82rem' }}>
+              {d.videoScore != null ? Number(d.videoScore).toFixed(1) : '—'}
+            </Typography>
+          </Box>
+          <Box sx={{ textAlign: 'center' }}>
+            <Typography variant="caption" sx={{ color: THEME.textTertiary, display: 'block', fontSize: '0.65rem', fontWeight: 600 }}>
+              🎙️ Audio
+            </Typography>
+            <Typography variant="body2" sx={{ fontWeight: 800, color: THEME.textPrimary, fontSize: '0.82rem' }}>
+              {d.audioScore != null ? Number(d.audioScore).toFixed(1) : '—'}
+            </Typography>
+          </Box>
+        </Box>
+
+        {/* Personalized Top Issues */}
+        <Box>
+          <Typography variant="caption" sx={{ fontWeight: 800, color: '#C2410C', display: 'block', mb: 0.75, fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+            Top Detected Issues
+          </Typography>
+          {(!d.topIssues || d.topIssues.length === 0) ? (
+            <Box sx={{ bgcolor: '#F0FDF4', px: 1, py: 0.5, borderRadius: 1, border: '1px solid #BBF7D0' }}>
+              <Typography variant="caption" sx={{ color: '#16A34A', fontWeight: 700, fontSize: '0.72rem', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                🎉 Top Performer — No critical issues!
+              </Typography>
+            </Box>
+          ) : (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+              {d.topIssues.map(([issue, count]) => (
+                <Box key={issue} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', bgcolor: '#FEF2F2', px: 1, py: 0.35, borderRadius: 1, border: '1px solid #FECACA' }}>
+                  <Typography variant="caption" sx={{ color: '#991B1B', fontWeight: 600, fontSize: '0.72rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', pr: 1 }}>
+                    • {issue}
+                  </Typography>
+                  <Chip
+                    label={count > 1 ? `${count}x` : 'Flagged'}
+                    size="small"
+                    sx={{ height: 16, fontSize: '0.62rem', fontWeight: 800, bgcolor: '#EF4444', color: '#FFFFFF', minWidth: 22, px: 0.3 }}
+                  />
+                </Box>
+              ))}
+            </Box>
+          )}
+        </Box>
+      </Box>
+    );
+  };
+
   // ─── Top Detected Issues Component ───────────────────────────────────────────
   const TopDetectedIssues = ({ allResults = [] }) => {
     const issueCounts = { video: {}, audio: {}, overall: {} };
@@ -1683,20 +1838,55 @@ export default function DealerAdminDashboard() {
                           </Typography>
                         </Box>
                       </Box>
-                      <ResponsiveContainer width="100%" height={200}>
-                        <RechartsBarChart
-                          data={dashboardData.serviceAdvisors.slice(0, 6).map(a => ({ name: a.name.split(',')[0].split(' ')[0], score: a.score }))}
-                          margin={{ top: 12, right: 24, left: -20, bottom: 12 }}
-                          barSize={22}
-                        >
-                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={CN.grid} />
-                          <XAxis dataKey="name" stroke={THEME.textTertiary} fontSize={11} tickLine={false} axisLine={false} />
-                          <YAxis domain={[0, 10]} stroke={THEME.textTertiary} fontSize={11} tickLine={false} axisLine={false} />
-                          <RechartsTooltip contentStyle={{ borderRadius: 10, border: `1px solid ${CN.orange}30`, boxShadow: '0 8px 24px rgba(255,102,0,0.12)' }} formatter={(v, n) => [`${v}/10`, n]} />
-                          <Legend iconType="circle" wrapperStyle={{ fontSize: '12px' }} />
-                          <Bar dataKey="score" name="Overall Score" fill={CN.orange} radius={[5, 5, 0, 0]} />
-                        </RechartsBarChart>
-                      </ResponsiveContainer>
+                      {(() => {
+                        const advisorChartData = (dashboardData.serviceAdvisors || []).slice(0, 6).map(a => {
+                          const shortName = (a.name || '').split(',')[0].split(' ')[0];
+                          const overallScore = typeof a.score === 'number' ? a.score : (typeof a.overall === 'number' ? a.overall : 0);
+                          const videoScore = typeof a.videoScore === 'number' ? a.videoScore : (typeof a.video === 'number' ? a.video : (a.avgVideoScore || null));
+                          const audioScore = typeof a.audioScore === 'number' ? a.audioScore : (typeof a.audio === 'number' ? a.audio : (a.avgAudioScore || null));
+                          const videoCount = a.videos || (a.scores ? a.scores.length : 0);
+                          
+                          let topIssues = getAdvisorTopIssues(a.name, allResults);
+                          if (topIssues.length === 0) {
+                            if (videoScore != null && videoScore > 0 && videoScore < 7) {
+                              topIssues.push([videoScore < 5 ? 'Poor Video Quality' : 'Below Average Video', 1]);
+                            }
+                            if (audioScore != null && audioScore > 0 && audioScore < 7) {
+                              topIssues.push([audioScore < 5 ? 'Low Audio / Background Noise' : 'Low Audio Clarity', 1]);
+                            }
+                            if (overallScore > 0 && overallScore < 7) {
+                              topIssues.push([overallScore < 5 ? 'Poor Overall Score' : 'Needs Improvement', 1]);
+                            }
+                          }
+
+                          return {
+                            name: shortName,
+                            fullName: a.name || shortName,
+                            score: overallScore,
+                            videoScore,
+                            audioScore,
+                            videos: videoCount,
+                            topIssues
+                          };
+                        });
+
+                        return (
+                          <ResponsiveContainer width="100%" height={200}>
+                            <RechartsBarChart
+                              data={advisorChartData}
+                              margin={{ top: 12, right: 24, left: -20, bottom: 12 }}
+                              barSize={22}
+                            >
+                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={CN.grid} />
+                              <XAxis dataKey="name" stroke={THEME.textTertiary} fontSize={11} tickLine={false} axisLine={false} />
+                              <YAxis domain={[0, 10]} stroke={THEME.textTertiary} fontSize={11} tickLine={false} axisLine={false} />
+                              <RechartsTooltip content={<CustomAdvisorTooltip />} />
+                              <Legend iconType="circle" wrapperStyle={{ fontSize: '12px' }} />
+                              <Bar dataKey="score" name="Overall Score" fill={CN.orange} radius={[5, 5, 0, 0]} />
+                            </RechartsBarChart>
+                          </ResponsiveContainer>
+                        );
+                      })()}
                     </CardContent>
                   </Card>
                 </Grid>
