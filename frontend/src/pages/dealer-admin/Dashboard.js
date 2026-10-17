@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useContext } from 'react';
+import React, { useEffect, useState, useContext, useRef } from 'react';
 import { useTheme } from '@mui/material/styles';
 import {
   Grid,
@@ -138,6 +138,9 @@ export default function DealerAdminDashboard() {
   });
   const [benchmarkTarget, setBenchmarkTarget] = useState(7.5);
   const [selectedAdvisorModal, setSelectedAdvisorModal] = useState(null);
+  const [hoveredAdvisorCard, setHoveredAdvisorCard] = useState(null);
+  const isOverAdvisorCardRef = useRef(false);
+  const advisorCardTimerRef = useRef(null);
   const [allResults, setAllResults] = useState(() => {
     return _globalDealerDashboardCache?.recentVideos || [];
   });
@@ -1773,164 +1776,150 @@ export default function DealerAdminDashboard() {
                           };
                         });
 
-                                                const AdvisorBarTooltip = ({ active, payload }) => {
-                          if (!active || !payload || !payload.length) return null;
-                          const data = payload[0].payload;
-                          if (!data) return null;
-
-                          return (
-                            <Box
-                              sx={{
-                                bgcolor: '#FFFFFF',
-                                border: `1.5px solid ${CN.orange}`,
-                                borderRadius: 2.5,
-                                px: 2,
-                                py: 1,
-                                boxShadow: '0 8px 24px rgba(255,102,0,0.18)',
-                                textAlign: 'center',
-                                userSelect: 'none',
-                                pointerEvents: 'none'
-                              }}
-                            >
-                              <Typography variant="subtitle2" sx={{ fontWeight: 800, color: THEME.textPrimary, fontSize: '0.88rem' }}>
-                                {data.name}
-                              </Typography>
-                              <Typography variant="body2" sx={{ color: CN.orange, fontWeight: 700, fontSize: '0.82rem', mt: 0.25 }}>
-                                Overall Score : {Number(data.score).toFixed(1)}/10
-                              </Typography>
-                              <Typography variant="caption" sx={{ color: THEME.textTertiary, fontSize: '0.68rem', display: 'block', mt: 0.25, fontWeight: 600 }}>
-                                Click bar or ⓘ icon for personalized results
-                              </Typography>
-                            </Box>
-                          );
-                        };
-
-                        const renderAdvisorAxisTick = (props) => {
-                          const { x, y, payload } = props;
-                          const name = payload.value || '';
-                          const adv = advisorChartData.find(a => a.name === name) || { name };
-                          return (
-                            <g
-                              transform={`translate(${x},${y})`}
-                              style={{ cursor: 'pointer' }}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedAdvisorModal(adv);
-                              }}
-                            >
-                              <rect
-                                x={-34}
-                                y={4}
-                                width={68}
-                                height={22}
-                                rx={11}
-                                fill="#FFF7ED"
-                                stroke="#FFEDD5"
-                                strokeWidth={1}
-                              />
-                              <text
-                                x={-5}
-                                y={19}
-                                textAnchor="middle"
-                                fill="#1C3FAA"
-                                fontSize={10.5}
-                                fontWeight={700}
-                              >
-                                {name.length > 7 ? name.slice(0, 6) + '.' : name}
-                              </text>
-                              <circle cx={22} cy={15} r={6} fill={CN.orange} />
-                              <text
-                                x={22}
-                                y={18.5}
-                                textAnchor="middle"
-                                fill="#FFFFFF"
-                                fontSize={8.5}
-                                fontWeight={800}
-                                fontFamily="sans-serif"
-                              >
-                                i
-                              </text>
-                            </g>
-                          );
-                        };
-
-                        return (
-                          <ResponsiveContainer width="100%" height={215}>
-                            <RechartsBarChart
-                              data={advisorChartData}
-                              margin={{ top: 22, right: 24, left: -20, bottom: 18 }}
-                              barSize={24}
-                              style={{ cursor: 'pointer' }}
-                              onClick={(state) => {
-                                if (state && state.activePayload && state.activePayload.length) {
-                                  setSelectedAdvisorModal(state.activePayload[0].payload);
+                                                return (
+                          <Box
+                            sx={{ position: 'relative', width: '100%', height: 215 }}
+                            onMouseLeave={() => {
+                              if (advisorCardTimerRef.current) clearTimeout(advisorCardTimerRef.current);
+                              advisorCardTimerRef.current = setTimeout(() => {
+                                if (!isOverAdvisorCardRef.current) {
+                                  setHoveredAdvisorCard(null);
                                 }
-                              }}
-                            >
-                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={CN.grid} />
-                              <XAxis 
-                                dataKey="name" 
-                                stroke={THEME.textTertiary} 
-                                fontSize={11} 
-                                tickLine={false} 
-                                axisLine={false}
-                                tick={renderAdvisorAxisTick}
-                                height={34}
-                              />
-                              <YAxis domain={[0, 10]} stroke={THEME.textTertiary} fontSize={11} tickLine={false} axisLine={false} />
-                              <RechartsTooltip 
-                                content={<AdvisorBarTooltip />} 
-                                wrapperStyle={{ pointerEvents: 'none' }}
-                              />
-                              <Legend iconType="circle" wrapperStyle={{ fontSize: '12px' }} />
-                              <Bar 
-                                dataKey="score" 
-                                name="Overall Score" 
-                                fill={CN.orange} 
-                                radius={[5, 5, 0, 0]} 
-                                cursor="pointer"
-                                onClick={(entry) => setSelectedAdvisorModal(entry)}
-                              >
-                                <LabelList
-                                  content={(props) => {
-                                    const { x, y, width, index } = props;
-                                    const adv = advisorChartData[index];
-                                    if (!adv) return null;
-                                    const badgeY = Math.max(10, y - 13);
-                                    return (
-                                      <g
-                                        style={{ cursor: 'pointer' }}
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setSelectedAdvisorModal(adv);
-                                        }}
-                                      >
-                                        <circle
-                                          cx={x + width / 2}
-                                          cy={badgeY}
-                                          r={8.5}
-                                          fill={CN.orange}
-                                          stroke="#FFFFFF"
-                                          strokeWidth={1.5}
-                                        />
-                                        <text
-                                          x={x + width / 2}
-                                          y={badgeY + 3.5}
-                                          textAnchor="middle"
-                                          fill="#FFFFFF"
-                                          fontSize={10}
-                                          fontWeight={800}
-                                          fontFamily="sans-serif"
-                                        >
-                                          i
-                                        </text>
-                                      </g>
-                                    );
+                              }, 350);
+                            }}
+                          >
+                            {/* Card inside chart - completely stationary when hovering/clicking, never runs away */}
+                            {hoveredAdvisorCard && hoveredAdvisorCard.data && (() => {
+                              const adv = hoveredAdvisorCard.data;
+                              const idx = hoveredAdvisorCard.index;
+                              const total = Math.max(advisorChartData.length, 1);
+                              const leftPercent = Math.max(18, Math.min(82, ((idx + 0.5) / total) * 100));
+
+                              return (
+                                <Box
+                                  onMouseEnter={() => {
+                                    isOverAdvisorCardRef.current = true;
+                                    if (advisorCardTimerRef.current) clearTimeout(advisorCardTimerRef.current);
                                   }}
+                                  onMouseLeave={() => {
+                                    isOverAdvisorCardRef.current = false;
+                                    if (advisorCardTimerRef.current) clearTimeout(advisorCardTimerRef.current);
+                                    advisorCardTimerRef.current = setTimeout(() => {
+                                      setHoveredAdvisorCard(null);
+                                    }, 300);
+                                  }}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedAdvisorModal(adv);
+                                  }}
+                                  sx={{
+                                    position: 'absolute',
+                                    left: `${leftPercent}%`,
+                                    top: 10,
+                                    transform: 'translateX(-50%)',
+                                    zIndex: 25,
+                                    bgcolor: '#FFFFFF',
+                                    border: `1.5px solid ${CN.orange}`,
+                                    borderRadius: 2.5,
+                                    px: 2,
+                                    py: 1,
+                                    boxShadow: '0 10px 28px rgba(255, 102, 0, 0.22)',
+                                    cursor: 'pointer',
+                                    textAlign: 'center',
+                                    userSelect: 'none',
+                                    minWidth: 185,
+                                    transition: 'left 0.2s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.15s ease',
+                                    '&:hover': {
+                                      bgcolor: '#FFF7ED',
+                                      boxShadow: '0 12px 32px rgba(255, 102, 0, 0.28)'
+                                    }
+                                  }}
+                                >
+                                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.8, mb: 0.25 }}>
+                                    <Typography variant="subtitle2" sx={{ fontWeight: 800, color: THEME.textPrimary, fontSize: '0.88rem' }}>
+                                      {adv.name}
+                                    </Typography>
+                                    <Box
+                                      component="span"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSelectedAdvisorModal(adv);
+                                      }}
+                                      sx={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        width: 19,
+                                        height: 19,
+                                        borderRadius: '50%',
+                                        bgcolor: CN.orange,
+                                        color: '#fff',
+                                        fontSize: '11px',
+                                        fontWeight: 800,
+                                        cursor: 'pointer',
+                                        boxShadow: '0 2px 6px rgba(255,102,0,0.3)',
+                                        transition: 'transform 0.15s ease, background-color 0.15s ease',
+                                        '&:hover': {
+                                          transform: 'scale(1.2)',
+                                          bgcolor: '#EA580C'
+                                        }
+                                      }}
+                                    >
+                                      i
+                                    </Box>
+                                  </Box>
+                                  <Typography variant="body2" sx={{ color: CN.orange, fontWeight: 700, fontSize: '0.82rem' }}>
+                                    Overall Score : {Number(adv.score).toFixed(1)}/10
+                                  </Typography>
+                                  <Typography variant="caption" sx={{ color: THEME.textTertiary, fontSize: '0.68rem', display: 'block', mt: 0.25, fontWeight: 600 }}>
+                                    Click ⓘ to view personalized results →
+                                  </Typography>
+                                </Box>
+                              );
+                            })()}
+
+                            <ResponsiveContainer width="100%" height={215}>
+                              <RechartsBarChart
+                                data={advisorChartData}
+                                margin={{ top: 18, right: 24, left: -20, bottom: 12 }}
+                                barSize={24}
+                                style={{ cursor: 'pointer' }}
+                                onMouseMove={(state) => {
+                                  if (isOverAdvisorCardRef.current) return;
+                                  if (state && state.activePayload && state.activePayload.length) {
+                                    if (advisorCardTimerRef.current) clearTimeout(advisorCardTimerRef.current);
+                                    const data = state.activePayload[0].payload;
+                                    const idx = typeof state.activeTooltipIndex === 'number' ? state.activeTooltipIndex : 0;
+                                    setHoveredAdvisorCard({ data, index: idx });
+                                  }
+                                }}
+                                onClick={(state) => {
+                                  if (state && state.activePayload && state.activePayload.length) {
+                                    setSelectedAdvisorModal(state.activePayload[0].payload);
+                                  }
+                                }}
+                              >
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={CN.grid} />
+                                <XAxis 
+                                  dataKey="name" 
+                                  stroke={THEME.textTertiary} 
+                                  fontSize={11} 
+                                  tickLine={false} 
+                                  axisLine={false}
                                 />
-                              </Bar>
-                            </RechartsBarChart>
-                          </ResponsiveContainer>
+                                <YAxis domain={[0, 10]} stroke={THEME.textTertiary} fontSize={11} tickLine={false} axisLine={false} />
+                                <Legend iconType="circle" wrapperStyle={{ fontSize: '12px' }} />
+                                <Bar 
+                                  dataKey="score" 
+                                  name="Overall Score" 
+                                  fill={CN.orange} 
+                                  radius={[5, 5, 0, 0]} 
+                                  cursor="pointer"
+                                  onClick={(entry) => setSelectedAdvisorModal(entry)}
+                                />
+                              </RechartsBarChart>
+                            </ResponsiveContainer>
+                          </Box>
                         );
                       })()}
                     </CardContent>
