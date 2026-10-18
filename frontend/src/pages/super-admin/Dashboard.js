@@ -122,6 +122,9 @@ import api from '../../services/api';
 import { listUsers, createUser, updateUser, deleteUser } from '../../services/users.js';
 import { listDealerUsers, getDealerUserStats } from '../../services/dealer_user.js';
 import { formatDateTime } from '../../utils/dateFormatter';
+import { useAuth } from '../../contexts/AuthContext';
+import TechLuxuryDashboard from '../master-admin/TechLuxuryDashboard';
+import { isProTechExperience } from '../../utils/uiExperience';
 // QualityLens Dashboard Theme
 const THEME = {
   primary: '#0DA1B8',
@@ -3850,6 +3853,27 @@ let _globalUsersCache = [];
 
 // Main Dashboard Component
 export default function SuperAdminDashboard() {
+  const { user } = useAuth();
+  const [, setUiTick] = useState(0);
+
+  // Re-evaluate if UI preference changed for currently active user
+  useEffect(() => {
+    const handlePrefChange = (e) => {
+      const { username, userId } = e.detail || {};
+      const currentUsername = user?.username ? String(user.username).toLowerCase() : null;
+      const currentId = user?.id ? String(user.id) : (user?._id ? String(user._id) : null);
+      if (
+        (username && currentUsername && username.toLowerCase() === currentUsername) ||
+        (userId && currentId && userId === currentId)
+      ) {
+        setUiTick((t) => t + 1);
+      }
+    };
+    window.addEventListener('ql_ui_preference_changed', handlePrefChange);
+    return () => window.removeEventListener('ql_ui_preference_changed', handlePrefChange);
+  }, [user]);
+
+  const isTech = isProTechExperience(user);
   const [allResults, setAllResults] = useState(() => _globalAllResultsCache || []);
   const [dashboardData, setDashboardData] = useState(() => {
     if (_globalDashboardCache) return _globalDashboardCache;
@@ -4475,80 +4499,35 @@ export default function SuperAdminDashboard() {
           </Alert>
         </Snackbar>
 
-        {/* Header Section */}
+        {/* Performance Overview Section */}
         <Box sx={{ mb: 6, textAlign: 'center' }}>
-          <Typography
-            variant="h3"
-            sx={{
-              fontWeight: 700,
-              color: THEME.textPrimary,
-              mb: 2,
-              background: THEME.gradientPrimary,
-              backgroundClip: 'text',
-              textFillColor: 'transparent',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent'
-            }}
-          >
+          <Typography variant="h4" sx={{
+            color: THEME.textPrimary,
+            fontWeight: 700,
+            letterSpacing: '-0.02em',
+            mb: 1,
+            fontSize: { xs: '1.6rem', md: '2rem' }
+          }}>
             Network Performance Overview
           </Typography>
-          <Typography
-            variant="h6"
-            sx={{
-              color: THEME.textSecondary,
-              fontWeight: 400,
-              maxWidth: '800px',
-              mx: 'auto',
-              lineHeight: 1.6,
-              mb: 3
-            }}
-          >
-            Comprehensive analytics and performance insights across your entire dealership network
+          <Typography variant="body1" sx={{
+            color: THEME.textSecondary,
+            mb: 3,
+            maxWidth: '600px',
+            mx: 'auto'
+          }}>
+            Key performance indicators and metrics across your dealership network
           </Typography>
 
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
-            <Box sx={{ textAlign: 'left' }}>
-              <Typography variant="h4" sx={{
-                fontWeight: 600,
-                color: THEME.textPrimary,
-                mb: 1
-              }}>
-                Super Admin Dashboard
-              </Typography>
-              <Typography variant="body1" sx={{
-                color: THEME.textSecondary,
-                fontWeight: 400
-              }}>
-                Real-time monitoring and performance tracking
-              </Typography>
-            </Box>
-            <Button
-              variant="contained"
-              startIcon={<Refresh />}
-              onClick={handleRefresh}
-              sx={{
-                borderRadius: 3,
-                px: 4,
-                py: 1.5,
-                fontWeight: 600,
-                textTransform: 'none',
-                fontSize: '16px',
-                // Global gradient theme applies
-              }}
-            >
-              Refresh Data
-            </Button>
-          </Box>
-
-          {/* Time Range Tabs - Centered */}
+          {/* Time Range Tabs - Centered Floating Filter */}
           <Box sx={{ display: 'flex', justifyContent: 'center', mb: 4 }}>
             <Paper sx={{
-              background: 'rgba(0,0,0,0.03)',
+              background: '#FFFFFF',
               border: `1px solid ${THEME.border}`,
               borderRadius: 50,
               display: 'inline-flex',
               p: 0.75,
-              backdropFilter: 'blur(10px)',
+              boxShadow: '0 4px 16px rgba(15, 23, 42, 0.04)',
               gap: 0.5
             }}>
               {['day', 'week', 'month', 'quarter', 'year'].map((range) => {
@@ -4572,16 +4551,16 @@ export default function SuperAdminDashboard() {
                       borderRadius: 50,
                       px: 3,
                       py: 1,
-                      fontWeight: isActive ? 600 : 500,
+                      fontWeight: isActive ? 700 : 500,
                       textTransform: 'none',
                       fontSize: '14px',
-                      color: isActive ? THEME.primary : THEME.textSecondary,
-                      background: isActive ? '#FFFFFF' : 'transparent',
-                      boxShadow: isActive ? '0 4px 12px rgba(0,0,0,0.08)' : 'none',
-                      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                      color: isActive ? '#FFFFFF' : THEME.textSecondary,
+                      background: isActive ? 'linear-gradient(135deg, #0DA1B8 0%, #0C587D 100%)' : 'transparent',
+                      boxShadow: isActive ? '0 4px 12px rgba(13, 161, 184, 0.3)' : 'none',
+                      transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
                       '&:hover': {
-                        background: isActive ? '#FFFFFF' : 'rgba(255,255,255,0.5)',
-                        color: THEME.primary,
+                        background: isActive ? 'linear-gradient(135deg, #0DA1B8 0%, #0C587D 100%)' : 'rgba(241, 245, 249, 0.8)',
+                        color: isActive ? '#FFFFFF' : THEME.primary,
                         transform: 'translateY(-1px)'
                       }
                     }}
@@ -4592,25 +4571,6 @@ export default function SuperAdminDashboard() {
               })}
             </Paper>
           </Box>
-        </Box>
-
-        {/* Performance Overview Section */}
-        <Box sx={{ mb: 6, textAlign: 'center' }}>
-          <Typography variant="h4" sx={{
-            color: THEME.textPrimary,
-            fontWeight: 600,
-            mb: 1
-          }}>
-            Network Performance Overview
-          </Typography>
-          <Typography variant="body1" sx={{
-            color: THEME.textSecondary,
-            mb: 4,
-            maxWidth: '600px',
-            mx: 'auto'
-          }}>
-            Key performance indicators and metrics across your dealership network
-          </Typography>
 
           {/* Overview Stats - Guaranteed 4 cards on 1 horizontal row */}
           <Box sx={{
@@ -4675,6 +4635,35 @@ export default function SuperAdminDashboard() {
             />
           </Box>
         </Box>
+
+        {/* ── 2x2 LUXURY TELEMETRY & ADVISOR TREND GRID (EXCLUSIVELY FOR TECH LOGIN) ── */}
+        {isTech && (
+          <Box sx={{ mb: 6 }}>
+            <Box sx={{ textAlign: 'center', mb: 3 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1.5, mb: 0.75 }}>
+                <Typography
+                  sx={{
+                    fontSize: '0.72rem',
+                    fontWeight: 800,
+                    letterSpacing: '0.22em',
+                    color: '#64748B',
+                    textTransform: 'uppercase'
+                  }}
+                >
+                  QUALITY & UPLOAD TELEMETRY
+                </Typography>
+                <Box sx={{ width: 28, height: '1.5px', bgcolor: '#CBD5E1' }} />
+              </Box>
+              <Typography variant="h4" sx={{ color: '#0F172A', fontWeight: 800, letterSpacing: '-0.02em', mb: 0.5 }}>
+                Operational Trends & Advisor Benchmarks
+              </Typography>
+              <Typography variant="body1" sx={{ color: '#64748B', fontSize: '0.92rem', maxWidth: '600px', mx: 'auto' }}>
+                Real-time daily telemetry, uploads volume, and advisor rankings
+              </Typography>
+            </Box>
+            <TechLuxuryDashboard />
+          </Box>
+        )}
 
         {/* Analytics & Insights Section */}
         <Box sx={{ mb: 6, textAlign: 'center' }}>

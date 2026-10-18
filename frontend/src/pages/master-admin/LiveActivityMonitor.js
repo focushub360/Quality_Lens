@@ -134,11 +134,22 @@ export default function LiveActivityMonitor() {
         });
       }
 
-      // Parse completed bulk batches from /bulk-batches (ensuring no batch misses out)
+      // Helper to strictly identify completed batches (100% done or marked completed)
+      const isBatchFullyDone = (b) => {
+        if (!b) return false;
+        const status = String(b.status || '').toLowerCase();
+        if (status === 'completed') return true;
+        const total = Number(b.total_urls || 0);
+        const processed = Number(b.processed_urls || b.processed || 0);
+        const pct = Number(b.progress_pct || b.progress_percentage || 0);
+        return (total > 0 && processed >= total) || pct >= 100;
+      };
+
+      // Parse completed bulk batches from /bulk-batches (ensuring all 100% done batches go to completed)
       let formattedCompletedBatches = [];
       if (batchesRes.status === 'fulfilled' && Array.isArray(batchesRes.value?.data)) {
         formattedCompletedBatches = batchesRes.value.data
-          .filter(b => b.status === 'completed')
+          .filter(isBatchFullyDone)
           .map(b => {
             const batchId = b.batch_id || b._id || '';
             const filename = b.original_filename || b.filename || 'Excel Batch Upload';
@@ -158,12 +169,26 @@ export default function LiveActivityMonitor() {
               total_urls: totalUrls,
               processed_urls: processedUrls,
               failed_urls: failedUrls,
-              status: b.status,
+              status: 'completed',
               created_at: b.created_at,
               completed_at: completedAt
             };
           });
       }
+
+      // Purge any completed batches from pausedBatchIds
+      const doneBatchIds = new Set(formattedCompletedBatches.map(b => String(b.batch_id || b.id)));
+      setPausedBatchIds(prev => {
+        let changed = false;
+        const next = new Set(prev);
+        for (const id of prev) {
+          if (doneBatchIds.has(String(id))) {
+            next.delete(id);
+            changed = true;
+          }
+        }
+        return changed ? next : prev;
+      });
 
       // If /admin/live-activity returned valid data:
       if (liveRes.status === 'fulfilled' && liveRes.value?.data) {
@@ -201,11 +226,13 @@ export default function LiveActivityMonitor() {
           }
         });
 
-        const incomingLiveVideos = d.live_videos?.in_flight_videos || [];
+        // Strictly exclude any videos that are 100% completed
+        const incomingLiveVideos = (d.live_videos?.in_flight_videos || []).filter(lv => !isBatchFullyDone(lv));
 
-        // Ensure any paused batches (from rawBatches or pausedBatchIds) are never dropped
+        // Ensure any paused batches (from rawBatches or pausedBatchIds) that are NOT 100% done are retained
         const rawBatches = batchesRes.status === 'fulfilled' && Array.isArray(batchesRes.value?.data) ? batchesRes.value.data : [];
         const pausedBatchesFromRaw = rawBatches
+          .filter(b => !isBatchFullyDone(b))
           .filter(b => b.status === 'paused' || pausedBatchIds.has(b.batch_id || b._id))
           .filter(b => !incomingLiveVideos.some(lv => String(lv.batch_id || lv.id) === String(b.batch_id || b._id)))
           .map(b => ({
@@ -226,26 +253,28 @@ export default function LiveActivityMonitor() {
           }));
 
         const runningVideos = [...incomingLiveVideos, ...pausedBatchesFromRaw].filter(
-          v => !pausedBatchIds.has(v.batch_id || v.id) && v.status !== 'paused'
+          v => !isBatchFullyDone(v) && !pausedBatchIds.has(v.batch_id || v.id) && v.status !== 'paused'
         );
 
-        const finalInFlightVideos = [...incomingLiveVideos, ...pausedBatchesFromRaw].map(v => {
-          const isPaused = pausedBatchIds.has(v.batch_id || v.id) || v.status === 'paused';
-          if (isPaused) {
+        const finalInFlightVideos = [...incomingLiveVideos, ...pausedBatchesFromRaw]
+          .filter(v => !isBatchFullyDone(v))
+          .map(v => {
+            const isPaused = pausedBatchIds.has(v.batch_id || v.id) || v.status === 'paused';
+            if (isPaused) {
+              return {
+                ...v,
+                status: 'paused',
+                is_paused: true,
+                worker_slot: 'Paused Slot',
+                stage: v.stage?.includes('Paused') ? v.stage : 'Stage Paused: Analysis Paused by Admin'
+              };
+            }
+            const activeSlotLabel = runningVideos.length === 1 ? 'Worker #1 & #2 (Dual Parallel)' : (v.worker_slot || 'Worker #1');
             return {
               ...v,
-              status: 'paused',
-              is_paused: true,
-              worker_slot: 'Paused Slot',
-              stage: v.stage?.includes('Paused') ? v.stage : 'Stage Paused: Analysis Paused by Admin'
+              worker_slot: activeSlotLabel
             };
-          }
-          const activeSlotLabel = runningVideos.length === 1 ? 'Worker #1 & #2 (Dual Parallel)' : (v.worker_slot || 'Worker #1');
-          return {
-            ...v,
-            worker_slot: activeSlotLabel
-          };
-        });
+          });
 
         setLiveData({
           ...d,
@@ -267,7 +296,9 @@ export default function LiveActivityMonitor() {
       } else {
         // Fallback using direct live endpoints
         const rawBatches = batchesRes.status === 'fulfilled' && Array.isArray(batchesRes.value?.data) ? batchesRes.value.data : [];
-        const activeB = rawBatches.filter(b => ['processing', 'pending', 'stopping', 'in_progress', 'queued', 'paused'].includes(b.status) || pausedBatchIds.has(b.batch_id || b._id));
+        const activeB = rawBatches
+          .filter(b => !isBatchFullyDone(b))
+          .filter(b => ['processing', 'pending', 'stopping', 'in_progress', 'queued', 'paused'].includes(b.status) || pausedBatchIds.has(b.batch_id || b._id));
 
         const cutoff7d = new Date();
         cutoff7d.setDate(cutoff7d.getDate() - 7);
@@ -1630,9 +1661,40 @@ Projected Finish Time: ~${finishEta.toLocaleTimeString([], { hour: '2-digit', mi
                                 </Typography>
                               </Box>
 
-                              {/* Individual Batch Pause / Resume Button (Pauses ONLY this batch, notifies submitter) */}
+                              {/* Individual Batch Pause / Resume Button OR Go to Completed when 100% Done */}
                               {(() => {
                                 const bId = vid.batch_id || vid.id;
+                                const isDone = Boolean(Number(vid.progress_pct) >= 100 || remaining === 0 || vid.status === 'completed');
+                                if (isDone) {
+                                  return (
+                                    <Tooltip title="This batch is 100% complete! Click to view completed results page." arrow>
+                                      <Button
+                                        size="small"
+                                        variant="contained"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          navigate(`/dealer/results?batchId=${bId}`);
+                                        }}
+                                        startIcon={<CheckCircle sx={{ fontSize: '14px !important' }} />}
+                                        sx={{
+                                          height: 30,
+                                          px: 1.4,
+                                          fontSize: '0.73rem',
+                                          fontWeight: 800,
+                                          textTransform: 'none',
+                                          borderRadius: 1.75,
+                                          bgcolor: '#10B981',
+                                          color: '#FFFFFF',
+                                          boxShadow: '0 2px 6px rgba(16, 185, 129, 0.35)',
+                                          whiteSpace: 'nowrap',
+                                          '&:hover': { bgcolor: '#059669' }
+                                        }}
+                                      >
+                                        Go to Completed
+                                      </Button>
+                                    </Tooltip>
+                                  );
+                                }
                                 const isThisBatchPaused = Boolean(pausedBatchIds.has(bId) || vid.status === 'paused' || vid.is_paused);
                                 return (
                                   <Tooltip
@@ -1706,6 +1768,22 @@ Projected Finish Time: ~${finishEta.toLocaleTimeString([], { hour: '2-digit', mi
                           <TableCell align="right" sx={{ py: 2 }}>
                             {(() => {
                               const bId = vid.batch_id || vid.id;
+                              const isDone = Boolean(Number(vid.progress_pct) >= 100 || remaining === 0 || vid.status === 'completed');
+                              if (isDone) {
+                                return (
+                                  <Box sx={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                                    <Chip
+                                      icon={<CheckCircleOutline sx={{ fontSize: '13px !important', color: '#047857 !important' }} />}
+                                      label="100% COMPLETED"
+                                      size="small"
+                                      sx={{ fontWeight: 800, fontSize: '0.72rem', bgcolor: 'rgba(16, 185, 129, 0.15)', color: '#047857', border: '1px solid rgba(16, 185, 129, 0.3)' }}
+                                    />
+                                    <Typography variant="caption" sx={{ color: '#059669', fontSize: '0.66rem', mt: 0.3, fontWeight: 700 }}>
+                                      Ready in Completed
+                                    </Typography>
+                                  </Box>
+                                );
+                              }
                               const isThisBatchPaused = Boolean(pausedBatchIds.has(bId) || vid.status === 'paused' || vid.is_paused);
                               if (isThisBatchPaused) {
                                 return (
@@ -1998,12 +2076,22 @@ Projected Finish Time: ~${finishEta.toLocaleTimeString([], { hour: '2-digit', mi
                       <TableCell align="center" sx={{ fontWeight: 700, color: THEME.textSecondary, fontSize: '0.8rem', py: 1.25 }}>TOTAL VIDEOS</TableCell>
                       <TableCell sx={{ fontWeight: 700, color: THEME.textSecondary, fontSize: '0.8rem', py: 1.25 }}>STATUS</TableCell>
                       <TableCell align="right" sx={{ fontWeight: 700, color: THEME.textSecondary, fontSize: '0.8rem', py: 1.25 }}>COMPLETION TIMESTAMP</TableCell>
+                      <TableCell align="center" sx={{ fontWeight: 700, color: THEME.textSecondary, fontSize: '0.8rem', py: 1.25 }}>COMPLETED PAGE / ACTION</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {paginatedBatches.length > 0 ? (
                       paginatedBatches.map((b) => (
-                        <TableRow key={b.id} hover sx={{ '&:last-child td, &:last-child th': { border: 0 } }}>
+                        <TableRow
+                          key={b.id}
+                          hover
+                          onClick={() => navigate(`/dealer/results?batchId=${b.batch_id}`)}
+                          sx={{
+                            cursor: 'pointer',
+                            '&:last-child td, &:last-child th': { border: 0 },
+                            '&:hover': { bgcolor: '#F0FDF4 !important' }
+                          }}
+                        >
                           <TableCell sx={{ py: 1.5 }}>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                               <Box sx={{
@@ -2116,11 +2204,37 @@ Projected Finish Time: ~${finishEta.toLocaleTimeString([], { hour: '2-digit', mi
                               </Typography>
                             )}
                           </TableCell>
+                          <TableCell align="center" sx={{ py: 1.5 }}>
+                            <Button
+                              size="small"
+                              variant="contained"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/dealer/results?batchId=${b.batch_id}`);
+                              }}
+                              startIcon={<Launch sx={{ fontSize: 13 }} />}
+                              sx={{
+                                borderRadius: 2,
+                                textTransform: 'none',
+                                fontWeight: 800,
+                                fontSize: '0.72rem',
+                                py: 0.5,
+                                px: 1.5,
+                                bgcolor: THEME.primary,
+                                color: '#fff',
+                                boxShadow: 'none',
+                                whiteSpace: 'nowrap',
+                                '&:hover': { bgcolor: THEME.primaryDark, boxShadow: '0 2px 6px rgba(13,161,184,0.35)' }
+                              }}
+                            >
+                              Go to Completed
+                            </Button>
+                          </TableCell>
                         </TableRow>
                       ))
                     ) : (
                       <TableRow>
-                        <TableCell colSpan={6} align="center" sx={{ py: 3, color: THEME.textSecondary }}>
+                        <TableCell colSpan={7} align="center" sx={{ py: 3, color: THEME.textSecondary }}>
                           {liveData.completed_batches?.length === 0 ? 'No completed bulk uploads found.' : 'No completed bulk uploads match the selected time filter or search query.'}
                         </TableCell>
                       </TableRow>

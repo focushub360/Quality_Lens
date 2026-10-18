@@ -1,11 +1,39 @@
-// src/components/layout/Layout.jsx
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Box } from '@mui/material';
 import Navbar from './Navbar';
 import Sidebar from './Sidebar';
 import Footer from './Footer';
+import TechLuxuryLayout from './TechLuxuryLayout';
+import { useAuth } from '../../contexts/AuthContext';
+import { isProTechExperience } from '../../utils/uiExperience';
 
 export default function Layout({ children }) {
+  const { user } = useAuth();
+  const [, setTick] = useState(0);
+
+  // Listen for real-time UI preference changes
+  useEffect(() => {
+    const handlePrefChange = (e) => {
+      const { username, userId } = e.detail || {};
+      const currentUsername = user?.username ? String(user.username).toLowerCase() : null;
+      const currentId = user?.id ? String(user.id) : (user?._id ? String(user._id) : null);
+      if (
+        (username && currentUsername && username.toLowerCase() === currentUsername) ||
+        (userId && currentId && userId === currentId)
+      ) {
+        setTick((t) => t + 1);
+      }
+    };
+
+    window.addEventListener('ql_ui_preference_changed', handlePrefChange);
+    return () => window.removeEventListener('ql_ui_preference_changed', handlePrefChange);
+  }, [user]);
+
+  const isTechUser = isProTechExperience(user);
+
+  if (isTechUser) {
+    return <TechLuxuryLayout>{children}</TechLuxuryLayout>;
+  }
   return (
     <Box 
       sx={{ 

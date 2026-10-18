@@ -720,7 +720,10 @@ export default function BulkUpload() {
         setStatus(prev => ({ ...prev, ...updatedStatus }));
         saveBatchToStorage(updatedStatus);
 
-        if (['completed', 'failed', 'cancelled'].includes(statusData.status)) {
+        const isDone = ['completed', 'failed', 'cancelled'].includes(statusData.status) ||
+          (Number(statusData.total_urls) > 0 && Number(statusData.processed_urls) >= Number(statusData.total_urls));
+
+        if (isDone) {
           clearInterval(pollingIntervalRef.current);
           pollingIntervalRef.current = null;
           setLoading(false);

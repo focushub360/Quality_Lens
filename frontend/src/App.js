@@ -30,6 +30,8 @@ import SupportPage from './pages/SupportPage';
 import ThemeSettings from './pages/config/ThemeSettings';
 import CitNowUpgrades from './pages/CitNowUpgrades';
 import GlobalTaskNotification from './components/common/GlobalTaskNotification';
+import TechLuxuryDashboard from './pages/master-admin/TechLuxuryDashboard';
+import { useAuth } from './contexts/AuthContext';
 
 export default function App() {
   return (
@@ -42,9 +44,10 @@ export default function App() {
             <Route path="/logout" element={<Logout />} />
 
             {/* Shared Configuration Routes (all authenticated roles) */}
-            <Route element={<ProtectedRoute roles={["super_admin", "dealer_admin", "dealer_user", "branch_admin"]} />}>
+            <Route element={<ProtectedRoute roles={["super_admin", "master_admin", "dealer_admin", "dealer_user", "branch_admin"]} />}>
               <Route path="/config" element={<Navigate to="/config/theme" replace />} />
               <Route path="/config/theme" element={<Layout><ThemeSettings /></Layout>} />
+              <Route path="/super-admin/config" element={<Navigate to="/config/theme" replace />} />
               <Route path="/citnow-upgrades" element={<Layout><CitNowUpgrades /></Layout>} />
             </Route>
 

@@ -13,6 +13,11 @@ import {
 } from '@mui/icons-material';
 import api from '../../services/api';
 import { formatDateTime } from '../../utils/dateFormatter';
+import {
+  saveUserUiPreference,
+  getStoredUiPreferences,
+  UI_EXPERIENCE_META
+} from '../../utils/uiExperience';
 
 const THEME = {
   primary: '#0DA1B8',
@@ -89,7 +94,9 @@ const DealerAccordionItem = React.memo(function DealerAccordionItem({
   revealAll,
   onTogglePassword,
   onCopy,
-  onOpenUpdateModal
+  onOpenUpdateModal,
+  userExperiences = {},
+  onUpdateUiExperience
 }) {
   const handleToggle = useCallback(() => {
     onToggle(dealerGroup.dealer_name);
@@ -164,16 +171,17 @@ const DealerAccordionItem = React.memo(function DealerAccordionItem({
 
       <AccordionDetails sx={{ p: 0 }}>
         {isExpanded && (
-          <TableContainer>
-            <Table size="small">
+          <TableContainer sx={{ overflowX: 'auto', width: '100%' }}>
+            <Table size="small" sx={{ minWidth: 1060, tableLayout: 'auto' }}>
               <TableHead sx={{ bgcolor: '#F1F5F9' }}>
                 <TableRow>
-                  <TableCell sx={{ fontWeight: 700, pl: 3, width: 220 }}>User & Role</TableCell>
-                  <TableCell sx={{ fontWeight: 700, width: 180 }}>Login Username</TableCell>
-                  <TableCell sx={{ fontWeight: 700, width: 220 }}>Email Address</TableCell>
-                  <TableCell sx={{ fontWeight: 700, width: 240 }}>Current Password</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>Branch / Location</TableCell>
-                  <TableCell sx={{ fontWeight: 700, textAlign: 'right', pr: 3, width: 130 }}>Actions</TableCell>
+                  <TableCell sx={{ fontWeight: 700, pl: 2.5, width: 190, minWidth: 175 }}>User & Role</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: 145, minWidth: 135 }}>Login Username</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: 180, minWidth: 165 }}>Email Address</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: 200, minWidth: 190 }}>Current Password</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: 190, minWidth: 180 }}>UI Experience</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: 125, minWidth: 110 }}>Branch / Location</TableCell>
+                  <TableCell sx={{ fontWeight: 700, textAlign: 'right', pr: 2.5, width: 125, minWidth: 125, whiteSpace: 'nowrap' }}>Actions</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -299,15 +307,143 @@ const DealerAccordionItem = React.memo(function DealerAccordionItem({
                         )}
                       </TableCell>
 
+                      {/* UI Experience Column */}
+                      <TableCell sx={{ width: 190, minWidth: 180 }}>
+                        {(() => {
+                          const userId = String(user.id || user._id || '');
+                          const uname = String(user.username || '').toLowerCase().trim();
+                          const currentExp =
+                            (userExperiences && (userExperiences[userId] || userExperiences[uname])) ||
+                            (user.ui_experience === 'pro' || user.ui_experience === 'tech' ? 'pro' :
+                             user.ui_experience === 'classic' || user.ui_experience === 'enterprise' ? 'classic' :
+                             (uname === 'tech@focus' || user.role === 'master_admin' ? 'pro' : 'classic'));
+                          const isPro = currentExp === 'pro';
+
+                          return (
+                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                              <Select
+                                size="small"
+                                value={isPro ? 'pro' : 'classic'}
+                                onChange={(e) => onUpdateUiExperience && onUpdateUiExperience(user, e.target.value)}
+                                renderValue={(val) => {
+                                  const isSelectedPro = val === 'pro';
+                                  return (
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.7, whiteSpace: 'nowrap' }}>
+                                      {isSelectedPro ? (
+                                        <VpnKey sx={{ fontSize: 13, color: '#7C3AED' }} />
+                                      ) : (
+                                        <Shield sx={{ fontSize: 13, color: '#0284C7' }} />
+                                      )}
+                                      <Typography
+                                        component="span"
+                                        sx={{
+                                          fontSize: '11px',
+                                          fontWeight: 800,
+                                          color: isSelectedPro ? '#7C3AED' : '#334155',
+                                          letterSpacing: '-0.2px'
+                                        }}
+                                      >
+                                        {isSelectedPro ? 'Pro (Tech Edition)' : 'Enterprise (Classic)'}
+                                      </Typography>
+                                    </Box>
+                                  );
+                                }}
+                                sx={{
+                                  height: 29,
+                                  width: '100%',
+                                  maxWidth: 185,
+                                  borderRadius: 2,
+                                  bgcolor: isPro ? '#FAF5FF' : '#F8FAFC',
+                                  border: `1.5px solid ${isPro ? '#C084FC' : '#CBD5E1'}`,
+                                  transition: 'all 0.15s ease',
+                                  '& .MuiSelect-select': {
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    py: 0.3,
+                                    px: 1
+                                  },
+                                  '& fieldset': { border: 'none' },
+                                  '&:hover': {
+                                    bgcolor: isPro ? '#F3E8FF' : '#F1F5F9',
+                                    borderColor: isPro ? '#9333EA' : '#94A3B8'
+                                  }
+                                }}
+                              >
+                                <MenuItem value="classic" sx={{ py: 1 }}>
+                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                    <Box sx={{
+                                      width: 22,
+                                      height: 22,
+                                      borderRadius: 1,
+                                      bgcolor: '#E0F2FE',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      color: '#0284C7',
+                                      flexShrink: 0
+                                    }}>
+                                      <Shield sx={{ fontSize: 13 }} />
+                                    </Box>
+                                    <Box>
+                                      <Typography variant="body2" sx={{ fontSize: '11.5px', fontWeight: 700, color: '#1E293B', lineHeight: 1.1 }}>
+                                        Enterprise (Classic Admin)
+                                      </Typography>
+                                      <Typography variant="caption" sx={{ fontSize: '9.5px', color: '#64748B', display: 'block' }}>
+                                        Default for all regular users & admins
+                                      </Typography>
+                                    </Box>
+                                  </Box>
+                                </MenuItem>
+                                <MenuItem value="pro" sx={{ py: 1 }}>
+                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                    <Box sx={{
+                                      width: 22,
+                                      height: 22,
+                                      borderRadius: 1,
+                                      bgcolor: '#EDE9FE',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      color: '#7C3AED',
+                                      flexShrink: 0
+                                    }}>
+                                      <VpnKey sx={{ fontSize: 13 }} />
+                                    </Box>
+                                    <Box>
+                                      <Typography variant="body2" sx={{ fontSize: '11.5px', fontWeight: 800, color: '#6B21A8', lineHeight: 1.1 }}>
+                                        Pro (Tech Edition)
+                                      </Typography>
+                                      <Typography variant="caption" sx={{ fontSize: '9.5px', color: '#8B5CF6', display: 'block' }}>
+                                        Default for tech@focus
+                                      </Typography>
+                                    </Box>
+                                  </Box>
+                                </MenuItem>
+                              </Select>
+                            </Box>
+                          );
+                        })()}
+                      </TableCell>
+
                       {/* Branch / Showroom */}
-                      <TableCell>
-                        <Typography variant="body2" sx={{ color: THEME.textSecondary, fontSize: '12px' }}>
+                      <TableCell sx={{ width: 125, minWidth: 110 }}>
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            color: THEME.textSecondary,
+                            fontSize: '12px',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            maxWidth: 125
+                          }}
+                        >
                           {user.branch_name || user.showroom_name || '-'}
                         </Typography>
                       </TableCell>
 
                       {/* Actions Column */}
-                      <TableCell sx={{ textAlign: 'right', pr: 3 }}>
+                      <TableCell sx={{ textAlign: 'right', pr: 2.5, width: 125, minWidth: 125, whiteSpace: 'nowrap' }}>
                         <Tooltip title="Update / Reset Password for this user">
                           <Button
                             size="small"
@@ -317,8 +453,10 @@ const DealerAccordionItem = React.memo(function DealerAccordionItem({
                             sx={{
                               fontSize: '11px',
                               fontWeight: 700,
-                              py: 0.3,
-                              px: 1.2,
+                              py: 0.4,
+                              px: 1.3,
+                              whiteSpace: 'nowrap',
+                              minWidth: 95,
                               textTransform: 'none',
                               borderRadius: 2,
                               color: THEME.accent,
@@ -374,6 +512,59 @@ export default function CredentialsVault() {
 
   // Toast / Feedback State
   const [toastMsg, setToastMsg] = useState(null);
+
+  // UI Experience State (QualityLens Enterprise Classic vs QualityLens Pro Tech Edition)
+  const [userExperiences, setUserExperiences] = useState(() => getStoredUiPreferences());
+  const [modalUiExperience, setModalUiExperience] = useState('classic');
+
+  // Handle Dynamic UI Experience Change
+  const handleUpdateUiExperience = useCallback(async (user, newExp) => {
+    if (!user) return;
+    const expValue = newExp === 'pro' ? 'pro' : 'classic';
+    const userId = String(user.id || user._id || '');
+    const username = String(user.username || '');
+
+    // 1. Instantly update local state
+    setUserExperiences((prev) => ({
+      ...prev,
+      [userId]: expValue,
+      [username.toLowerCase().trim()]: expValue
+    }));
+
+    // 2. Persist to localStorage and dispatch event for immediate reactivity
+    saveUserUiPreference(userId, username, expValue);
+
+    // 3. Update dealer and user lists in state
+    setAllUsers((prev) =>
+      prev.map((u) => (u.id === user.id ? { ...u, ui_experience: expValue } : u))
+    );
+    setDealersData((prev) =>
+      prev.map((dg) => ({
+        ...dg,
+        users: dg.users.map((u) => (u.id === user.id ? { ...u, ui_experience: expValue } : u))
+      }))
+    );
+
+    const meta = UI_EXPERIENCE_META[expValue];
+    setToastMsg({
+      type: 'success',
+      text: `Set UI Experience for "${username}" to ${meta.name} (${meta.badge})`
+    });
+
+    // 4. Persist to backend in background
+    const key = sessionStorage.getItem('ql_vault_key') || MASTER_VAULT_KEY;
+    try {
+      await api.post('/admin/credentials-vault/update-ui-experience', {
+        user_id: user.id,
+        username: user.username,
+        ui_experience: expValue,
+        security_key: key
+      });
+    } catch (err) {
+      console.warn('Backend update-ui-experience fallback to /users/:id', err?.message);
+      api.put(`/users/${user.id}`, { ui_experience: expValue }).catch(() => {});
+    }
+  }, []);
 
   // Helper to unify all super admin / system admin groups into single "Quality Lens Admin Team"
   const normalizeVaultData = (data) => {
@@ -565,6 +756,18 @@ export default function CredentialsVault() {
         setDealersData(vaultData.dealers);
         setAllUsers(vaultData.users);
 
+        const storedPrefs = getStoredUiPreferences();
+        const mergedPrefs = { ...storedPrefs };
+        vaultData.users.forEach((u) => {
+          const uid = String(u.id);
+          const uname = String(u.username || '').toLowerCase();
+          if (u.ui_experience) {
+            if (!mergedPrefs[uid]) mergedPrefs[uid] = u.ui_experience;
+            if (!mergedPrefs[uname]) mergedPrefs[uname] = u.ui_experience;
+          }
+        });
+        setUserExperiences(mergedPrefs);
+
         // Expand first 4 dealerships by default
         const initExpanded = {};
         vaultData.dealers.slice(0, 4).forEach((d) => {
@@ -605,6 +808,19 @@ export default function CredentialsVault() {
         _globalVaultCache = vaultData;
         setDealersData(vaultData.dealers);
         setAllUsers(vaultData.users);
+
+        const storedPrefs = getStoredUiPreferences();
+        const mergedPrefs = { ...storedPrefs };
+        vaultData.users.forEach((u) => {
+          const uid = String(u.id);
+          const uname = String(u.username || '').toLowerCase();
+          if (u.ui_experience) {
+            if (!mergedPrefs[uid]) mergedPrefs[uid] = u.ui_experience;
+            if (!mergedPrefs[uname]) mergedPrefs[uname] = u.ui_experience;
+          }
+        });
+        setUserExperiences(mergedPrefs);
+
         if (Object.keys(expandedDealerships).length === 0) {
           const initExpanded = {};
           vaultData.dealers.slice(0, 4).forEach((d) => {
@@ -671,9 +887,16 @@ export default function CredentialsVault() {
   const handleOpenUpdateModal = useCallback((user) => {
     setSelectedUser(user);
     setNewPasswordValue(user.password || 'sales@focus');
+    const userId = String(user.id || user._id || '');
+    const uname = String(user.username || '').toLowerCase().trim();
+    const currExp =
+      userExperiences[userId] ||
+      userExperiences[uname] ||
+      (user.ui_experience ? user.ui_experience : (uname === 'tech@focus' || user.role === 'master_admin' ? 'pro' : 'classic'));
+    setModalUiExperience(currExp === 'pro' ? 'pro' : 'classic');
     setShowNewPassword(true);
     setUpdateModalOpen(true);
-  }, []);
+  }, [userExperiences]);
 
   // Generate Suggested Password
   const handleGeneratePassword = () => {
@@ -774,9 +997,14 @@ export default function CredentialsVault() {
           [selectedUser.id]: true
         }));
 
+        // Also update UI Experience if selected in modal
+        if (modalUiExperience) {
+          handleUpdateUiExperience(selectedUser, modalUiExperience);
+        }
+
         setToastMsg({
           type: 'success',
-          text: `Password updated for ${selectedUser.username} to "${updatedPassword}"!`
+          text: `Updated credentials & experience for ${selectedUser.username} successfully!`
         });
         setUpdateModalOpen(false);
       }
@@ -794,17 +1022,26 @@ export default function CredentialsVault() {
   // Export CSV of Credentials
   const handleExportCsv = () => {
     if (allUsers.length === 0) return;
-    const headers = ['Dealership', 'Full Name', 'Username', 'Email', 'Role', 'Password', 'Last Password Update', 'Status'];
-    const rows = allUsers.map((u) => [
-      `"${u.dealer_name || ''}"`,
-      `"${u.name || ''}"`,
-      `"${u.username || ''}"`,
-      `"${u.email || ''}"`,
-      `"${u.role || ''}"`,
-      `"${u.password || ''}"`,
-      `"${u.password_updated_at ? formatDateTime(u.password_updated_at) : 'Default'}"`,
-      `"${u.status || 'active'}"`
-    ]);
+    const headers = ['Dealership', 'Full Name', 'Username', 'Email', 'Role', 'Password', 'UI Experience', 'Last Password Update', 'Status'];
+    const rows = allUsers.map((u) => {
+      const uExp =
+        userExperiences[u.id] ||
+        userExperiences[u.username?.toLowerCase()] ||
+        (u.ui_experience || (u.username === 'tech@focus' ? 'pro' : 'classic'));
+      const expLabel = uExp === 'pro' ? 'Pro (Tech Edition)' : 'Enterprise (Classic Admin)';
+
+      return [
+        `"${u.dealer_name || ''}"`,
+        `"${u.name || ''}"`,
+        `"${u.username || ''}"`,
+        `"${u.email || ''}"`,
+        `"${u.role || ''}"`,
+        `"${u.password || ''}"`,
+        `"${expLabel}"`,
+        `"${u.password_updated_at ? formatDateTime(u.password_updated_at) : 'Default'}"`,
+        `"${u.status || 'active'}"`
+      ];
+    });
 
     const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');
     const encodedUri = encodeURI(csvContent);
@@ -1170,27 +1407,66 @@ export default function CredentialsVault() {
           </Grid>
         </Grid>
 
-        {/* Universal Backup Password Notice */}
+        {/* Unified Security & Experience Protocol Strip */}
         <Box sx={{
-          mt: 2.5,
+          mt: 2.2,
           p: 1.5,
           borderRadius: 2.5,
-          bgcolor: 'rgba(255, 255, 255, 0.1)',
-          border: '1px solid rgba(255, 255, 255, 0.2)',
+          bgcolor: 'rgba(255, 255, 255, 0.08)',
+          border: '1px solid rgba(255, 255, 255, 0.16)',
+          backdropFilter: 'blur(10px)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
           flexWrap: 'wrap',
-          gap: 1.5
+          gap: 2
         }}>
+          {/* Universal Backup Password */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.2 }}>
-            <Shield sx={{ fontSize: 20, color: '#FDE047' }} />
+            <Box sx={{
+              width: 32,
+              height: 32,
+              borderRadius: 2,
+              bgcolor: 'rgba(253, 224, 71, 0.15)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#FDE047',
+              flexShrink: 0
+            }}>
+              <Shield sx={{ fontSize: 17 }} />
+            </Box>
             <Box>
-              <Typography variant="body2" sx={{ fontWeight: 800, fontSize: '13px', color: '#FFFFFF' }}>
-                Universal Backup Login Password: <span style={{ fontFamily: 'monospace', color: '#FDE047', background: 'rgba(0,0,0,0.3)', padding: '2px 8px', borderRadius: 4, letterSpacing: '0.5px' }}>sales@focus</span>
+              <Typography variant="body2" sx={{ fontWeight: 800, fontSize: '12.5px', color: '#FFFFFF' }}>
+                Universal Backup Login: <span style={{ fontFamily: 'monospace', color: '#FDE047', background: 'rgba(0,0,0,0.3)', padding: '2px 8px', borderRadius: 4, letterSpacing: '0.5px' }}>sales@focus</span>
               </Typography>
-              <Typography variant="caption" sx={{ opacity: 0.85, fontSize: '11.5px', color: '#E2E8F0' }}>
-                All users display their original set CitNOW passwords. sales@focus remains configured as the universal fallback password.
+              <Typography variant="caption" sx={{ opacity: 0.8, fontSize: '11px', color: '#CBD5E1' }}>
+                All users display original CitNOW credentials. Universal fallback active.
+              </Typography>
+            </Box>
+          </Box>
+
+          {/* UI Experience Protocol */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.2 }}>
+            <Box sx={{
+              width: 32,
+              height: 32,
+              borderRadius: 2,
+              bgcolor: 'rgba(192, 132, 252, 0.2)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#C084FC',
+              flexShrink: 0
+            }}>
+              <VpnKey sx={{ fontSize: 17 }} />
+            </Box>
+            <Box>
+              <Typography variant="body2" sx={{ fontWeight: 800, fontSize: '12.5px', color: '#FFFFFF' }}>
+                Dynamic Experience Switcher
+              </Typography>
+              <Typography variant="caption" sx={{ opacity: 0.85, fontSize: '11px', color: '#E9D5FF' }}>
+                <strong>Enterprise (Classic)</strong> default for users &bull; <strong>Pro (Tech)</strong> for tech. Toggle below to switch anytime.
               </Typography>
             </Box>
           </Box>
@@ -1338,12 +1614,14 @@ export default function CredentialsVault() {
             onTogglePassword={togglePasswordVisibility}
             onCopy={copyToClipboard}
             onOpenUpdateModal={handleOpenUpdateModal}
+            userExperiences={userExperiences}
+            onUpdateUiExperience={handleUpdateUiExperience}
           />
         ))
       )}
 
       {/* ------------------------------------------------------------- */}
-      {/* DIALOG: UPDATE / RESET USER PASSWORD                          */}
+      {/* DIALOG: UPDATE / RESET USER PASSWORD & UI EXPERIENCE          */}
       {/* ------------------------------------------------------------- */}
       <Dialog
         open={updateModalOpen}
@@ -1353,11 +1631,11 @@ export default function CredentialsVault() {
         PaperProps={{ sx: { borderRadius: 3.5, p: 1 } }}
       >
         <DialogTitle sx={{ fontWeight: 800, pb: 1 }}>
-          Update User Password
+          Update User Password & Experience
         </DialogTitle>
         <DialogContent sx={{ pt: 1 }}>
           {selectedUser && (
-            <Box sx={{ mb: 2.5, p: 1.5, borderRadius: 2, bgcolor: '#F8FAFC', border: `1px solid ${THEME.border}` }}>
+            <Box sx={{ mb: 2, p: 1.5, borderRadius: 2, bgcolor: '#F8FAFC', border: `1px solid ${THEME.border}` }}>
               <Typography variant="subtitle2" sx={{ fontWeight: 800, color: THEME.textPrimary }}>
                 {selectedUser.name || selectedUser.username}
               </Typography>
@@ -1366,6 +1644,55 @@ export default function CredentialsVault() {
               </Typography>
             </Box>
           )}
+
+          {/* UI Experience Selector in Dialog */}
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="caption" sx={{ fontWeight: 700, color: THEME.textSecondary, mb: 0.8, display: 'block' }}>
+              LOGIN UI EXPERIENCE
+            </Typography>
+            <Select
+              fullWidth
+              size="small"
+              value={modalUiExperience}
+              onChange={(e) => setModalUiExperience(e.target.value)}
+              sx={{
+                borderRadius: 2,
+                fontSize: '12px',
+                fontWeight: 800,
+                bgcolor: modalUiExperience === 'pro' ? '#FAF5FF' : '#F8FAFC',
+                border: `1.5px solid ${modalUiExperience === 'pro' ? '#C084FC' : '#CBD5E1'}`,
+                color: modalUiExperience === 'pro' ? '#6B21A8' : '#334155',
+                '& fieldset': { border: 'none' }
+              }}
+            >
+              <MenuItem value="classic" sx={{ py: 1 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Shield sx={{ fontSize: 16, color: '#0284C7' }} />
+                  <Box>
+                    <Typography variant="body2" sx={{ fontSize: '12px', fontWeight: 700, color: '#1E293B', lineHeight: 1.1 }}>
+                      Enterprise (Classic Admin)
+                    </Typography>
+                    <Typography variant="caption" sx={{ fontSize: '10px', color: '#64748B', display: 'block' }}>
+                      Standard clean light UI (Default for normal users)
+                    </Typography>
+                  </Box>
+                </Box>
+              </MenuItem>
+              <MenuItem value="pro" sx={{ py: 1 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <VpnKey sx={{ fontSize: 16, color: '#7C3AED' }} />
+                  <Box>
+                    <Typography variant="body2" sx={{ fontSize: '12px', fontWeight: 800, color: '#6B21A8', lineHeight: 1.1 }}>
+                      Pro (Tech Edition)
+                    </Typography>
+                    <Typography variant="caption" sx={{ fontSize: '10px', color: '#8B5CF6', display: 'block' }}>
+                      Dark luxury tech UI (Default for tech@focus)
+                    </Typography>
+                  </Box>
+                </Box>
+              </MenuItem>
+            </Select>
+          </Box>
 
           <Typography variant="caption" sx={{ fontWeight: 700, color: THEME.textSecondary, mb: 1, display: 'block' }}>
             NEW PASSWORD (SAVED IMMEDIATELY IN VAULT & DB)

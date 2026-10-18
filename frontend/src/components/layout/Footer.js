@@ -66,24 +66,25 @@ export default function Footer() {
       <Container maxWidth="xl">
         <Grid container spacing={3}>
           {/* Brand Section */}
-          <Grid size={{ xs: 12, md: 4 }}>
-            <Box sx={{ mb: 2 }}> {/* Reduced from mb: 3 */}
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1.5 }}>
-                <Box sx={{ height: 90, display: 'flex', alignItems: 'center', justifyContent: 'flex-start' }}>
+          <Grid size={{ xs: 12, md: 7 }}>
+            <Box sx={{ mb: 2 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2.5, mb: 2, flexWrap: 'wrap' }}>
+                <Box sx={{ height: 48, display: 'flex', alignItems: 'center', justifyContent: 'flex-start' }}>
                   <img
                     src="/qualitylens-logo.png"
                     alt="QualityLens"
                     style={{ height: '100%', width: 'auto', objectFit: 'contain' }}
                   />
                 </Box>
-                <Box sx={{ width: '1px', height: 75, bgcolor: '#e0e0e0', flexShrink: 0 }} />
-                <img
-                  src="/focus-engineering-logo.png"
-                  alt="Focus Engineering"
-                  style={{ height: '90px', width: 'auto', objectFit: 'contain' }}
-                />
+                <Box sx={{ width: '1px', height: 38, bgcolor: '#e0e0e0', flexShrink: 0 }} />
+                <Box sx={{ height: 48, display: 'flex', alignItems: 'center' }}>
+                  <img
+                    src="/focus-engineering-logo.png"
+                    alt="Focus Engineering"
+                    style={{ height: '100%', width: 'auto', objectFit: 'contain' }}
+                  />
+                </Box>
               </Box>
-
             </Box>
 
             {/* Social Links */}
@@ -130,40 +131,37 @@ export default function Footer() {
             </Stack>
           </Grid>
 
-
-
-
-
           {/* Contact Information */}
-          <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-            <Typography variant="subtitle2" sx={{ // Changed from h6 to subtitle2
-              fontWeight: 600,
+          <Grid size={{ xs: 12, md: 5 }}>
+            <Typography variant="subtitle2" sx={{
+              fontWeight: 700,
               color: THEME.textPrimary,
-              mb: 1.5, // Reduced from mb: 2
-              fontSize: '0.9rem'
+              mb: 1.5,
+              fontSize: '0.95rem',
+              letterSpacing: '0.02em'
             }}>
               Contact
             </Typography>
-            <Stack spacing={1.5}> {/* Reduced from spacing={2} */}
-              <Box sx={{ display: 'flex', alignItems: 'flex-start' }}>
+            <Stack spacing={1.5}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                 <LocationOn sx={{
                   color: THEME.primary,
-                  mr: 1.5, // Reduced from mr: 2
-                  fontSize: 18, // Smaller icon
-                  mt: 0.25 // Align better with text
+                  fontSize: 20,
+                  flexShrink: 0
                 }} />
                 <Typography variant="body2" sx={{
                   color: THEME.textSecondary,
-                  fontSize: '0.875rem' // Smaller text
+                  fontSize: '0.875rem',
+                  lineHeight: 1.5
                 }}>
                   FocusEngineering, Gudiyatham, Tamil Nadu, India - 632602
                 </Typography>
               </Box>
-              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                 <Email sx={{
                   color: THEME.primary,
-                  mr: 1.5, // Reduced from mr: 2
-                  fontSize: 18 // Smaller icon
+                  fontSize: 20,
+                  flexShrink: 0
                 }} />
                 <Link
                   href="mailto:info@focusengineering.in"
@@ -171,14 +169,14 @@ export default function Footer() {
                   sx={{
                     color: THEME.textSecondary,
                     textDecoration: 'none',
-                    fontSize: '0.875rem', // Smaller text
+                    fontSize: '0.875rem',
+                    lineHeight: 1.5,
                     '&:hover': {
                       color: THEME.primary
                     }
                   }}
                 >
                   info@focusengineering.in
-
                 </Link>
               </Box>
             </Stack>

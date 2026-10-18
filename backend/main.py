@@ -17,15 +17,17 @@ import time
 # High-Speed In-Memory Cache for Heavy MongoDB Aggregations
 _backend_cache = {}
 
-def get_from_cache(key: str, ttl_seconds: int = 45):
+def get_from_cache(key: str, ttl_seconds: int = 300):
     entry = _backend_cache.get(key)
     if entry:
         val, ts = entry
         if (time.time() - ts) < ttl_seconds:
             return val
+        else:
+            _backend_cache.pop(key, None)
     return None
 
-def set_in_cache(key: str, val):
+def set_in_cache(key: str, val, ttl_seconds: int = 300):
     _backend_cache[key] = (val, time.time())
 
 def clear_backend_cache():
@@ -68,7 +70,7 @@ from Dude import UnifiedMediaAnalyzer # Assuming HELLO.py is in the same directo
 import uuid
 
 
-# NEW: Redis Cache Manager for scaling to 1000+ users
+# NEW: Redis Cache Manager with In-Memory fallback for sub-millisecond 0ms responses
 class RedisCacheManager:
     def __init__(self):
         self.redis_url = os.getenv("REDIS_URL")
@@ -77,16 +79,15 @@ class RedisCacheManager:
 
     async def connect(self):
         if not self.redis_url:
-            logger.info("REDIS_URL not set in env. Caching is disabled.")
+            logger.info("REDIS_URL not set in env. Using high-speed in-memory cache fallback.")
             return
         try:
             self.redis = aioredis.from_url(self.redis_url, encoding="utf-8", decode_responses=True)
-            # Test connection
             await self.redis.ping()
             self.enabled = True
             logger.info("Redis cache connection established successfully.")
         except Exception as e:
-            logger.warning(f"Could not connect to Redis: {e}. Caching is disabled.")
+            logger.warning(f"Could not connect to Redis: {e}. Falling back to in-memory caching.")
             self.redis = None
             self.enabled = False
 
@@ -96,15 +97,19 @@ class RedisCacheManager:
             logger.info("Redis cache connection closed.")
 
     async def get(self, key: str) -> Optional[str]:
-        if not self.enabled or not self.redis:
-            return None
-        try:
-            return await self.redis.get(key)
-        except Exception as e:
-            logger.warning(f"Redis GET failed for key {key}: {e}")
-            return None
+        if self.enabled and self.redis:
+            try:
+                res = await self.redis.get(key)
+                if res is not None:
+                    return res
+            except Exception as e:
+                logger.warning(f"Redis GET failed for key {key}: {e}")
+        # Ultra-fast in-memory fallback (0ms)
+        return get_from_cache(key)
 
     async def set(self, key: str, value: str, expire: int = 300):
+        # Always populate in-memory cache for 0ms instant retrieval
+        set_in_cache(key, value, ttl_seconds=expire)
         if not self.enabled or not self.redis:
             return
         try:
@@ -113,6 +118,7 @@ class RedisCacheManager:
             logger.warning(f"Redis SET failed for key {key}: {e}")
 
     async def delete(self, key: str):
+        _backend_cache.pop(key, None)
         if not self.enabled or not self.redis:
             return
         try:
@@ -121,6 +127,13 @@ class RedisCacheManager:
             logger.warning(f"Redis DELETE failed for key {key}: {e}")
 
     async def delete_pattern(self, pattern: str):
+        try:
+            regex_pattern = re.compile("^" + pattern.replace("*", ".*") + "$")
+            keys_to_del = [k for k in list(_backend_cache.keys()) if regex_pattern.match(k)]
+            for k in keys_to_del:
+                _backend_cache.pop(k, None)
+        except Exception:
+            pass
         if not self.enabled or not self.redis:
             return
         try:
@@ -234,6 +247,7 @@ class UserBase(BaseModel):
     branch_name: Optional[str] = None
     is_active: bool = True
     status: Optional[str] = "active"
+    ui_experience: Optional[str] = None  # 'classic' | 'pro'
 
 class UserCreate(UserBase):
     password: str
@@ -254,6 +268,7 @@ class UserUpdate(BaseModel):
     branch_name: Optional[str] = None
     is_active: Optional[bool] = None
     status: Optional[str] = None
+    ui_experience: Optional[str] = None
 
 class UserInDB(UserBase):
     id: Optional[str] = Field(default=None, alias="_id")  # This should accept ObjectId converted to string
@@ -269,6 +284,7 @@ class UserInDB(UserBase):
     created_by_user_id: Optional[str] = None  # who created this user
     created_at: Optional[Any] = None
     updated_at: Optional[Any] = None
+    ui_experience: Optional[str] = None
 
     class Config:
         populate_by_name = True  # Allow both alias and field name
@@ -1575,6 +1591,9 @@ async def update_user(user_id: str, payload: UserUpdate, current_user: UserInDB 
     if payload.status is not None:
         updates["status"] = payload.status
         updates["is_active"] = (payload.status == "active")
+
+    if payload.ui_experience is not None:
+        updates["ui_experience"] = payload.ui_experience
 
     if not updates:
         raise HTTPException(400, detail="No valid fields to update.")
@@ -4069,10 +4088,26 @@ async def list_all_batches(limit: int = 50, status_filter: Optional[str] = None,
         att = proc + fail
         pct = round((att / tot * 100), 2) if tot > 0 else 0.0
 
+        b_status = batch.get("status")
+        # If all items are processed (100% done), it is completed, not paused or running
+        if tot > 0 and att >= tot and b_status != "completed":
+            b_status = "completed"
+            try:
+                await batch_collection.update_one(
+                    {"_id": batch["_id"]},
+                    {"$set": {
+                        "status": "completed",
+                        "is_paused": False,
+                        "completed_at": batch.get("completed_at") or batch.get("updated_at") or dt.utcnow()
+                    }}
+                )
+            except Exception as e:
+                logger.warning(f"Error auto-completing batch {str(batch['_id'])}: {e}")
+
         result.append(BatchCreateResponse(
             success=True,
             batch_id=str(batch["_id"]),
-            status=batch.get("status"),
+            status=b_status,
             total_urls=tot,
             processed_urls=proc,
             failed_urls=fail,
@@ -4087,7 +4122,7 @@ async def list_all_batches(limit: int = 50, status_filter: Optional[str] = None,
             dealer_name=d_name,
             deleted_by_admin=batch.get("deleted_by_admin", False),
             deleted_by_admin_msg=batch.get("deleted_by_admin_msg"),
-            message=f"Batch {str(batch['_id'])} status: {batch.get('status')}"
+            message=f"Batch {str(batch['_id'])} status: {b_status}"
         ))
 
     return result
@@ -5288,7 +5323,8 @@ async def unlock_credentials_vault(
             "status": u.get("status", "active"),
             "password": plain_pw,
             "password_updated_at": pw_updated_at_str,
-            "is_recently_updated": bool(u.get("password_updated_at"))
+            "is_recently_updated": bool(u.get("password_updated_at")),
+            "ui_experience": u.get("ui_experience")
         }
         users_list.append(user_info)
 
@@ -5362,6 +5398,56 @@ async def vault_update_user_password(
     return {
         "success": True,
         "message": f"Password updated to '{new_password}' successfully.",
+        "updated_at": now_utc.strftime("%Y-%m-%d %H:%M:%S UTC")
+    }
+
+@app.post("/admin/credentials-vault/update-ui-experience")
+async def vault_update_ui_experience(
+    payload: dict,
+    current_user: UserInDB = Depends(get_current_super_admin)
+):
+    """
+    Directly update a user's UI experience preference from Credentials Vault.
+    Options: 'classic' (QualityLens Enterprise) or 'pro' (QualityLens Pro - Tech Edition)
+    """
+    entered_key = (payload.get("security_key") or "").strip()
+    if entered_key != CREDENTIALS_VAULT_KEY:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid Security Key. Action not permitted."
+        )
+
+    user_id = payload.get("user_id")
+    ui_experience = (payload.get("ui_experience") or "classic").strip().lower()
+    username = payload.get("username")
+
+    if ui_experience not in ["classic", "pro"]:
+        ui_experience = "classic"
+
+    query = {}
+    if user_id and ObjectId.is_valid(user_id):
+        query["_id"] = ObjectId(user_id)
+    elif username:
+        query["username"] = username
+    else:
+        raise HTTPException(status_code=400, detail="user_id or username required.")
+
+    now_utc = dt.utcnow()
+    res = await users_collection.update_one(
+        query,
+        {"$set": {
+            "ui_experience": ui_experience,
+            "updated_at": now_utc
+        }}
+    )
+
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="User not found.")
+
+    return {
+        "success": True,
+        "message": f"UI Experience updated to '{ui_experience}' successfully.",
+        "ui_experience": ui_experience,
         "updated_at": now_utc.strftime("%Y-%m-%d %H:%M:%S UTC")
     }
 
@@ -6075,11 +6161,33 @@ async def get_live_activity(current_user: UserInDB = Depends(get_current_super_a
         # 3. Get in-flight video analyses (Check batch jobs and direct tasks)
         live_in_flight_videos = []
         active_batches_cursor = batch_collection.find({"status": {"$in": ["processing", "pending", "stopping", "in_progress", "queued", "running", "paused"]}})
-        active_batches = await active_batches_cursor.to_list(20)
+        active_batches = await active_batches_cursor.to_list(100)
         
-        active_running_batches = [b for b in active_batches if b.get("status") in ["processing", "running", "in_progress"]]
-        slot_counter = 1
+        # Filter out 100% finished batches so they don't count towards active/running
+        truly_active_batches = []
         for b in active_batches:
+            tot_u = b.get("total_urls", 0)
+            done_u = b.get("processed_urls", 0) + b.get("failed_urls", 0)
+            if tot_u > 0 and done_u >= tot_u:
+                # 100% finished batch! Auto-mark as completed and move out of in-flight
+                if b.get("status") != "completed":
+                    try:
+                        await batch_collection.update_one(
+                            {"_id": b["_id"]},
+                            {"$set": {
+                                "status": "completed",
+                                "is_paused": False,
+                                "completed_at": b.get("completed_at") or b.get("updated_at") or now
+                            }}
+                        )
+                    except Exception as e:
+                        logger.warning(f"Error auto-completing in-flight batch {str(b['_id'])}: {e}")
+                continue
+            truly_active_batches.append(b)
+
+        active_running_batches = [b for b in truly_active_batches if b.get("status") in ["processing", "running", "in_progress"]]
+        slot_counter = 1
+        for b in truly_active_batches:
             b_id = str(b["_id"])
             b_status = b.get("status")
             curr_url = b.get("current_url")
@@ -6087,6 +6195,10 @@ async def get_live_activity(current_user: UserInDB = Depends(get_current_super_a
             proc_u = b.get("processed_urls", 0) + b.get("failed_urls", 0)
             pct = round((proc_u / total_u) * 100) if total_u > 0 else 0
             
+            # Double check completion
+            if total_u > 0 and proc_u >= total_u:
+                continue
+
             # Determine stage
             if b_status == "paused":
                 stage_desc = "Stage Paused: Analysis Paused by Admin"

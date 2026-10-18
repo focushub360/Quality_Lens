@@ -16,6 +16,7 @@ import {
 } from '@mui/material';
 import { Lock, Person, Business, Visibility, VisibilityOff } from '@mui/icons-material';
 import { AuthContext } from '../../contexts/AuthContext';
+import { isProTechExperience } from '../../utils/uiExperience';
 
 const THEME = {
   primary: '#0DA1B8',
@@ -82,9 +83,12 @@ export default function LoginPage() {
         dealer_user: 'Service Advisor'
       };
 
+      const isProUi = isProTechExperience(user);
+      const expName = isProUi ? 'QualityLens Pro (Tech Edition)' : 'QualityLens Enterprise (Classic)';
+
       setSnackbar({
         open: true,
-        message: `Logging in as ${isMasterAdmin ? 'Master Admin (Tech Team)' : (roleLabels[role] || 'User')}...`,
+        message: `Welcome to ${expName}! Logging in as ${isMasterAdmin ? 'Master Admin (Tech)' : (roleLabels[role] || 'User')}...`,
         severity: 'success'
       });
 

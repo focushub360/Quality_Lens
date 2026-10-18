@@ -81,7 +81,7 @@ const ROLE_ACCESS = {
     { text: 'Dealer Network', path: '/super-admin/dealers', icon: Business },
     { text: 'CitNow Upgrades', path: '/citnow-upgrades', icon: Timeline },
     { text: 'Monitor', path: '/super-admin/monitor', icon: DesktopWindows },
-    { text: 'Configuration', path: '/super-admin/config', icon: Settings },
+    { text: 'Configuration', path: '/config/theme', icon: Settings },
   ],
   super_admin: [
     { text: 'Dashboard', path: '/super-admin/dashboard', icon: SpaceDashboard },
@@ -91,7 +91,7 @@ const ROLE_ACCESS = {
     { text: 'Dealer Network', path: '/super-admin/dealers', icon: Business },
     { text: 'CitNow Upgrades', path: '/citnow-upgrades', icon: Timeline },
     { text: 'Monitor', path: '/super-admin/monitor', icon: DesktopWindows },
-    { text: 'Configuration', path: '/super-admin/config', icon: Settings },
+    { text: 'Configuration', path: '/config/theme', icon: Settings },
   ],
   dealer_admin: [
     { text: 'Top Dashboard', path: '/dealer/dashboard', icon: SpaceDashboard },
@@ -410,7 +410,7 @@ export default function Sidebar() {
 }
 
 // Speedometer Gauge Component for CAPEX Limit & Usage (Permanently visible in Sidebar)
-function CapexSpeedometer({ used = 0, max = 1000, dealerName = '' }) {
+export function CapexSpeedometer({ used = 0, max = 1000, dealerName = '' }) {
   const safeUsed = isNaN(used) ? 0 : Math.max(0, used);
   const safeMax = isNaN(max) || max <= 0 ? 1000 : max;
   const percentage = Math.min(100, Math.round((safeUsed / safeMax) * 100 * 10) / 10);
@@ -626,7 +626,7 @@ function CapexSpeedometer({ used = 0, max = 1000, dealerName = '' }) {
 }
 
 // src/components/layout/Sidebar.js - Helper component for global Analysis Monitor
-function GlobalAnalysisMonitor() {
+export function GlobalAnalysisMonitor() {
   const [batches, setBatches] = useState([]);
   const [open, setOpen] = useState(() => {
     const saved = localStorage.getItem('ql_sidebar_monitor_open');

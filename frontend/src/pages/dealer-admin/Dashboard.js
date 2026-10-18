@@ -79,6 +79,7 @@ try {
 } catch (e) {}
 
 let _globalDealerDashboardCache = null;
+const _dealerPeriodCache = {}; // { [timeRange]: { dashboardData, allResults, dealerInfo, benchmarkTarget, timestamp } }
 try {
   const _saved = typeof localStorage !== 'undefined' ? localStorage.getItem(DEALER_CACHE_KEY) : null;
   if (_saved) {
@@ -89,6 +90,11 @@ try {
       );
     }
     _globalDealerDashboardCache = _parsed;
+    _dealerPeriodCache['year'] = {
+      dashboardData: _parsed,
+      allResults: _parsed.recentVideos || [],
+      timestamp: Date.now()
+    };
   }
 } catch (e) {}
 
@@ -151,7 +157,15 @@ export default function DealerAdminDashboard() {
   };
 
   const getRangeLabel = (range) => {
-    return range === 'month' ? 'This Month' : 'This Year';
+    switch (range) {
+      case 'today': return 'Today';
+      case 'week': return 'This Week';
+      case 'month': return 'This Month';
+      case 'quarter': return 'This Quarter';
+      case 'year': return 'This Year';
+      case 'all': return 'All Time';
+      default: return 'This Year';
+    }
   };
   const [refreshCounter, setRefreshCounter] = useState(0);
   const [error, setError] = useState(null);
@@ -814,8 +828,152 @@ export default function DealerAdminDashboard() {
     );
   };
 
-    const loadDashboardData = async (isManualRefresh = false) => {
-    if (isManualRefresh || (!_globalDealerDashboardCache && !dashboardData.overview.totalVideos)) {
+  const processDealerOverview = (data, resultsArray, targetRange) => {
+    const recentRaw = data?.recent_analyses || [];
+    const completionRate = (data?.total_videos_analyzed || 0) > 0 
+        ? Math.round((((data.total_videos_analyzed || 0) - (data.low_quality_video_count || 0)) / (data.total_videos_analyzed || 1)) * 100)
+        : 0;
+
+    const qualityBreakdown = Object.entries(data?.quality_distribution || {}).map(([name, value]) => ({ name, value }));
+
+    const rawDaily = (data?.dailyPerformance || [])
+      .filter(d => (Number(d.score || 0) > 0 || Number(d.video || 0) > 0 || Number(d.audio || 0) > 0))
+      .map(d => ({
+        ...d,
+        score: Number(d.score || 0) > 0 ? Number(d.score) : null,
+        video: Number(d.video || 0) > 0 ? Number(d.video) : null,
+        audio: Number(d.audio || 0) > 0 ? Number(d.audio) : null,
+        videos: typeof d.videos === 'number' && !isNaN(d.videos)
+          ? d.videos
+          : (typeof d.count === 'number' && !isNaN(d.count) ? d.count : 0)
+      }));
+
+    const now = new Date();
+    const currentMonthShort = now.toLocaleString('en-US', { month: 'short' }).toLowerCase();
+
+    let activeDaily = rawDaily;
+    if (targetRange === 'month') {
+      activeDaily = rawDaily.filter(d => {
+        const parts = (d.name || '').trim().split(' ');
+        const monthStr = parts.length > 1 ? parts[1].toLowerCase() : parts[0].toLowerCase();
+        return monthStr === currentMonthShort || (d.name || '').toLowerCase().includes(currentMonthShort);
+      });
+      if (activeDaily.length === 0 && rawDaily.length > 0) {
+        const lastEntry = rawDaily[rawDaily.length - 1];
+        const lastMonth = (lastEntry.name || '').trim().split(' ')[1]?.toLowerCase();
+        if (lastMonth) {
+          activeDaily = rawDaily.filter(d => (d.name || '').toLowerCase().includes(lastMonth));
+        }
+      }
+    }
+
+    const activeTotalVideos = typeof data?.total_videos_analyzed === 'number'
+      ? data.total_videos_analyzed
+      : (targetRange === 'month' && activeDaily.length > 0
+          ? activeDaily.reduce((sum, d) => sum + (d.videos || 0), 0)
+          : 0);
+
+    const activeAvgScore = typeof data?.average_overall_quality === 'number'
+      ? data.average_overall_quality
+      : (targetRange === 'month' && activeDaily.length > 0
+          ? Number((activeDaily.reduce((sum, d) => sum + (d.score || 0), 0) / activeDaily.length).toFixed(1))
+          : 0);
+
+    return {
+      overview: {
+        totalVideos: activeTotalVideos,
+        averageScore: activeAvgScore,
+        serviceAdvisors: (data?.serviceAdvisors || []).length,
+        completionRate: completionRate,
+        totalVideosChange: data?.total_videos_change,
+        totalVideosChangeType: data?.total_videos_change_type,
+        averageScoreChange: data?.average_score_change,
+        averageScoreChangeType: data?.average_score_change_type
+      },
+      dailyPerformance: activeDaily,
+      serviceAdvisors: data?.serviceAdvisors || [],
+      qualityBreakdown: qualityBreakdown,
+      recentVideos: recentRaw.map((video, index) => ({
+        id: video._id || video.id || `video-${index}`,
+        vehicle: video.citnow_vehicle || video.vehicle || 'Unknown Vehicle',
+        advisor: video.citnow_service_advisor || video.advisor || 'Unknown Advisor',
+        score: typeof video.overall_quality_score === 'number'
+          ? video.overall_quality_score.toFixed(1)
+          : (typeof video.score === 'number' ? video.score.toFixed(1) : (video.score || '0.0')),
+        date: video.created_at ? formatDate(video.created_at) : (video.date || 'N/A'),
+        status: video.status === 'completed' ? 'Completed' : (video.status || 'In Progress')
+      })),
+      performanceTrend: data?.serviceAdvisors || []
+    };
+  };
+
+  // Preload remaining periods in background for 0ms instantaneous tab switching
+  const preloadRemainingRanges = (activeRange) => {
+    const allRanges = ['today', 'week', 'month', 'quarter', 'year', 'all'];
+    const pending = allRanges.filter(r => r !== activeRange && !_dealerPeriodCache[r]);
+    if (pending.length === 0) return;
+
+    setTimeout(async () => {
+      const token = localStorage.getItem('auth_token');
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      for (const r of pending) {
+        if (_dealerPeriodCache[r]) continue;
+        try {
+          let endpoint = '/dashboard/dealer/overview';
+          if (r !== 'all') endpoint += `?timeRange=${r}`;
+          let resultsUrl = '/results?limit=1000&minimal=true';
+          if (r !== 'all') resultsUrl += `&timeRange=${r}`;
+
+          const [overviewRes, resultsRes] = await Promise.all([
+            api.get(endpoint, { headers }).catch(async () => {
+              if (r !== 'all' && r !== 'year') {
+                return await api.get('/dashboard/dealer/overview?timeRange=year', { headers });
+              }
+              return { data: {} };
+            }),
+            api.get(resultsUrl, { headers }).catch(() => ({ data: [] }))
+          ]);
+
+          const data = overviewRes.data || {};
+          const resData = resultsRes.data;
+          const resultsArray = Array.isArray(resData) ? resData : (resData?.results || []);
+          const fresh = processDealerOverview(data, resultsArray, r);
+          _dealerPeriodCache[r] = {
+            dashboardData: fresh,
+            allResults: resultsArray.length > 0 ? resultsArray : (fresh.recentVideos || []),
+            dealerInfo: {
+              name: authUser?.showroom_name || 'Your Dealership',
+              location: 'Your Location',
+              id: data.dealer_id || 'current'
+            },
+            benchmarkTarget: Number(data.target_score || data.benchmark_target || getDealerTargetScore(data.dealer_id || authUser?.dealer_id, authUser?.showroom_name)) || 7.5,
+            timestamp: Date.now()
+          };
+        } catch (err) {
+          // Background preload failure is non-blocking
+        }
+      }
+    }, 250);
+  };
+
+  const loadDashboardData = async (isManualRefresh = false, targetRange = timeRange) => {
+    // 0ms Cache Hit: If cached and fresh (< 3 mins), load immediately with zero spinner
+    const cached = _dealerPeriodCache[targetRange];
+    const isFresh = cached && (Date.now() - (cached.timestamp || 0) < 180000);
+
+    if (cached && !isManualRefresh) {
+      setDashboardData(cached.dashboardData);
+      setAllResults(cached.allResults || []);
+      if (cached.dealerInfo) setDealerInfo(cached.dealerInfo);
+      if (cached.benchmarkTarget) setBenchmarkTarget(cached.benchmarkTarget);
+      setLoading(false);
+      if (isFresh) {
+        preloadRemainingRanges(targetRange);
+        return;
+      }
+    }
+
+    if (isManualRefresh || (!_globalDealerDashboardCache && !dashboardData.overview.totalVideos && !cached)) {
       setLoading(true);
     }
     setError(null);
@@ -824,19 +982,19 @@ export default function DealerAdminDashboard() {
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
       let endpoint = '/dashboard/dealer/overview';
-      if (timeRange && timeRange !== 'all') {
-         endpoint += `?timeRange=${timeRange}`;
+      if (targetRange && targetRange !== 'all') {
+         endpoint += `?timeRange=${targetRange}`;
       }
 
       let resultsUrl = '/results?limit=1000&minimal=true';
-      if (timeRange && timeRange !== 'all') {
-        resultsUrl += `&timeRange=${timeRange}`;
+      if (targetRange && targetRange !== 'all') {
+        resultsUrl += `&timeRange=${targetRange}`;
       }
 
       const [overviewRes, resultsRes] = await Promise.all([
-        api.get(endpoint, { headers, skipCache: true, forceRefresh: true }).catch(async (reqErr) => {
-          if (timeRange !== 'all' && timeRange !== 'year') {
-            return await api.get('/dashboard/dealer/overview?timeRange=year', { headers, skipCache: true, forceRefresh: true });
+        api.get(endpoint, { headers, forceRefresh: isManualRefresh }).catch(async (reqErr) => {
+          if (targetRange !== 'all' && targetRange !== 'year') {
+            return await api.get('/dashboard/dealer/overview?timeRange=year', { headers, forceRefresh: isManualRefresh });
           }
           throw reqErr;
         }),
@@ -846,115 +1004,47 @@ export default function DealerAdminDashboard() {
         })
       ]);
 
-      const data = overviewRes.data;
+      const data = overviewRes.data || {};
       const resData = resultsRes.data;
       const resultsArray = Array.isArray(resData) ? resData : (resData?.results || []);
 
-      // Update dealer info
-      setDealerInfo({
+      const newDealerInfo = {
         name: authUser?.showroom_name || 'Your Dealership',
         location: 'Your Location',
         id: data.dealer_id || 'current'
-      });
-      const resolvedTarget = data.target_score || data.benchmark_target || getDealerTargetScore(data.dealer_id || authUser?.dealer_id, authUser?.showroom_name);
-      setBenchmarkTarget(Number(resolvedTarget) || 7.5);
-      
-      const completionRate = data.total_videos_analyzed > 0 
-          ? Math.round(((data.total_videos_analyzed - data.low_quality_video_count) / data.total_videos_analyzed) * 100)
-          : 0;
+      };
+      setDealerInfo(newDealerInfo);
 
-      const qualityBreakdown = Object.entries(data.quality_distribution || {}).map(([name, value]) => ({ name, value }));
+      const resolvedTarget = Number(data.target_score || data.benchmark_target || getDealerTargetScore(data.dealer_id || authUser?.dealer_id, authUser?.showroom_name)) || 7.5;
+      setBenchmarkTarget(resolvedTarget);
 
-      // Populate allResults from results endpoint (or recent_analyses fallback) for issue counts & trend calculations
-      const recentRaw = data.recent_analyses || [];
-      const combinedResults = resultsArray.length > 0 ? resultsArray : recentRaw;
+      const freshDashboard = processDealerOverview(data, resultsArray, targetRange);
+      const combinedResults = resultsArray.length > 0 ? resultsArray : (freshDashboard.recentVideos || []);
       setAllResults(combinedResults);
 
-      const rawDaily = (data.dailyPerformance || [])
-        .filter(d => (Number(d.score || 0) > 0 || Number(d.video || 0) > 0 || Number(d.audio || 0) > 0))
-        .map(d => ({
-          ...d,
-          score: Number(d.score || 0) > 0 ? Number(d.score) : null,
-          video: Number(d.video || 0) > 0 ? Number(d.video) : null,
-          audio: Number(d.audio || 0) > 0 ? Number(d.audio) : null,
-          videos: typeof d.videos === 'number' && !isNaN(d.videos)
-            ? d.videos
-            : (typeof d.count === 'number' && !isNaN(d.count) ? d.count : 0)
-        }));
-
-      // Filter daily data based on selected timeRange
-      const now = new Date();
-      const currentMonthShort = now.toLocaleString('en-US', { month: 'short' }).toLowerCase(); // "oct"
-
-      let activeDaily = rawDaily;
-      if (timeRange === 'month') {
-        // Keep only records from THIS MONTH (e.g. "03 Oct", "05 Oct")
-        activeDaily = rawDaily.filter(d => {
-          const parts = (d.name || '').trim().split(' ');
-          const monthStr = parts.length > 1 ? parts[1].toLowerCase() : parts[0].toLowerCase();
-          return monthStr === currentMonthShort || (d.name || '').toLowerCase().includes(currentMonthShort);
-        });
-        if (activeDaily.length === 0 && rawDaily.length > 0) {
-          const lastEntry = rawDaily[rawDaily.length - 1];
-          const lastMonth = (lastEntry.name || '').trim().split(' ')[1]?.toLowerCase();
-          if (lastMonth) {
-            activeDaily = rawDaily.filter(d => (d.name || '').toLowerCase().includes(lastMonth));
-          }
-        }
-      }
-
-      const activeTotalVideos = typeof data.total_videos_analyzed === 'number'
-        ? data.total_videos_analyzed
-        : (timeRange === 'month' && activeDaily.length > 0
-            ? activeDaily.reduce((sum, d) => sum + (d.videos || 0), 0)
-            : 0);
-
-      const activeAvgScore = typeof data.average_overall_quality === 'number'
-        ? data.average_overall_quality
-        : (timeRange === 'month' && activeDaily.length > 0
-            ? Number((activeDaily.reduce((sum, d) => sum + (d.score || 0), 0) / activeDaily.length).toFixed(1))
-            : 0);
-
-      const freshDashboard = {
-        overview: {
-          totalVideos: activeTotalVideos,
-          averageScore: activeAvgScore,
-          serviceAdvisors: (data.serviceAdvisors || []).length,
-          completionRate: completionRate,
-          totalVideosChange: data.total_videos_change,
-          totalVideosChangeType: data.total_videos_change_type,
-          averageScoreChange: data.average_score_change,
-          averageScoreChangeType: data.average_score_change_type
-        },
-        dailyPerformance: activeDaily,
-        serviceAdvisors: data.serviceAdvisors || [],
-        qualityBreakdown: qualityBreakdown,
-        recentVideos: recentRaw.map((video, index) => ({
-          id: video._id || video.id || `video-${index}`,
-          vehicle: video.citnow_vehicle || video.vehicle || 'Unknown Vehicle',
-          advisor: video.citnow_service_advisor || video.advisor || 'Unknown Advisor',
-          score: typeof video.overall_quality_score === 'number'
-            ? video.overall_quality_score.toFixed(1)
-            : (typeof video.score === 'number' ? video.score.toFixed(1) : (video.score || '0.0')),
-          date: video.created_at ? formatDate(video.created_at) : (video.date || 'N/A'),
-          status: video.status === 'completed' ? 'Completed' : (video.status || 'In Progress')
-        })),
-        performanceTrend: data.serviceAdvisors || []
+      _dealerPeriodCache[targetRange] = {
+        dashboardData: freshDashboard,
+        allResults: combinedResults,
+        dealerInfo: newDealerInfo,
+        benchmarkTarget: resolvedTarget,
+        timestamp: Date.now()
       };
-
       _globalDealerDashboardCache = freshDashboard;
       try {
         localStorage.setItem(DEALER_CACHE_KEY, JSON.stringify(freshDashboard));
       } catch (e) {}
-      setDashboardData(freshDashboard);
 
+      setDashboardData(freshDashboard);
       setLoading(false);
+
+      preloadRemainingRanges(targetRange);
     } catch (error) {
       console.error('Error loading dashboard data:', error);
       setError('Failed to load dashboard data. Please try again.');
       setLoading(false);
     }
   };
+
   // Data processing functions
   const filterByTimeRange = (results, timeRange) => {
     const now = new Date();
@@ -973,8 +1063,13 @@ export default function DealerAdminDashboard() {
       case 'quarter':
         startDate = new Date(now.getFullYear(), now.getMonth() - 3, now.getDate());
         break;
+      case 'year':
+        startDate = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+        break;
+      case 'all':
+        return results;
       default:
-        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        startDate = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
     }
 
     return results.filter(result => {
@@ -1178,11 +1273,12 @@ export default function DealerAdminDashboard() {
   };
 
   useEffect(() => {
-    loadDashboardData();
+    loadDashboardData(false, timeRange);
   }, [refreshCounter, timeRange]);
 
   const handleRefresh = () => {
-    setRefreshCounter(prev => prev + 1);
+    Object.keys(_dealerPeriodCache).forEach(k => delete _dealerPeriodCache[k]);
+    loadDashboardData(true, timeRange);
   };
 
   const handleViewDetails = (section) => {
@@ -1428,7 +1524,20 @@ export default function DealerAdminDashboard() {
                 return (
                   <Button
                     key={range}
-                    onClick={() => setTimeRange(range)}
+                    onClick={() => {
+                      if (range === timeRange) return;
+                      setTimeRange(range);
+                      if (_dealerPeriodCache[range]) {
+                        // 0ms ULTRA-FAST INSTANT SWITCH!
+                        setDashboardData(_dealerPeriodCache[range].dashboardData);
+                        setAllResults(_dealerPeriodCache[range].allResults || []);
+                        if (_dealerPeriodCache[range].dealerInfo) setDealerInfo(_dealerPeriodCache[range].dealerInfo);
+                        if (_dealerPeriodCache[range].benchmarkTarget) setBenchmarkTarget(_dealerPeriodCache[range].benchmarkTarget);
+                        setLoading(false);
+                      } else {
+                        setLoading(true);
+                      }
+                    }}
                     sx={{
                       borderRadius: 50,
                       px: 4,
