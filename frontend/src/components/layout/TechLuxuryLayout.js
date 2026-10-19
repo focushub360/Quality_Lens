@@ -614,53 +614,60 @@ export default function TechLuxuryLayout({ children }) {
             overflowY: 'auto',
           }}
         >
-          {/* Panoramic Luxury Hero Card (Full Cover Background) */}
+          {/* Panoramic Alpine Road & Luxury Sports Car Inside Main Bar */}
           <Box
             sx={{
-              mx: { xs: 2, md: 3 },
-              mt: { xs: 1.5, md: 2.5 },
-              mb: { xs: 1.5, md: 2 },
-              borderRadius: 3.5,
+              width: '100%',
+              minHeight: { xs: 150, md: 175 },
               position: 'relative',
               overflow: 'hidden',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              minHeight: { xs: 155, md: 175 },
-              border: '1px solid #E2E8F0',
-              boxShadow: '0 8px 30px rgba(15, 23, 42, 0.06)',
               bgcolor: '#FFFFFF',
+              borderBottom: '1px solid #E2E8F0',
               px: { xs: 2.5, sm: 3.5, md: 4.5 },
               py: 2.5,
               flexShrink: 0,
             }}
           >
-            {/* Full Cover Background Image across the entire card */}
+            {/* Panoramic Alpine Road & Luxury Sports Car with 50/50 Full-Height Mask */}
             <Box
               sx={{
                 position: 'absolute',
-                inset: 0,
-                backgroundImage: 'url(/assets/bmw_luxury_banner.png)',
+                top: 0,
+                right: 0,
+                bottom: 0,
+                width: { xs: '100%', md: '52%' },
+                backgroundImage: 'url(/assets/luxury_car_banner.jpg)',
                 backgroundSize: 'cover',
-                backgroundPosition: { xs: 'center 60%', md: 'right 56%' },
+                backgroundPosition: 'right 68%',
+                maskImage: {
+                  xs: 'linear-gradient(to right, transparent 0%, rgba(0,0,0,0.3) 30%, black 100%)',
+                  md: 'linear-gradient(to right, transparent 0%, rgba(0,0,0,0.12) 15%, rgba(0,0,0,0.65) 45%, black 85%)'
+                },
+                WebkitMaskImage: {
+                  xs: 'linear-gradient(to right, transparent 0%, rgba(0,0,0,0.3) 30%, black 100%)',
+                  md: 'linear-gradient(to right, transparent 0%, rgba(0,0,0,0.12) 15%, rgba(0,0,0,0.65) 45%, black 85%)'
+                },
               }}
             />
 
-            {/* Seamless Horizontal Gradient: Solid pure white behind text on left, smooth transition into full image on right */}
+            {/* Atmospheric Misty Fade Overlay for Ultra-Smooth 50/50 Blending */}
             <Box
               sx={{
                 position: 'absolute',
                 inset: 0,
                 background: {
-                  xs: 'linear-gradient(to right, rgba(255, 255, 255, 0.98) 0%, rgba(255, 255, 255, 0.94) 45%, rgba(255, 255, 255, 0.3) 100%)',
-                  md: 'linear-gradient(to right, #FFFFFF 0%, #FFFFFF 30%, rgba(255, 255, 255, 0.88) 38%, rgba(255, 255, 255, 0.4) 52%, transparent 72%)'
+                  xs: 'linear-gradient(to right, #FFFFFF 0%, rgba(255, 255, 255, 0.94) 50%, rgba(255, 255, 255, 0.4) 100%)',
+                  md: 'linear-gradient(to right, #FFFFFF 0%, #FFFFFF 46%, rgba(255, 255, 255, 0.88) 52%, rgba(255, 255, 255, 0.25) 68%, transparent 88%)'
                 },
                 pointerEvents: 'none'
               }}
             />
 
             {/* Left: Title & Subtitle sitting crisply on the clean white background */}
-            <Box sx={{ position: 'relative', zIndex: 2, p: { xs: 1, md: 1.5 }, maxWidth: { xs: '100%', md: '44%' } }}>
+            <Box sx={{ position: 'relative', zIndex: 2, p: { xs: 2, md: 3 }, maxWidth: { xs: '100%', md: '48%' } }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 0.75 }}>
                 <Typography
                   sx={{
@@ -694,30 +701,19 @@ export default function TechLuxuryLayout({ children }) {
               </Typography>
             </Box>
 
-            {/* Right: Slogan with subtle vertical line divider and frosted luxury badge */}
+            {/* Right: Slogan with subtle vertical line divider (exact match to screenshot) */}
             <Box
               sx={{
                 position: 'relative',
                 zIndex: 2,
-                pr: { xs: 2, md: 3 },
+                pr: { xs: 3, md: 5 },
                 display: { xs: 'none', md: 'flex' },
                 alignItems: 'center',
-                gap: 1.5
+                gap: 2
               }}
             >
               <Box sx={{ width: '1.5px', height: 32, bgcolor: 'rgba(255, 255, 255, 0.45)' }} />
-              <Box
-                sx={{
-                  textAlign: 'left',
-                  bgcolor: 'rgba(15, 23, 42, 0.65)',
-                  backdropFilter: 'blur(10px)',
-                  px: 1.75,
-                  py: 0.8,
-                  borderRadius: 2,
-                  border: '1px solid rgba(255, 255, 255, 0.2)',
-                  boxShadow: '0 4px 16px rgba(0, 0, 0, 0.25)'
-                }}
-              >
+              <Box sx={{ textAlign: 'left' }}>
                 <Typography
                   sx={{
                     color: '#FFFFFF',
