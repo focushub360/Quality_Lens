@@ -3,7 +3,7 @@ import {
   Card, CardContent, Typography, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
   Button, Box, Chip, Tooltip, IconButton, Dialog, DialogTitle, DialogContent, DialogActions,
   TablePagination, Grid, Avatar, Fade, Container, TextField, Stack,
-  InputAdornment, Divider, MenuItem, Menu
+  InputAdornment, Divider, MenuItem, Menu, LinearProgress
 } from '@mui/material';
 import {
   Business, DirectionsCar, Person, Description, Email, Phone, Videocam, Mic,
@@ -165,7 +165,8 @@ const StatsCard = ({ icon: Icon, value, label, color, trend }) => (
   </Card>
 );
 
-// Module-level persistent cache for 0ms instant tab switching
+// Module-level persistent cache for 0ms instant tab switching and instant page load
+const RESULTS_CACHE_KEY = 'ql_results_cache_v2';
 let _globalResultsCache = {
   rows: null,
   totalCount: 0,
@@ -173,10 +174,36 @@ let _globalResultsCache = {
   activityMap: null
 };
 
+// Seed or restore persistent cache across reloads and tab navigations
+const getPersistedResultsCache = () => {
+  if (_globalResultsCache.rows && _globalResultsCache.rows.length > 0) {
+    return _globalResultsCache;
+  }
+  try {
+    const raw = sessionStorage.getItem(RESULTS_CACHE_KEY) || localStorage.getItem(RESULTS_CACHE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && Array.isArray(parsed.rows) && parsed.rows.length > 0) {
+        _globalResultsCache = parsed;
+        return parsed;
+      }
+    }
+  } catch (e) {}
+  return {
+    rows: null,
+    totalCount: 0,
+    stats: null,
+    activityMap: null
+  };
+};
+
 export default function Results() {
   const { user: authUser } = useContext(AuthContext);
-  const [rows, setRows] = useState(() => _globalResultsCache.rows || []);
-  const [loading, setLoading] = useState(() => !_globalResultsCache.rows);
+  const initialCache = React.useMemo(() => getPersistedResultsCache(), []);
+
+  const [rows, setRows] = useState(() => initialCache.rows || []);
+  const [loading, setLoading] = useState(() => (!initialCache.rows || initialCache.rows.length === 0));
+  const [isFetching, setIsFetching] = useState(false);
   const [selectedResult, setSelectedResult] = useState(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState(() => {
@@ -196,54 +223,20 @@ export default function Results() {
     preset: 'All Time',
     label: 'All Time'
   });
-  const [activityMap, setActivityMap] = useState({});
+  const [activityMap, setActivityMap] = useState(() => initialCache.activityMap || {});
   const [exportAnchor, setExportAnchor] = useState(null); // export dropdown
 
   // Pagination state
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
-  const [totalCount, setTotalCount] = useState(() => _globalResultsCache.totalCount || 0);
+  const [totalCount, setTotalCount] = useState(() => initialCache.totalCount || 0);
 
-  const [allRows, setAllRows] = useState([]); // All loaded rows
+  const [allRows, setAllRows] = useState(() => initialCache.rows || []); // All loaded rows
   const [currentPageBackend, setCurrentPageBackend] = useState(1); // Backend page number
   const [hasMore, setHasMore] = useState(true); // More data to load
 
-  // Pre-fetch calendar activity map across records for seamless color-coded days
-  useEffect(() => {
-    const prefetchActivity = async () => {
-      try {
-        const token = localStorage.getItem('auth_token');
-        const headers = token ? { Authorization: `Bearer ${token}` } : {};
-        const res = await api.get('/results?per_page=1000&minimal=true', { headers });
-        const data = res.data?.results || res.data || [];
-        if (Array.isArray(data) && data.length > 0) {
-          const map = {};
-          data.forEach(r => {
-            if (!r || !r.created_at) return;
-            const d = new Date(r.created_at);
-            if (isNaN(d.getTime())) return;
-            const ymd = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-            if (!map[ymd]) {
-              map[ymd] = { count: 0, totalScore: 0, avgScore: 0 };
-            }
-            map[ymd].count += 1;
-            const score = Number(r.overall_quality?.overall_score ?? r.overall_quality_score ?? 0);
-            if (score > 0) {
-              map[ymd].totalScore += score;
-              map[ymd].avgScore = map[ymd].totalScore / map[ymd].count;
-            }
-          });
-          setActivityMap(prev => ({ ...map, ...prev }));
-        }
-      } catch (err) {
-        console.warn('Could not prefetch full calendar activity:', err);
-      }
-    };
-    prefetchActivity();
-  }, []);
-
   // Dashboard stats
-  const [stats, setStats] = useState(() => _globalResultsCache.stats || {
+  const [stats, setStats] = useState(() => initialCache.stats || {
     totalResults: 0,
     averageVideoScore: 0,
     averageAudioScore: 0,
@@ -251,10 +244,53 @@ export default function Results() {
     qualityDistribution: { excellent: 0, good: 0, fair: 0, poor: 0 }
   });
 
+  // Pre-fetch calendar activity map in background 2.5s AFTER initial page load (idle queue)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const prefetchActivity = async () => {
+        try {
+          const token = localStorage.getItem('auth_token');
+          const headers = token ? { Authorization: `Bearer ${token}` } : {};
+          const res = await api.get('/results?per_page=1000&minimal=true', { headers });
+          const data = res.data?.results || res.data || [];
+          if (Array.isArray(data) && data.length > 0) {
+            const map = {};
+            data.forEach(r => {
+              if (!r || !r.created_at) return;
+              const d = new Date(r.created_at);
+              if (isNaN(d.getTime())) return;
+              const ymd = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+              if (!map[ymd]) {
+                map[ymd] = { count: 0, totalScore: 0, avgScore: 0 };
+              }
+              map[ymd].count += 1;
+              const score = Number(r.overall_quality?.overall_score ?? r.overall_quality_score ?? 0);
+              if (score > 0) {
+                map[ymd].totalScore += score;
+                map[ymd].avgScore = map[ymd].totalScore / map[ymd].count;
+              }
+            });
+            setActivityMap(prev => {
+              const updated = { ...map, ...prev };
+              _globalResultsCache.activityMap = updated;
+              return updated;
+            });
+          }
+        } catch (err) {
+          console.warn('Could not prefetch full calendar activity:', err);
+        }
+      };
+      prefetchActivity();
+    }, 2500);
+
+    return () => clearTimeout(timer);
+  }, []);
+
   const loadData = async (silent = false) => {
     const isSearchOrFilter = Boolean(searchTerm || dealershipFilter || (dateRange.preset && dateRange.preset !== 'All Time'));
-    const shouldBeSilent = silent || (_globalResultsCache.rows && !isSearchOrFilter);
-    if (!shouldBeSilent) setLoading(true);
+    const shouldBeSilent = silent || (rows.length > 0 && !isSearchOrFilter) || (initialCache.rows && initialCache.rows.length > 0 && !isSearchOrFilter);
+    if (!shouldBeSilent && rows.length === 0) setLoading(true);
+    setIsFetching(true);
 
     try {
       const urlParams = new URLSearchParams(window.location.search);
@@ -288,6 +324,7 @@ export default function Results() {
       const endpointParams = new URLSearchParams();
       endpointParams.append('page', page + 1); // API is 1-indexed, UI is 0-indexed
       endpointParams.append('per_page', rowsPerPage);
+      endpointParams.append('minimal', 'true');
       if (batchId) endpointParams.append('batch_id', batchId);
       if (searchTerm) endpointParams.append('search', searchTerm);
       if (dealershipFilter) endpointParams.append('search', dealershipFilter);
@@ -306,9 +343,10 @@ export default function Results() {
         api.get(`/results?${endpointParams.toString()}`, { headers })
       ]);
 
+      let newStats = null;
       const st = statsRes?.data;
       if (st && st.total !== undefined) {
-        const newStats = {
+        newStats = {
           totalResults: st.total,
           averageVideoScore: st.avg_video,
           averageAudioScore: st.avg_audio,
@@ -316,7 +354,6 @@ export default function Results() {
           qualityDistribution: { excellent: 0, good: 0, fair: 0, poor: 0 }
         };
         setStats(newStats);
-        _globalResultsCache.stats = newStats;
       }
       const data = res.data;
       let rawResults = data.results || data || [];
@@ -349,40 +386,20 @@ export default function Results() {
         });
       }
 
-      // Update calendar activity map with newly loaded results
-      const newActivity = {};
-      (rawResults || []).forEach(r => {
-        if (!r || !r.created_at) return;
-        const d = new Date(r.created_at);
-        if (isNaN(d.getTime())) return;
-        const ymd = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-        if (!newActivity[ymd]) {
-          newActivity[ymd] = { count: 0, totalScore: 0, avgScore: 0 };
-        }
-        newActivity[ymd].count += 1;
-        const score = Number(r.overall_quality?.overall_score ?? r.overall_quality_score ?? 0);
-        if (score > 0) {
-          newActivity[ymd].totalScore += score;
-          newActivity[ymd].avgScore = newActivity[ymd].totalScore / newActivity[ymd].count;
-        }
-      });
-      if (Object.keys(newActivity).length > 0) {
-        setActivityMap(prev => ({ ...prev, ...newActivity }));
-      }
-
       // Recalculate stats dynamically for custom date range filter
       if (dateRange.preset !== 'All Time' && (dateRange.startDate || dateRange.endDate)) {
         const tot = finalResults.length;
         const avgV = tot ? (finalResults.reduce((acc, r) => acc + (Number(r.video_analysis?.quality_score ?? r.video_quality_score ?? 0)), 0) / tot) : 0;
         const avgA = tot ? (finalResults.reduce((acc, r) => acc + (Number(r.audio_analysis?.score ?? r.audio_quality_score ?? 0)), 0) / tot) : 0;
         const avgO = tot ? (finalResults.reduce((acc, r) => acc + (Number(r.overall_quality?.overall_score ?? r.overall_quality_score ?? 0)), 0) / tot) : 0;
-        setStats({
+        newStats = {
           totalResults: tot,
           averageVideoScore: avgV,
           averageAudioScore: avgA,
           averageOverallScore: avgO,
           qualityDistribution: { excellent: 0, good: 0, fair: 0, poor: 0 }
-        });
+        };
+        setStats(newStats);
       }
 
       // Update states safely
@@ -395,9 +412,21 @@ export default function Results() {
         : (st && st.total !== undefined ? st.total : finalResults.length);
       setTotalCount(serverTotal);
 
-      // Cache the loaded rows and totals for instant re-navigation
-      _globalResultsCache.rows = finalResults;
-      _globalResultsCache.totalCount = serverTotal;
+      // Cache the loaded rows and totals for instant 0ms re-navigation
+      const cacheObj = {
+        rows: finalResults,
+        totalCount: serverTotal,
+        stats: newStats || stats,
+        activityMap: _globalResultsCache.activityMap || {},
+        timestamp: Date.now()
+      };
+      _globalResultsCache = cacheObj;
+      if (!isSearchOrFilter && page === 0) {
+        try {
+          sessionStorage.setItem(RESULTS_CACHE_KEY, JSON.stringify(cacheObj));
+          localStorage.setItem(RESULTS_CACHE_KEY, JSON.stringify(cacheObj));
+        } catch (e) {}
+      }
 
       // Update hasMore logically based on total
       if (serverTotal !== undefined) {
@@ -408,22 +437,37 @@ export default function Results() {
 
     } catch (error) {
       console.error('Error loading results:', error);
-      setRows([]);
-      setAllRows([]);
-      setTotalCount(0);
-      setHasMore(false);
+      if (rows.length === 0) {
+        setRows([]);
+        setAllRows([]);
+        setTotalCount(0);
+        setHasMore(false);
+      }
     } finally {
       setLoading(false);
+      setIsFetching(false);
     }
   };
 
+  const prevSearchRef = React.useRef(searchTerm);
+  const isInitialMountRef = React.useRef(true);
+
   useEffect(() => {
+    const isSearchChange = prevSearchRef.current !== searchTerm;
+    prevSearchRef.current = searchTerm;
+
+    // 0ms delay on initial mount; 250ms debounce only when actively typing in search
+    const delay = isSearchChange ? 250 : (isInitialMountRef.current ? 0 : 50);
+    isInitialMountRef.current = false;
+
     const timer = setTimeout(() => {
-      loadData();
-    }, 300);
+      loadData(rows.length > 0);
+    }, delay);
+
     const interval = setInterval(() => {
       loadData(true);
     }, 15000);
+
     return () => {
       clearTimeout(timer);
       clearInterval(interval);
@@ -932,7 +976,7 @@ export default function Results() {
               </Stack>
             </Box>
 
-            {loading ? (
+            {loading && rows.length === 0 ? (
               <Box sx={{ textAlign: 'center', py: 8 }}>
                 <Box sx={{
                   width: 60,
@@ -953,6 +997,9 @@ export default function Results() {
               </Box>
             ) : (
               <>
+                {isFetching && (
+                  <LinearProgress sx={{ height: 2, bgcolor: '#E0F2FE', '& .MuiLinearProgress-bar': { bgcolor: THEME.primary } }} />
+                )}
                 <TableContainer>
                   <Table>
                     <TableHead>
