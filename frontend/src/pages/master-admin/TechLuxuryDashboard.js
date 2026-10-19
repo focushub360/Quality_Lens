@@ -30,13 +30,13 @@ import {
 import api from '../../services/api';
 
 const LUXURY_CARD_SX = {
-  backgroundImage: 'linear-gradient(145deg, rgba(16, 24, 38, 0.94) 0%, rgba(10, 16, 26, 0.97) 100%), url(/assets/luxury_card_texture.jpg)',
+  backgroundImage: 'linear-gradient(145deg, rgba(255, 255, 255, 0.94) 0%, rgba(246, 250, 254, 0.90) 100%), url(/assets/light_card_texture.jpg)',
   backgroundSize: 'cover',
   backgroundPosition: 'center',
-  bgcolor: '#0B111A',
+  bgcolor: '#FFFFFF',
   borderRadius: 4,
-  border: '1px solid rgba(56, 189, 248, 0.18)',
-  boxShadow: '0 12px 36px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.08)',
+  border: '1px solid rgba(13, 161, 184, 0.2)',
+  boxShadow: '0 10px 30px rgba(15, 23, 42, 0.05), 0 2px 6px rgba(13, 161, 184, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.95)',
   backdropFilter: 'blur(16px)',
   p: 3,
   width: '100%',
@@ -48,8 +48,8 @@ const LUXURY_CARD_SX = {
   boxSizing: 'border-box',
   transition: 'all 0.25s ease',
   '&:hover': {
-    boxShadow: '0 18px 48px rgba(0, 0, 0, 0.7), 0 0 24px rgba(56, 189, 248, 0.22)',
-    borderColor: 'rgba(56, 189, 248, 0.45)',
+    boxShadow: '0 16px 40px rgba(13, 161, 184, 0.12), 0 4px 12px rgba(15, 23, 42, 0.06)',
+    borderColor: 'rgba(13, 161, 184, 0.45)',
     transform: 'translateY(-2px)'
   }
 };
@@ -264,21 +264,21 @@ export default function TechLuxuryDashboard() {
                   width: 44,
                   height: 44,
                   borderRadius: 2.5,
-                  bgcolor: '#0B3B24',
+                  bgcolor: '#E6F8F2',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  color: '#34D399',
-                  boxShadow: '0 4px 12px rgba(11, 59, 36, 0.4)'
+                  color: '#059669',
+                  boxShadow: '0 2px 8px rgba(5, 150, 105, 0.15)'
                 }}
               >
                 <ShowChart sx={{ fontSize: 22 }} />
               </Box>
               <Box>
-                <Typography sx={{ fontWeight: 800, fontSize: '1.05rem', color: '#FFFFFF', lineHeight: 1.2 }}>
+                <Typography sx={{ fontWeight: 800, fontSize: '1.05rem', color: '#0F172A', lineHeight: 1.2 }}>
                   Quality Score Trend
                 </Typography>
-                <Typography sx={{ color: 'rgba(226, 232, 240, 0.7)', fontSize: '0.78rem', mt: 0.35 }}>
+                <Typography sx={{ color: '#64748B', fontSize: '0.78rem', mt: 0.35 }}>
                   Daily average quality ratings for overall, video, and audio (out of 10)
                 </Typography>
               </Box>
@@ -294,54 +294,54 @@ export default function TechLuxuryDashboard() {
                 px: 1.6,
                 py: 0.55,
                 borderRadius: 50,
-                border: '1px solid rgba(255, 255, 255, 0.14)',
-                bgcolor: 'rgba(255, 255, 255, 0.06)',
+                border: '1px solid #E2E8F0',
+                bgcolor: '#FFFFFF',
                 cursor: 'pointer',
-                backdropFilter: 'blur(8px)',
-                '&:hover': { bgcolor: 'rgba(255, 255, 255, 0.12)' }
+                boxShadow: '0 1px 3px rgba(15, 23, 42, 0.04)',
+                '&:hover': { bgcolor: '#F8FAFC' }
               }}
             >
-              <CalendarToday sx={{ fontSize: 13, color: 'rgba(226, 232, 240, 0.8)' }} />
-              <Typography sx={{ fontSize: '0.76rem', fontWeight: 600, color: '#FFFFFF' }}>
+              <CalendarToday sx={{ fontSize: 13, color: '#64748B' }} />
+              <Typography sx={{ fontSize: '0.76rem', fontWeight: 600, color: '#0F172A' }}>
                 Last 30 Days
               </Typography>
-              <KeyboardArrowDown sx={{ fontSize: 16, color: 'rgba(255, 255, 255, 0.7)' }} />
+              <KeyboardArrowDown sx={{ fontSize: 16, color: '#64748B' }} />
             </Box>
           </Box>
 
           {/* Metrics Row */}
           <Box sx={{ display: 'flex', gap: 4, mb: 2, px: 0.5, minHeight: 68 }}>
             <Box>
-              <Typography sx={{ color: 'rgba(148, 163, 184, 0.9)', fontSize: '0.74rem', fontWeight: 600 }}>Overall Avg</Typography>
-              <Typography sx={{ fontWeight: 800, fontSize: '1.5rem', color: '#FFFFFF', my: 0.25, textShadow: '0 2px 8px rgba(0,0,0,0.6)' }}>
+              <Typography sx={{ color: '#64748B', fontSize: '0.74rem', fontWeight: 600 }}>Overall Avg</Typography>
+              <Typography sx={{ fontWeight: 800, fontSize: '1.5rem', color: '#0F172A', my: 0.25 }}>
                 {overviewData.overallAvg}
               </Typography>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                <Typography sx={{ color: '#34D399', fontSize: '0.72rem', fontWeight: 700 }}>
+                <Typography sx={{ color: '#059669', fontSize: '0.72rem', fontWeight: 700 }}>
                   ▲ +0.4 vs. last 30 days
                 </Typography>
               </Box>
             </Box>
 
             <Box>
-              <Typography sx={{ color: 'rgba(148, 163, 184, 0.9)', fontSize: '0.74rem', fontWeight: 600 }}>Avg Video</Typography>
-              <Typography sx={{ fontWeight: 800, fontSize: '1.5rem', color: '#FFFFFF', my: 0.25, textShadow: '0 2px 8px rgba(0,0,0,0.6)' }}>
+              <Typography sx={{ color: '#64748B', fontSize: '0.74rem', fontWeight: 600 }}>Avg Video</Typography>
+              <Typography sx={{ fontWeight: 800, fontSize: '1.5rem', color: '#0F172A', my: 0.25 }}>
                 {overviewData.videoAvg}
               </Typography>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                <Typography sx={{ color: '#34D399', fontSize: '0.72rem', fontWeight: 700 }}>
+                <Typography sx={{ color: '#059669', fontSize: '0.72rem', fontWeight: 700 }}>
                   ▲ +0.3 vs. last 30 days
                 </Typography>
               </Box>
             </Box>
 
             <Box>
-              <Typography sx={{ color: 'rgba(148, 163, 184, 0.9)', fontSize: '0.74rem', fontWeight: 600 }}>Avg Audio</Typography>
-              <Typography sx={{ fontWeight: 800, fontSize: '1.5rem', color: '#FFFFFF', my: 0.25, textShadow: '0 2px 8px rgba(0,0,0,0.6)' }}>
+              <Typography sx={{ color: '#64748B', fontSize: '0.74rem', fontWeight: 600 }}>Avg Audio</Typography>
+              <Typography sx={{ fontWeight: 800, fontSize: '1.5rem', color: '#0F172A', my: 0.25 }}>
                 {overviewData.audioAvg}
               </Typography>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                <Typography sx={{ color: '#34D399', fontSize: '0.72rem', fontWeight: 700 }}>
+                <Typography sx={{ color: '#059669', fontSize: '0.72rem', fontWeight: 700 }}>
                   ▲ +0.6 vs. last 30 days
                 </Typography>
               </Box>
@@ -352,13 +352,13 @@ export default function TechLuxuryDashboard() {
           <Box sx={{ width: '100%', minWidth: 0, height: 230, mt: 'auto' }}>
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={qualityTrend} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255, 255, 255, 0.08)" />
-                <XAxis dataKey="name" tick={{ fontSize: 11, fill: 'rgba(226, 232, 240, 0.7)' }} axisLine={false} tickLine={false} />
-                <YAxis domain={[0, 10]} ticks={[0, 3, 6, 9, 10]} tick={{ fontSize: 11, fill: 'rgba(226, 232, 240, 0.7)' }} axisLine={false} tickLine={false} />
-                <RechartsTooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.95)', border: '1px solid rgba(56, 189, 248, 0.3)', borderRadius: 8, fontSize: '0.8rem', color: '#FFFFFF' }} />
-                <Line type="monotone" dataKey="audio" stroke="#34D399" strokeWidth={2.5} dot={{ r: 3, fill: '#34D399' }} />
-                <Line type="monotone" dataKey="overall" stroke="#38BDF8" strokeWidth={2.5} dot={{ r: 3, fill: '#38BDF8' }} />
-                <Line type="monotone" dataKey="video" stroke="#F5B800" strokeWidth={2.5} dot={{ r: 3, fill: '#F5B800' }} />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(15, 23, 42, 0.07)" />
+                <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#64748B' }} axisLine={false} tickLine={false} />
+                <YAxis domain={[0, 10]} ticks={[0, 3, 6, 9, 10]} tick={{ fontSize: 11, fill: '#64748B' }} axisLine={false} tickLine={false} />
+                <RechartsTooltip contentStyle={{ backgroundColor: '#FFFFFF', border: '1px solid rgba(13, 161, 184, 0.3)', borderRadius: 8, fontSize: '0.8rem', color: '#0F172A', boxShadow: '0 8px 24px rgba(15, 23, 42, 0.12)' }} />
+                <Line type="monotone" dataKey="audio" stroke="#059669" strokeWidth={2.5} dot={{ r: 3, fill: '#059669' }} />
+                <Line type="monotone" dataKey="overall" stroke="#0284C7" strokeWidth={2.5} dot={{ r: 3, fill: '#0284C7' }} />
+                <Line type="monotone" dataKey="video" stroke="#D97706" strokeWidth={2.5} dot={{ r: 3, fill: '#D97706' }} />
               </LineChart>
             </ResponsiveContainer>
           </Box>
@@ -366,16 +366,16 @@ export default function TechLuxuryDashboard() {
           {/* Legend */}
           <Box sx={{ display: 'flex', justifyContent: 'center', gap: 3, mt: 2, height: 24, alignItems: 'center' }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#34D399' }} />
-              <Typography sx={{ fontSize: '0.74rem', color: 'rgba(226, 232, 240, 0.85)', fontWeight: 600 }}>Audio Quality</Typography>
+              <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#059669' }} />
+              <Typography sx={{ fontSize: '0.74rem', color: '#334155', fontWeight: 600 }}>Audio Quality</Typography>
             </Box>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#38BDF8' }} />
-              <Typography sx={{ fontSize: '0.74rem', color: 'rgba(226, 232, 240, 0.85)', fontWeight: 600 }}>Overall Quality</Typography>
+              <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#0284C7' }} />
+              <Typography sx={{ fontSize: '0.74rem', color: '#334155', fontWeight: 600 }}>Overall Quality</Typography>
             </Box>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#F5B800' }} />
-              <Typography sx={{ fontSize: '0.74rem', color: 'rgba(226, 232, 240, 0.85)', fontWeight: 600 }}>Video Quality</Typography>
+              <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#D97706' }} />
+              <Typography sx={{ fontSize: '0.74rem', color: '#334155', fontWeight: 600 }}>Video Quality</Typography>
             </Box>
           </Box>
         </Card>
@@ -390,21 +390,21 @@ export default function TechLuxuryDashboard() {
                   width: 44,
                   height: 44,
                   borderRadius: 2.5,
-                  bgcolor: '#0F2942',
+                  bgcolor: '#E0F2FE',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  color: '#38BDF8',
-                  boxShadow: '0 4px 12px rgba(15, 41, 66, 0.4)'
+                  color: '#0284C7',
+                  boxShadow: '0 2px 8px rgba(2, 132, 199, 0.15)'
                 }}
               >
                 <Videocam sx={{ fontSize: 22 }} />
               </Box>
               <Box>
-                <Typography sx={{ fontWeight: 800, fontSize: '1.05rem', color: '#FFFFFF', lineHeight: 1.2 }}>
+                <Typography sx={{ fontWeight: 800, fontSize: '1.05rem', color: '#0F172A', lineHeight: 1.2 }}>
                   Videos Uploaded Trend
                 </Typography>
-                <Typography sx={{ color: 'rgba(226, 232, 240, 0.7)', fontSize: '0.78rem', mt: 0.35 }}>
+                <Typography sx={{ color: '#64748B', fontSize: '0.78rem', mt: 0.35 }}>
                   Number of videos submitted for analysis per day
                 </Typography>
               </Box>
@@ -420,39 +420,39 @@ export default function TechLuxuryDashboard() {
                 px: 1.6,
                 py: 0.55,
                 borderRadius: 50,
-                border: '1px solid rgba(255, 255, 255, 0.14)',
-                bgcolor: 'rgba(255, 255, 255, 0.06)',
+                border: '1px solid #E2E8F0',
+                bgcolor: '#FFFFFF',
                 cursor: 'pointer',
-                backdropFilter: 'blur(8px)',
-                '&:hover': { bgcolor: 'rgba(255, 255, 255, 0.12)' }
+                boxShadow: '0 1px 3px rgba(15, 23, 42, 0.04)',
+                '&:hover': { bgcolor: '#F8FAFC' }
               }}
             >
-              <CalendarToday sx={{ fontSize: 13, color: 'rgba(226, 232, 240, 0.8)' }} />
-              <Typography sx={{ fontSize: '0.76rem', fontWeight: 600, color: '#FFFFFF' }}>
+              <CalendarToday sx={{ fontSize: 13, color: '#64748B' }} />
+              <Typography sx={{ fontSize: '0.76rem', fontWeight: 600, color: '#0F172A' }}>
                 Last 30 Days
               </Typography>
-              <KeyboardArrowDown sx={{ fontSize: 16, color: 'rgba(255, 255, 255, 0.7)' }} />
+              <KeyboardArrowDown sx={{ fontSize: 16, color: '#64748B' }} />
             </Box>
           </Box>
 
           {/* Metrics Row */}
           <Box sx={{ display: 'flex', gap: 5, mb: 2, px: 0.5, minHeight: 68 }}>
             <Box>
-              <Typography sx={{ color: 'rgba(148, 163, 184, 0.9)', fontSize: '0.74rem', fontWeight: 600 }}>Total Videos</Typography>
-              <Typography sx={{ fontWeight: 800, fontSize: '1.5rem', color: '#FFFFFF', my: 0.25, textShadow: '0 2px 8px rgba(0,0,0,0.6)' }}>
+              <Typography sx={{ color: '#64748B', fontSize: '0.74rem', fontWeight: 600 }}>Total Videos</Typography>
+              <Typography sx={{ fontWeight: 800, fontSize: '1.5rem', color: '#0F172A', my: 0.25 }}>
                 {overviewData.totalVideos}
               </Typography>
-              <Typography sx={{ color: '#34D399', fontSize: '0.72rem', fontWeight: 700 }}>
+              <Typography sx={{ color: '#059669', fontSize: '0.72rem', fontWeight: 700 }}>
                 ▲ +12% vs. last 30 days
               </Typography>
             </Box>
 
             <Box>
-              <Typography sx={{ color: 'rgba(148, 163, 184, 0.9)', fontSize: '0.74rem', fontWeight: 600 }}>Busiest Day</Typography>
-              <Typography sx={{ fontWeight: 800, fontSize: '1.5rem', color: '#FFFFFF', my: 0.25, textShadow: '0 2px 8px rgba(0,0,0,0.6)' }}>
+              <Typography sx={{ color: '#64748B', fontSize: '0.74rem', fontWeight: 600 }}>Busiest Day</Typography>
+              <Typography sx={{ fontWeight: 800, fontSize: '1.5rem', color: '#0F172A', my: 0.25 }}>
                 {overviewData.busiestDay}
               </Typography>
-              <Typography sx={{ color: '#34D399', fontSize: '0.72rem', fontWeight: 700 }}>
+              <Typography sx={{ color: '#059669', fontSize: '0.72rem', fontWeight: 700 }}>
                 ▲ +26% vs. avg day
               </Typography>
             </Box>
@@ -462,19 +462,19 @@ export default function TechLuxuryDashboard() {
           <Box sx={{ width: '100%', minWidth: 0, height: 230, mt: 'auto' }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={uploadTrend} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255, 255, 255, 0.08)" />
-                <XAxis dataKey="name" tick={{ fontSize: 11, fill: 'rgba(226, 232, 240, 0.7)' }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: 'rgba(226, 232, 240, 0.7)' }} axisLine={false} tickLine={false} domain={[0, 'auto']} />
-                <RechartsTooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.95)', border: '1px solid rgba(56, 189, 248, 0.3)', borderRadius: 8, fontSize: '0.8rem', color: '#FFFFFF' }} />
-                <Bar dataKey="count" fill="#F5B800" radius={[5, 5, 0, 0]} maxBarSize={38} barSize={26} />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(15, 23, 42, 0.07)" />
+                <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#64748B' }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 11, fill: '#64748B' }} axisLine={false} tickLine={false} domain={[0, 'auto']} />
+                <RechartsTooltip contentStyle={{ backgroundColor: '#FFFFFF', border: '1px solid rgba(13, 161, 184, 0.3)', borderRadius: 8, fontSize: '0.8rem', color: '#0F172A', boxShadow: '0 8px 24px rgba(15, 23, 42, 0.12)' }} />
+                <Bar dataKey="count" fill="#D97706" radius={[5, 5, 0, 0]} maxBarSize={38} barSize={26} />
               </BarChart>
             </ResponsiveContainer>
           </Box>
 
           {/* Symmetrical Legend */}
           <Box sx={{ display: 'flex', justifyContent: 'center', gap: 1, mt: 2, height: 24, alignItems: 'center' }}>
-            <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#F5B800' }} />
-            <Typography sx={{ fontSize: '0.74rem', color: 'rgba(226, 232, 240, 0.85)', fontWeight: 600 }}>Videos Uploaded</Typography>
+            <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#D97706' }} />
+            <Typography sx={{ fontSize: '0.74rem', color: '#334155', fontWeight: 600 }}>Videos Uploaded</Typography>
           </Box>
         </Card>
 
@@ -488,21 +488,21 @@ export default function TechLuxuryDashboard() {
                   width: 44,
                   height: 44,
                   borderRadius: 2.5,
-                  bgcolor: '#0F3829',
+                  bgcolor: '#FEF3C7',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  color: '#34D399',
-                  boxShadow: '0 4px 12px rgba(15, 56, 41, 0.4)'
+                  color: '#D97706',
+                  boxShadow: '0 2px 8px rgba(217, 119, 6, 0.15)'
                 }}
               >
                 <Star sx={{ fontSize: 22 }} />
               </Box>
               <Box>
-                <Typography sx={{ fontWeight: 800, fontSize: '1.05rem', color: '#FFFFFF', lineHeight: 1.2 }}>
+                <Typography sx={{ fontWeight: 800, fontSize: '1.05rem', color: '#0F172A', lineHeight: 1.2 }}>
                   Advisor Performance Trend
                 </Typography>
-                <Typography sx={{ color: 'rgba(226, 232, 240, 0.7)', fontSize: '0.78rem', mt: 0.35 }}>
+                <Typography sx={{ color: '#64748B', fontSize: '0.78rem', mt: 0.35 }}>
                   Overall quality score per service advisor (top 6 by rank)
                 </Typography>
               </Box>
@@ -518,38 +518,38 @@ export default function TechLuxuryDashboard() {
                 px: 1.6,
                 py: 0.55,
                 borderRadius: 50,
-                border: '1px solid rgba(255, 255, 255, 0.14)',
-                bgcolor: 'rgba(255, 255, 255, 0.06)',
+                border: '1px solid #E2E8F0',
+                bgcolor: '#FFFFFF',
                 cursor: 'pointer',
-                backdropFilter: 'blur(8px)',
-                '&:hover': { bgcolor: 'rgba(255, 255, 255, 0.12)' }
+                boxShadow: '0 1px 3px rgba(15, 23, 42, 0.04)',
+                '&:hover': { bgcolor: '#F8FAFC' }
               }}
             >
-              <Typography sx={{ fontSize: '0.76rem', fontWeight: 600, color: '#FFFFFF' }}>
+              <Typography sx={{ fontSize: '0.76rem', fontWeight: 600, color: '#0F172A' }}>
                 Top 6
               </Typography>
-              <KeyboardArrowDown sx={{ fontSize: 16, color: 'rgba(255, 255, 255, 0.7)' }} />
+              <KeyboardArrowDown sx={{ fontSize: 16, color: '#64748B' }} />
             </Box>
           </Box>
 
           {/* Metrics Row */}
           <Box sx={{ display: 'flex', gap: 5, mb: 2, px: 0.5, minHeight: 68 }}>
             <Box>
-              <Typography sx={{ color: 'rgba(148, 163, 184, 0.9)', fontSize: '0.74rem', fontWeight: 600 }}>Advisors</Typography>
-              <Typography sx={{ fontWeight: 800, fontSize: '1.5rem', color: '#FFFFFF', my: 0.25, textShadow: '0 2px 8px rgba(0,0,0,0.6)' }}>
+              <Typography sx={{ color: '#64748B', fontSize: '0.74rem', fontWeight: 600 }}>Advisors</Typography>
+              <Typography sx={{ fontWeight: 800, fontSize: '1.5rem', color: '#0F172A', my: 0.25 }}>
                 {overviewData.totalAdvisors}
               </Typography>
-              <Typography sx={{ color: '#34D399', fontSize: '0.72rem', fontWeight: 700 }}>
+              <Typography sx={{ color: '#059669', fontSize: '0.72rem', fontWeight: 700 }}>
                 ▲ +2 vs. last 30 days
               </Typography>
             </Box>
 
             <Box>
-              <Typography sx={{ color: 'rgba(148, 163, 184, 0.9)', fontSize: '0.74rem', fontWeight: 600 }}>Top Score</Typography>
-              <Typography sx={{ fontWeight: 800, fontSize: '1.5rem', color: '#FFFFFF', my: 0.25, textShadow: '0 2px 8px rgba(0,0,0,0.6)' }}>
+              <Typography sx={{ color: '#64748B', fontSize: '0.74rem', fontWeight: 600 }}>Top Score</Typography>
+              <Typography sx={{ fontWeight: 800, fontSize: '1.5rem', color: '#0F172A', my: 0.25 }}>
                 {overviewData.topScore}
               </Typography>
-              <Typography sx={{ color: '#34D399', fontSize: '0.72rem', fontWeight: 700 }}>
+              <Typography sx={{ color: '#059669', fontSize: '0.72rem', fontWeight: 700 }}>
                 ▲ +0.3 vs. last 30 days
               </Typography>
             </Box>
@@ -559,19 +559,19 @@ export default function TechLuxuryDashboard() {
           <Box sx={{ width: '100%', minWidth: 0, height: 230, mt: 'auto' }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={advisorTrend} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255, 255, 255, 0.08)" />
-                <XAxis dataKey="name" tick={{ fontSize: 11, fill: 'rgba(226, 232, 240, 0.7)' }} axisLine={false} tickLine={false} />
-                <YAxis domain={[0, 10]} ticks={[0, 3, 6, 9, 10]} tick={{ fontSize: 11, fill: 'rgba(226, 232, 240, 0.7)' }} axisLine={false} tickLine={false} />
-                <RechartsTooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.95)', border: '1px solid rgba(56, 189, 248, 0.3)', borderRadius: 8, fontSize: '0.8rem', color: '#FFFFFF' }} />
-                <Bar dataKey="score" fill="#10B981" radius={[6, 6, 0, 0]} maxBarSize={44} barSize={34} />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(15, 23, 42, 0.07)" />
+                <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#64748B' }} axisLine={false} tickLine={false} />
+                <YAxis domain={[0, 10]} ticks={[0, 3, 6, 9, 10]} tick={{ fontSize: 11, fill: '#64748B' }} axisLine={false} tickLine={false} />
+                <RechartsTooltip contentStyle={{ backgroundColor: '#FFFFFF', border: '1px solid rgba(13, 161, 184, 0.3)', borderRadius: 8, fontSize: '0.8rem', color: '#0F172A', boxShadow: '0 8px 24px rgba(15, 23, 42, 0.12)' }} />
+                <Bar dataKey="score" fill="#059669" radius={[6, 6, 0, 0]} maxBarSize={44} barSize={34} />
               </BarChart>
             </ResponsiveContainer>
           </Box>
 
           {/* Legend */}
           <Box sx={{ display: 'flex', justifyContent: 'center', gap: 1, mt: 2, height: 24, alignItems: 'center' }}>
-            <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#10B981' }} />
-            <Typography sx={{ fontSize: '0.74rem', color: 'rgba(226, 232, 240, 0.85)', fontWeight: 600 }}>Overall Score</Typography>
+            <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#059669' }} />
+            <Typography sx={{ fontSize: '0.74rem', color: '#334155', fontWeight: 600 }}>Overall Score</Typography>
           </Box>
         </Card>
 
@@ -585,21 +585,21 @@ export default function TechLuxuryDashboard() {
                   width: 44,
                   height: 44,
                   borderRadius: 2.5,
-                  bgcolor: '#0E363A',
+                  bgcolor: '#CCFBF1',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  color: '#2DD4BF',
-                  boxShadow: '0 4px 12px rgba(14, 54, 58, 0.4)'
+                  color: '#0D9488',
+                  boxShadow: '0 2px 8px rgba(13, 148, 136, 0.15)'
                 }}
               >
                 <GraphicEq sx={{ fontSize: 22 }} />
               </Box>
               <Box>
-                <Typography sx={{ fontWeight: 800, fontSize: '1.05rem', color: '#FFFFFF', lineHeight: 1.2 }}>
+                <Typography sx={{ fontWeight: 800, fontSize: '1.05rem', color: '#0F172A', lineHeight: 1.2 }}>
                   Audio / Video Improvement
                 </Typography>
-                <Typography sx={{ color: 'rgba(226, 232, 240, 0.7)', fontSize: '0.78rem', mt: 0.35 }}>
+                <Typography sx={{ color: '#64748B', fontSize: '0.78rem', mt: 0.35 }}>
                   Compare audio quality vs video quality over each day
                 </Typography>
               </Box>
@@ -615,40 +615,40 @@ export default function TechLuxuryDashboard() {
                 px: 1.6,
                 py: 0.55,
                 borderRadius: 50,
-                border: '1px solid rgba(255, 255, 255, 0.14)',
-                bgcolor: 'rgba(255, 255, 255, 0.06)',
+                border: '1px solid #E2E8F0',
+                bgcolor: '#FFFFFF',
                 cursor: 'pointer',
-                backdropFilter: 'blur(8px)',
-                '&:hover': { bgcolor: 'rgba(255, 255, 255, 0.12)' }
+                boxShadow: '0 1px 3px rgba(15, 23, 42, 0.04)',
+                '&:hover': { bgcolor: '#F8FAFC' }
               }}
             >
-              <CalendarToday sx={{ fontSize: 13, color: 'rgba(226, 232, 240, 0.8)' }} />
-              <Typography sx={{ fontSize: '0.76rem', fontWeight: 600, color: '#FFFFFF' }}>
+              <CalendarToday sx={{ fontSize: 13, color: '#64748B' }} />
+              <Typography sx={{ fontSize: '0.76rem', fontWeight: 600, color: '#0F172A' }}>
                 Last 30 Days
               </Typography>
-              <KeyboardArrowDown sx={{ fontSize: 16, color: 'rgba(255, 255, 255, 0.7)' }} />
+              <KeyboardArrowDown sx={{ fontSize: 16, color: '#64748B' }} />
             </Box>
           </Box>
 
           {/* Metrics Row */}
           <Box sx={{ display: 'flex', gap: 5, mb: 2, px: 0.5, minHeight: 68 }}>
             <Box>
-              <Typography sx={{ color: 'rgba(148, 163, 184, 0.9)', fontSize: '0.74rem', fontWeight: 600 }}>Avg Audio</Typography>
-              <Typography sx={{ fontWeight: 800, fontSize: '1.5rem', color: '#FFFFFF', my: 0.25, textShadow: '0 2px 8px rgba(0,0,0,0.6)' }}>
+              <Typography sx={{ color: '#64748B', fontSize: '0.74rem', fontWeight: 600 }}>Avg Audio</Typography>
+              <Typography sx={{ fontWeight: 800, fontSize: '1.5rem', color: '#0F172A', my: 0.25 }}>
                 {overviewData.audioAvg}
               </Typography>
-              <Typography sx={{ color: '#34D399', fontSize: '0.72rem', fontWeight: 700 }}>
+              <Typography sx={{ color: '#059669', fontSize: '0.72rem', fontWeight: 700 }}>
                 ▲ +0.5 vs. last 30 days
               </Typography>
             </Box>
 
             <Box>
-              <Typography sx={{ color: 'rgba(148, 163, 184, 0.9)', fontSize: '0.74rem', fontWeight: 600 }}>Avg Video</Typography>
-              <Typography sx={{ fontWeight: 800, fontSize: '1.5rem', color: '#FFFFFF', my: 0.25, textShadow: '0 2px 8px rgba(0,0,0,0.6)' }}>
+              <Typography sx={{ color: '#64748B', fontSize: '0.74rem', fontWeight: 600 }}>Avg Video</Typography>
+              <Typography sx={{ fontWeight: 800, fontSize: '1.5rem', color: '#0F172A', my: 0.25 }}>
                 {overviewData.videoAvg}
               </Typography>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                <Typography sx={{ color: '#34D399', fontSize: '0.72rem', fontWeight: 700 }}>
+                <Typography sx={{ color: '#059669', fontSize: '0.72rem', fontWeight: 700 }}>
                   ▲ +0.4 vs. last 30 days
                 </Typography>
               </Box>
@@ -659,12 +659,12 @@ export default function TechLuxuryDashboard() {
           <Box sx={{ width: '100%', minWidth: 0, height: 230, mt: 'auto' }}>
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={qualityTrend} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255, 255, 255, 0.08)" />
-                <XAxis dataKey="name" tick={{ fontSize: 11, fill: 'rgba(226, 232, 240, 0.7)' }} axisLine={false} tickLine={false} />
-                <YAxis domain={[0, 10]} ticks={[0, 3, 6, 9, 10]} tick={{ fontSize: 11, fill: 'rgba(226, 232, 240, 0.7)' }} axisLine={false} tickLine={false} />
-                <RechartsTooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.95)', border: '1px solid rgba(56, 189, 248, 0.3)', borderRadius: 8, fontSize: '0.8rem', color: '#FFFFFF' }} />
-                <Line type="monotone" dataKey="audio" stroke="#34D399" strokeWidth={2.5} dot={{ r: 3, fill: '#34D399' }} />
-                <Line type="monotone" dataKey="video" stroke="#F5B800" strokeWidth={2.5} dot={{ r: 3, fill: '#F5B800' }} />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(15, 23, 42, 0.07)" />
+                <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#64748B' }} axisLine={false} tickLine={false} />
+                <YAxis domain={[0, 10]} ticks={[0, 3, 6, 9, 10]} tick={{ fontSize: 11, fill: '#64748B' }} axisLine={false} tickLine={false} />
+                <RechartsTooltip contentStyle={{ backgroundColor: '#FFFFFF', border: '1px solid rgba(13, 161, 184, 0.3)', borderRadius: 8, fontSize: '0.8rem', color: '#0F172A', boxShadow: '0 8px 24px rgba(15, 23, 42, 0.12)' }} />
+                <Line type="monotone" dataKey="audio" stroke="#059669" strokeWidth={2.5} dot={{ r: 3, fill: '#059669' }} />
+                <Line type="monotone" dataKey="video" stroke="#D97706" strokeWidth={2.5} dot={{ r: 3, fill: '#D97706' }} />
               </LineChart>
             </ResponsiveContainer>
           </Box>
@@ -672,12 +672,12 @@ export default function TechLuxuryDashboard() {
           {/* Legend */}
           <Box sx={{ display: 'flex', justifyContent: 'center', gap: 3, mt: 2, height: 24, alignItems: 'center' }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#34D399' }} />
-              <Typography sx={{ fontSize: '0.74rem', color: 'rgba(226, 232, 240, 0.85)', fontWeight: 600 }}>Audio</Typography>
+              <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#059669' }} />
+              <Typography sx={{ fontSize: '0.74rem', color: '#334155', fontWeight: 600 }}>Audio</Typography>
             </Box>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#F5B800' }} />
-              <Typography sx={{ fontSize: '0.74rem', color: 'rgba(226, 232, 240, 0.85)', fontWeight: 600 }}>Video</Typography>
+              <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#D97706' }} />
+              <Typography sx={{ fontSize: '0.74rem', color: '#334155', fontWeight: 600 }}>Video</Typography>
             </Box>
           </Box>
         </Card>

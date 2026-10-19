@@ -2909,18 +2909,18 @@ const StatCard = ({ title, value, change, changeType, icon, color, subtitle }) =
     <Fade in={true}>
       <Card sx={{
         background: isPro
-          ? 'linear-gradient(145deg, rgba(16, 24, 38, 0.94) 0%, rgba(10, 16, 26, 0.97) 100%), url(/assets/luxury_card_texture.jpg)'
+          ? 'linear-gradient(145deg, rgba(255, 255, 255, 0.94) 0%, rgba(246, 250, 254, 0.90) 100%), url(/assets/light_card_texture.jpg)'
           : THEME.surfaceElevated,
         backgroundSize: 'cover',
         backgroundPosition: 'center',
-        border: isPro ? '1px solid rgba(56, 189, 248, 0.2)' : `1px solid ${THEME.border}`,
+        border: isPro ? '1px solid rgba(13, 161, 184, 0.2)' : `1px solid ${THEME.border}`,
         borderRadius: isPro ? 4 : 3,
-        boxShadow: isPro ? '0 10px 32px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.08)' : THEME.shadowSm,
+        boxShadow: isPro ? '0 10px 30px rgba(15, 23, 42, 0.05), 0 2px 6px rgba(13, 161, 184, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.95)' : THEME.shadowSm,
         backdropFilter: isPro ? 'blur(16px)' : 'none',
         transition: 'all 0.25s ease-in-out',
         '&:hover': {
-          boxShadow: isPro ? '0 16px 44px rgba(0, 0, 0, 0.65), 0 0 24px rgba(56, 189, 248, 0.22)' : THEME.shadowMd,
-          borderColor: isPro ? 'rgba(56, 189, 248, 0.45)' : undefined,
+          boxShadow: isPro ? '0 16px 40px rgba(13, 161, 184, 0.12), 0 4px 12px rgba(15, 23, 42, 0.06)' : THEME.shadowMd,
+          borderColor: isPro ? 'rgba(13, 161, 184, 0.45)' : undefined,
           transform: 'translateY(-2px)'
         },
         height: '100%'
@@ -2929,7 +2929,7 @@ const StatCard = ({ title, value, change, changeType, icon, color, subtitle }) =
           <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
             <Box sx={{ flex: 1 }}>
               <Typography variant="body2" sx={{
-                color: isPro ? 'rgba(226, 232, 240, 0.85)' : THEME.textSecondary,
+                color: isPro ? '#64748B' : THEME.textSecondary,
                 fontWeight: 600,
                 mb: 1,
                 fontSize: '0.875rem'
@@ -2937,17 +2937,17 @@ const StatCard = ({ title, value, change, changeType, icon, color, subtitle }) =
                 {title}
               </Typography>
               <Typography variant="h4" sx={{
-                color: isPro ? '#FFFFFF' : THEME.textPrimary,
+                color: isPro ? '#0F172A' : THEME.textPrimary,
                 fontWeight: 800,
                 mb: 1,
                 lineHeight: 1.2,
-                textShadow: isPro ? '0 2px 10px rgba(0, 0, 0, 0.7)' : 'none'
+                textShadow: 'none'
               }}>
                 {value}
               </Typography>
               {subtitle && (
                 <Typography variant="caption" sx={{
-                  color: isPro ? 'rgba(148, 163, 184, 0.85)' : THEME.textTertiary,
+                  color: isPro ? '#64748B' : THEME.textTertiary,
                   display: 'block',
                   mb: 1
                 }}>
@@ -2957,14 +2957,14 @@ const StatCard = ({ title, value, change, changeType, icon, color, subtitle }) =
               {change && (
                 <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
                   {changeType === 'positive' ? (
-                    <ArrowUpward sx={{ fontSize: 16, color: isPro ? '#34D399' : THEME.success, mr: 0.5 }} />
+                    <ArrowUpward sx={{ fontSize: 16, color: isPro ? '#10B981' : THEME.success, mr: 0.5 }} />
                   ) : changeType === 'negative' ? (
-                    <ArrowDownward sx={{ fontSize: 16, color: isPro ? '#F87171' : THEME.error, mr: 0.5 }} />
+                    <ArrowDownward sx={{ fontSize: 16, color: isPro ? '#EF4444' : THEME.error, mr: 0.5 }} />
                   ) : null}
                   <Typography variant="caption" sx={{
-                    color: changeType === 'positive' ? (isPro ? '#34D399' : THEME.success)
-                      : changeType === 'negative' ? (isPro ? '#F87171' : THEME.error)
-                        : (isPro ? 'rgba(148, 163, 184, 0.8)' : THEME.textTertiary),
+                    color: changeType === 'positive' ? (isPro ? '#10B981' : THEME.success)
+                      : changeType === 'negative' ? (isPro ? '#EF4444' : THEME.error)
+                        : (isPro ? '#64748B' : THEME.textTertiary),
                     fontWeight: 700
                   }}>
                     {change}
@@ -2975,18 +2975,18 @@ const StatCard = ({ title, value, change, changeType, icon, color, subtitle }) =
             <Box sx={{
               width: 48, height: 48, borderRadius: '50%',
               background: isPro
-                ? 'linear-gradient(135deg, rgba(13, 161, 184, 0.25) 0%, rgba(12, 88, 125, 0.4) 100%)'
+                ? 'linear-gradient(135deg, rgba(13, 161, 184, 0.15) 0%, rgba(12, 88, 125, 0.25) 100%)'
                 : (color === THEME.primary ? THEME.gradientPrimary :
                     color === THEME.accent ? THEME.gradientAccent :
                       color === THEME.success ? THEME.gradientSuccess :
                         color === THEME.warning ? THEME.gradientWarning :
                           THEME.gradientPrimary),
-              border: isPro ? '1px solid rgba(56, 189, 248, 0.35)' : 'none',
-              boxShadow: isPro ? '0 0 16px rgba(56, 189, 248, 0.3)' : THEME.shadowSm,
+              border: isPro ? '1px solid rgba(13, 161, 184, 0.3)' : 'none',
+              boxShadow: isPro ? '0 2px 8px rgba(13, 161, 184, 0.2)' : THEME.shadowSm,
               display: 'flex',
               alignItems: 'center', justifyContent: 'center', flexShrink: 0
             }}>
-              {React.cloneElement(icon, { sx: { fontSize: 24, color: isPro ? '#38BDF8' : '#FFFFFF' } })}
+              {React.cloneElement(icon, { sx: { fontSize: 24, color: isPro ? '#0DA1B8' : '#FFFFFF' } })}
             </Box>
           </Box>
         </CardContent>
@@ -3008,36 +3008,36 @@ const TopPerformerCard = ({ dealer, rank, metric, value }) => {
       px: 2,
       py: 1.5,
       borderRadius: 2,
-      background: isPro ? 'rgba(255, 255, 255, 0.04)' : THEME.surface,
-      border: isPro ? '1px solid rgba(255, 255, 255, 0.08)' : `1px solid ${THEME.border}`,
-      boxShadow: isPro ? '0 2px 8px rgba(0,0,0,0.3)' : '0 1px 3px rgba(0,0,0,0.03)',
+      background: isPro ? '#FFFFFF' : THEME.surface,
+      border: isPro ? '1px solid rgba(13, 161, 184, 0.16)' : `1px solid ${THEME.border}`,
+      boxShadow: isPro ? '0 2px 6px rgba(15, 23, 42, 0.04)' : '0 1px 3px rgba(0,0,0,0.03)',
       transition: 'all 0.2s ease-in-out',
       '&:hover': {
-        background: isPro ? 'rgba(56, 189, 248, 0.12)' : THEME.primaryUltraLight,
-        borderColor: isPro ? 'rgba(56, 189, 248, 0.35)' : THEME.primaryLight,
-        boxShadow: isPro ? '0 4px 16px rgba(0,0,0,0.5)' : '0 4px 12px rgba(0,0,0,0.06)',
+        background: isPro ? 'rgba(238, 248, 251, 0.95)' : THEME.primaryUltraLight,
+        borderColor: isPro ? '#0DA1B8' : THEME.primaryLight,
+        boxShadow: isPro ? '0 4px 14px rgba(13, 161, 184, 0.12)' : '0 4px 12px rgba(0,0,0,0.06)',
         transform: 'translateY(-1px)'
       }
     }}>
       <Box sx={{ display: 'flex', alignItems: 'center', flex: 1, minWidth: 0 }}>
         <Box sx={{
           width: 32, height: 32, borderRadius: '50%',
-          background: rank === 1 ? (isPro ? 'linear-gradient(135deg, #0DA1B8 0%, #0C587D 100%)' : THEME.gradientAccent) :
-            rank === 2 ? (isPro ? 'linear-gradient(135deg, #0284C7 0%, #0369A1 100%)' : THEME.gradientPrimary) :
-            rank === 3 ? (isPro ? 'linear-gradient(135deg, #10B981 0%, #059669 100%)' : THEME.gradientSuccess) :
-            (isPro ? 'rgba(255, 255, 255, 0.08)' : THEME.surfaceElevated),
+          background: rank === 1 ? THEME.gradientAccent :
+            rank === 2 ? THEME.gradientPrimary :
+            rank === 3 ? THEME.gradientSuccess :
+            (isPro ? '#F1F5F9' : THEME.surfaceElevated),
           display: 'flex', alignItems: 'center', justifyContent: 'center', mr: 2, fontWeight: 700, fontSize: '13px',
-          color: rank <= 3 ? '#FFFFFF' : (isPro ? '#94A3B8' : THEME.textPrimary),
-          border: rank > 3 ? (isPro ? '1px solid rgba(255, 255, 255, 0.1)' : `1px solid ${THEME.border}`) : 'none',
-          boxShadow: rank <= 3 ? (isPro ? '0 0 10px rgba(13, 161, 184, 0.4)' : THEME.shadowSm) : 'none', flexShrink: 0
+          color: rank <= 3 ? '#FFFFFF' : THEME.textPrimary,
+          border: rank > 3 ? `1px solid ${THEME.border}` : 'none',
+          boxShadow: rank <= 3 ? THEME.shadowSm : 'none', flexShrink: 0
         }}>
           {rank}
         </Box>
         <Box sx={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
-          <Typography variant="subtitle2" sx={{ color: isPro ? '#FFFFFF' : THEME.textPrimary, fontWeight: 600, mb: 0.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <Typography variant="subtitle2" sx={{ color: THEME.textPrimary, fontWeight: 600, mb: 0.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {dealer.name}
           </Typography>
-          <Typography variant="caption" sx={{ color: isPro ? 'rgba(226, 232, 240, 0.7)' : THEME.textSecondary, display: 'block' }}>
+          <Typography variant="caption" sx={{ color: THEME.textSecondary, display: 'block' }}>
             {metric}
           </Typography>
         </Box>
@@ -3047,14 +3047,14 @@ const TopPerformerCard = ({ dealer, rank, metric, value }) => {
         size="small"
         sx={{
           background: isPro
-            ? 'rgba(56, 189, 248, 0.15)'
+            ? (numericValue >= 8.5 ? '#DCFCE7' : numericValue >= 7 ? '#E0F2FE' : '#FEF3C7')
             : (numericValue >= 8.5 ? THEME.successLight : numericValue >= 7 ? THEME.primaryUltraLight :
               numericValue >= 5 ? THEME.warningLight : THEME.errorLight),
           color: isPro
-            ? '#38BDF8'
+            ? (numericValue >= 8.5 ? '#166534' : numericValue >= 7 ? '#0369A1' : '#92400E')
             : (numericValue >= 8.5 ? THEME.success : numericValue >= 7 ? THEME.primary :
               numericValue >= 5 ? THEME.warning : THEME.error),
-          border: isPro ? '1px solid rgba(56, 189, 248, 0.3)' : 'none',
+          border: isPro ? (numericValue >= 7 ? '1px solid rgba(13, 161, 184, 0.25)' : 'none') : 'none',
           fontWeight: 700, fontSize: '0.75rem', flexShrink: 0, ml: 1, px: 0.5
         }}
       />
