@@ -43,7 +43,21 @@ import {
   Warning,
   KeyboardArrowRight,
   TrendingUp,
-  Schedule
+  Schedule,
+  Memory,
+  Videocam,
+  Mic,
+  GraphicEq,
+  Translate,
+  Description,
+  Star,
+  CheckCircleOutline,
+  Tune,
+  Layers,
+  BarChart as BarChartIcon,
+  Visibility,
+  InfoOutlined,
+  SmartToy
 } from '@mui/icons-material';
 
 const THEME = {
@@ -68,6 +82,7 @@ const THEME = {
 export default function CitNowUpgrades() {
   const theme = useTheme();
   const [activeTab, setActiveTab] = useState(0);
+  const [aiEngineTab, setAiEngineTab] = useState(0);
 
   // Autocorrection Simulator State
   const [correctionLevel, setCorrectionLevel] = useState(70);
@@ -852,6 +867,438 @@ export default function CitNowUpgrades() {
           </Grid>
 
         </Grid>
+
+        {/* ── AI Models & Media Quality Scoring Engine Section ── */}
+        <Box sx={{ mb: 6 }}>
+          <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, justifyContent: 'space-between', alignItems: { xs: 'flex-start', md: 'center' }, gap: 2, mb: 3 }}>
+            <Box>
+              <Typography variant="h5" sx={{ fontWeight: 800, color: THEME.textPrimary, letterSpacing: '-0.01em', mb: 0.5 }}>
+                AI Models & Media Quality Scoring Engine
+              </Typography>
+              <Typography variant="body2" sx={{ color: THEME.textSecondary }}>
+                Deep-dive into the machine learning models, computer vision & acoustic weights, and how scores are calculated across the UI.
+              </Typography>
+            </Box>
+            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+              <Chip icon={<Memory sx={{ fontSize: 16 }} />} label="5 Production Engines" size="small" sx={{ bgcolor: 'rgba(13, 161, 184, 0.1)', color: THEME.primary, fontWeight: 700 }} />
+              <Chip icon={<Tune sx={{ fontSize: 16 }} />} label="13 Rated Metrics" size="small" sx={{ bgcolor: 'rgba(16, 185, 129, 0.1)', color: THEME.success, fontWeight: 700 }} />
+            </Box>
+          </Box>
+
+          <Card sx={{
+            borderRadius: 4,
+            border: `1px solid rgba(13, 161, 184, 0.18)`,
+            background: THEME.cardBg,
+            backdropFilter: 'blur(20px)',
+            boxShadow: '0 10px 30px rgba(0, 0, 0, 0.03)',
+            overflow: 'hidden'
+          }}>
+            <Box sx={{ borderBottom: '1px solid rgba(13, 161, 184, 0.12)', bgcolor: 'rgba(248, 250, 252, 0.8)', px: 3, pt: 1.5 }}>
+              <Tabs
+                value={aiEngineTab}
+                onChange={(e, val) => setAiEngineTab(val)}
+                variant="scrollable"
+                scrollButtons="auto"
+                sx={{
+                  '& .MuiTabs-indicator': {
+                    backgroundColor: THEME.primary,
+                    height: 3,
+                    borderRadius: '3px 3px 0 0'
+                  },
+                  '& .MuiTab-root': {
+                    textTransform: 'none',
+                    fontWeight: 700,
+                    fontSize: '0.9rem',
+                    color: THEME.textSecondary,
+                    py: 1.75,
+                    px: 2.5,
+                    minHeight: 48,
+                    '&.Mui-selected': {
+                      color: THEME.primary
+                    }
+                  }
+                }}
+              >
+                <Tab icon={<SmartToy sx={{ fontSize: 18 }} />} iconPosition="start" label="1. AI & ML Models Stack" />
+                <Tab icon={<Videocam sx={{ fontSize: 18 }} />} iconPosition="start" label="2. Video Quality Metrics (0–10)" />
+                <Tab icon={<GraphicEq sx={{ fontSize: 18 }} />} iconPosition="start" label="3. Audio Quality Metrics (0–10)" />
+                <Tab icon={<Star sx={{ fontSize: 18 }} />} iconPosition="start" label="4. Overall Score & UI Workflow" />
+              </Tabs>
+            </Box>
+
+            <CardContent sx={{ p: { xs: 2.5, md: 4 } }}>
+              {/* Tab 0: AI & ML Models Architecture */}
+              {aiEngineTab === 0 && (
+                <Box>
+                  <Box sx={{ mb: 3 }}>
+                    <Typography variant="h6" sx={{ fontWeight: 800, color: THEME.textPrimary, mb: 0.5 }}>
+                      Core AI & Machine Learning Architecture
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: THEME.textSecondary }}>
+                      Production models deployed in the processing pipeline to transcribe, summarize, translate, and analyze CitNow inspection videos.
+                    </Typography>
+                  </Box>
+
+                  <Grid container spacing={3}>
+                    {/* Model 1: Faster-Whisper */}
+                    <Grid item xs={12} md={6} lg={4}>
+                      <Card sx={{ height: '100%', borderRadius: 3, border: '1px solid #E2E8F0', boxShadow: 'none', bgcolor: '#FFFFFF', p: 2.5, transition: 'all 0.2s', '&:hover': { transform: 'translateY(-3px)', boxShadow: '0 8px 24px rgba(13, 161, 184, 0.12)' } }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                          <Box sx={{ width: 42, height: 42, borderRadius: 2.5, bgcolor: '#E0F2FE', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0284C7' }}>
+                            <Mic sx={{ fontSize: 22 }} />
+                          </Box>
+                          <Chip label="Speech-to-Text" size="small" sx={{ bgcolor: '#F0FDFA', color: '#0D9488', fontWeight: 800, fontSize: '0.72rem' }} />
+                        </Box>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 800, color: THEME.textPrimary }}>
+                          Faster-Whisper (base / int8)
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: THEME.primary, fontWeight: 700, display: 'block', mb: 1.5 }}>
+                          Powered by CTranslate2 Engine
+                        </Typography>
+                        <Typography variant="body2" sx={{ color: THEME.textSecondary, fontSize: '0.82rem', mb: 2, lineHeight: 1.5 }}>
+                          High-throughput speech-to-text model optimized for noisy workshop acoustics. Generates verbatim transcripts with word-level millisecond timestamps.
+                        </Typography>
+                        <Divider sx={{ my: 1.5 }} />
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: THEME.textSecondary }}>
+                          <span>Inference Latency: <strong>~1.2s / 60s</strong></span>
+                          <span>Precision: <strong>int8 / fp16</strong></span>
+                        </Box>
+                      </Card>
+                    </Grid>
+
+                    {/* Model 2: BART Large CNN */}
+                    <Grid item xs={12} md={6} lg={4}>
+                      <Card sx={{ height: '100%', borderRadius: 3, border: '1px solid #E2E8F0', boxShadow: 'none', bgcolor: '#FFFFFF', p: 2.5, transition: 'all 0.2s', '&:hover': { transform: 'translateY(-3px)', boxShadow: '0 8px 24px rgba(13, 161, 184, 0.12)' } }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                          <Box sx={{ width: 42, height: 42, borderRadius: 2.5, bgcolor: '#FEF3C7', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#D97706' }}>
+                            <Description sx={{ fontSize: 22 }} />
+                          </Box>
+                          <Chip label="Summarization" size="small" sx={{ bgcolor: '#FEF3C7', color: '#B45309', fontWeight: 800, fontSize: '0.72rem' }} />
+                        </Box>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 800, color: THEME.textPrimary }}>
+                          BART (`facebook/bart-large-cnn`)
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: '#D97706', fontWeight: 700, display: 'block', mb: 1.5 }}>
+                          HuggingFace Transformers / PyTorch
+                        </Typography>
+                        <Typography variant="body2" sx={{ color: THEME.textSecondary, fontSize: '0.82rem', mb: 2, lineHeight: 1.5 }}>
+                          Sequence-to-sequence bidirectional autoregressive transformer. Condenses lengthy technician walkaround dialogue into concise 3-bullet executive findings and action items.
+                        </Typography>
+                        <Divider sx={{ my: 1.5 }} />
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: THEME.textSecondary }}>
+                          <span>Max Tokens: <strong>1024 tokens</strong></span>
+                          <span>Output: <strong>Executive Summary</strong></span>
+                        </Box>
+                      </Card>
+                    </Grid>
+
+                    {/* Model 3: NLLB-200 / MarianMT */}
+                    <Grid item xs={12} md={6} lg={4}>
+                      <Card sx={{ height: '100%', borderRadius: 3, border: '1px solid #E2E8F0', boxShadow: 'none', bgcolor: '#FFFFFF', p: 2.5, transition: 'all 0.2s', '&:hover': { transform: 'translateY(-3px)', boxShadow: '0 8px 24px rgba(13, 161, 184, 0.12)' } }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                          <Box sx={{ width: 42, height: 42, borderRadius: 2.5, bgcolor: '#FEE2E2', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#DC2626' }}>
+                            <Translate sx={{ fontSize: 22 }} />
+                          </Box>
+                          <Chip label="Translation" size="small" sx={{ bgcolor: '#FEE2E2', color: '#B91C1C', fontWeight: 800, fontSize: '0.72rem' }} />
+                        </Box>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 800, color: THEME.textPrimary }}>
+                          NLLB-200 (`nllb-200-distilled-600M`)
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: '#DC2626', fontWeight: 700, display: 'block', mb: 1.5 }}>
+                          Meta No Language Left Behind
+                        </Typography>
+                        <Typography variant="body2" sx={{ color: THEME.textSecondary, fontSize: '0.82rem', mb: 2, lineHeight: 1.5 }}>
+                          Translates regional Indian languages (Hindi, Kannada, Tamil, Telugu, Marathi, Bengali, Odia, Gujarati) into clean English transcripts for centralized audit compliance.
+                        </Typography>
+                        <Divider sx={{ my: 1.5 }} />
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: THEME.textSecondary }}>
+                          <span>Supported: <strong>14+ Languages</strong></span>
+                          <span>Format: <strong>Parallel Sentences</strong></span>
+                        </Box>
+                      </Card>
+                    </Grid>
+
+                    {/* Model 4: OpenCV Computer Vision */}
+                    <Grid item xs={12} md={6} lg={6}>
+                      <Card sx={{ height: '100%', borderRadius: 3, border: '1px solid #E2E8F0', boxShadow: 'none', bgcolor: '#FFFFFF', p: 2.5, transition: 'all 0.2s', '&:hover': { transform: 'translateY(-3px)', boxShadow: '0 8px 24px rgba(13, 161, 184, 0.12)' } }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                          <Box sx={{ width: 42, height: 42, borderRadius: 2.5, bgcolor: '#CCFBF1', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0D9488' }}>
+                            <Videocam sx={{ fontSize: 22 }} />
+                          </Box>
+                          <Chip label="Computer Vision Engine" size="small" sx={{ bgcolor: '#CCFBF1', color: '#0F766E', fontWeight: 800, fontSize: '0.72rem' }} />
+                        </Box>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 800, color: THEME.textPrimary }}>
+                          OpenCV 4 + FFmpeg Sequential Frame Pipeline
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: '#0D9488', fontWeight: 700, display: 'block', mb: 1.5 }}>
+                          Multi-Frame Optical Flow & Spatial Transforms
+                        </Typography>
+                        <Typography variant="body2" sx={{ color: THEME.textSecondary, fontSize: '0.82rem', mb: 2, lineHeight: 1.5 }}>
+                          Samples keyframes across video duration. Calculates Laplacian variance (sharpness), HSV saturation, inter-frame motion vectors (camera shake), luminance (lighting), and 8x8 blockiness (compression artifacts).
+                        </Typography>
+                        <Divider sx={{ my: 1.5 }} />
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: THEME.textSecondary }}>
+                          <span>Sampling Rate: <strong>20–60 dynamic frames</strong></span>
+                          <span>Shake Sensitivity: <strong>1.5px variance</strong></span>
+                        </Box>
+                      </Card>
+                    </Grid>
+
+                    {/* Model 5: Librosa Acoustic Signal Engine */}
+                    <Grid item xs={12} md={6} lg={6}>
+                      <Card sx={{ height: '100%', borderRadius: 3, border: '1px solid #E2E8F0', boxShadow: 'none', bgcolor: '#FFFFFF', p: 2.5, transition: 'all 0.2s', '&:hover': { transform: 'translateY(-3px)', boxShadow: '0 8px 24px rgba(13, 161, 184, 0.12)' } }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                          <Box sx={{ width: 42, height: 42, borderRadius: 2.5, bgcolor: '#EDE9FE', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#7C3AED' }}>
+                            <GraphicEq sx={{ fontSize: 22 }} />
+                          </Box>
+                          <Chip label="Acoustic Signal Engine" size="small" sx={{ bgcolor: '#EDE9FE', color: '#6D28D9', fontWeight: 800, fontSize: '0.72rem' }} />
+                        </Box>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 800, color: THEME.textPrimary }}>
+                          Librosa DSP + Pydub Acoustic Processor
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: '#7C3AED', fontWeight: 700, display: 'block', mb: 1.5 }}>
+                          16 kHz STFT & Harmonic-Percussive Separation (HPSS)
+                        </Typography>
+                        <Typography variant="body2" sx={{ color: THEME.textSecondary, fontSize: '0.82rem', mb: 2, lineHeight: 1.5 }}>
+                          Splits audio into harmonic (vocal timbre) and percussive (tool bangs, tyre impacts) components. Measures RMS volume, Zero-Crossing Rate (background noise), and spectral flatness (muffled audio).
+                        </Typography>
+                        <Divider sx={{ my: 1.5 }} />
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: THEME.textSecondary }}>
+                          <span>Sample Rate: <strong>16,000 Hz</strong></span>
+                          <span>Hop Length: <strong>512 frames</strong></span>
+                        </Box>
+                      </Card>
+                    </Grid>
+                  </Grid>
+                </Box>
+              )}
+
+              {/* Tab 1: Video Quality Metrics */}
+              {aiEngineTab === 1 && (
+                <Box>
+                  <Box sx={{ mb: 3 }}>
+                    <Typography variant="h6" sx={{ fontWeight: 800, color: THEME.textPrimary, mb: 0.5 }}>
+                      Video Quality Rating Breakdown (Formula: 30% Resolution + 70% Visual Quality)
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: THEME.textSecondary }}>
+                      Every analyzed video is processed across 8 distinct computer vision factors to calculate an objective score from 0.0 to 10.0.
+                    </Typography>
+                  </Box>
+
+                  {/* Resolution Base Scale */}
+                  <Box sx={{ p: 2.5, mb: 3, borderRadius: 3, bgcolor: '#F8FAFC', border: '1px solid #E2E8F0' }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 800, color: THEME.textPrimary, mb: 1 }}>
+                      📹 Resolution Base Scores (30% Weight of Final Video Score)
+                    </Typography>
+                    <Grid container spacing={1.5}>
+                      {[
+                        { res: '4K UHD (3840×2160)', score: '9.0 – 10.0', color: '#059669', bg: '#F0FDF4' },
+                        { res: '1440p QHD (2560×1440)', score: '8.5 – 9.5', color: '#0284C7', bg: '#F0F9FF' },
+                        { res: '1080p FHD (1920×1080)', score: '7.5 – 9.2', color: '#0D9488', bg: '#F0FDFA' },
+                        { res: '720p HD (1280×720)', score: '6.0 – 8.0', color: '#D97706', bg: '#FFFBEB' },
+                        { res: '480p SD (854×480)', score: '4.0 – 6.0', color: '#DC2626', bg: '#FEF2F2' },
+                        { res: '360p LD (640×360)', score: '2.0 – 4.0', color: '#991B1B', bg: '#FEF2F2' }
+                      ].map((r, i) => (
+                        <Grid item xs={12} sm={6} md={4} key={i}>
+                          <Box sx={{ p: 1.25, borderRadius: 2, bgcolor: r.bg, border: `1px solid ${r.color}30`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Typography variant="caption" sx={{ fontWeight: 700, color: THEME.textPrimary }}>{r.res}</Typography>
+                            <Chip label={r.score} size="small" sx={{ height: 20, fontSize: '0.7rem', fontWeight: 800, bgcolor: r.color, color: '#FFFFFF' }} />
+                          </Box>
+                        </Grid>
+                      ))}
+                    </Grid>
+                  </Box>
+
+                  {/* 8 Visual Factors Table */}
+                  <Typography variant="subtitle2" sx={{ fontWeight: 800, color: THEME.textPrimary, mb: 1.5 }}>
+                    🔍 Visual Quality Factors (70% Weight of Final Video Score)
+                  </Typography>
+
+                  <Grid container spacing={2}>
+                    {[
+                      { factor: 'Sharpness & Focus', weight: '35%', metric: 'Laplacian variance of grayscale frames', good: 'Var > 100', issue: 'Slightly soft or out of focus / Very blurry' },
+                      { factor: 'Lighting & Brightness', weight: '15%', metric: 'Mean luminance (80–180 ideal)', good: 'Mean 120–140', issue: 'Video is too dark (undercarriage) / Overexposed' },
+                      { factor: 'Image Contrast', weight: '15%', metric: 'Pixel standard deviation (std > 40 ideal)', good: 'Std 40–60', issue: 'Low contrast – flat image' },
+                      { factor: 'Stability & Camera Shake', weight: '10%', metric: 'Inter-frame optical flow motion vector variance', good: 'Variance < 1.5px', issue: 'Severe camera shake – very unstable' },
+                      { factor: 'Cleanliness & ISO Noise', weight: '10%', metric: 'High-frequency Gaussian noise std dev', good: 'Std < 8', issue: 'Visible visual noise / grain in dark areas' },
+                      { factor: 'Color Vibrancy', weight: '5%', metric: 'HSV saturation channel mean', good: 'Saturation > 60', issue: 'Dull colors – poor saturation' },
+                      { factor: 'Compression Artifacts', weight: '5%', metric: '8×8 block boundary luminance discontinuity', good: 'Score > 80', issue: 'Visible compression artifacts / pixelation' },
+                      { factor: 'Motion & Frozen Frames', weight: '5%', metric: 'Frame differencing (penalized if > 15% frozen)', good: '< 5% frozen', issue: 'Many frozen or static frames' }
+                    ].map((f, idx) => (
+                      <Grid item xs={12} md={6} key={idx}>
+                        <Box sx={{ p: 2, borderRadius: 2.5, bgcolor: '#FFFFFF', border: '1px solid #E2E8F0', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 800, color: THEME.textPrimary }}>
+                              {f.factor}
+                            </Typography>
+                            <Chip label={`Weight: ${f.weight}`} size="small" sx={{ bgcolor: 'rgba(13, 161, 184, 0.12)', color: THEME.primary, fontWeight: 800, fontSize: '0.72rem' }} />
+                          </Box>
+                          <Typography variant="caption" sx={{ color: THEME.textSecondary, display: 'block', mb: 0.75 }}>
+                            <strong>Metric:</strong> {f.metric}
+                          </Typography>
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', pt: 1, borderTop: '1px dashed #F1F5F9' }}>
+                            <Typography variant="caption" sx={{ color: '#059669', fontWeight: 700 }}>
+                              ✓ Target: {f.good}
+                            </Typography>
+                            <Typography variant="caption" sx={{ color: '#DC2626', fontWeight: 600 }}>
+                              ⚠️ Flags: {f.issue}
+                            </Typography>
+                          </Box>
+                        </Box>
+                      </Grid>
+                    ))}
+                  </Grid>
+                </Box>
+              )}
+
+              {/* Tab 2: Audio Quality Metrics */}
+              {aiEngineTab === 2 && (
+                <Box>
+                  <Box sx={{ mb: 3 }}>
+                    <Typography variant="h6" sx={{ fontWeight: 800, color: THEME.textPrimary, mb: 0.5 }}>
+                      Audio Quality Rating Breakdown (Formula: 5 Acoustic Factors, Score 0 to 10)
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: THEME.textSecondary }}>
+                      Audio is isolated and sampled at 16,000 Hz using Librosa acoustic analysis to measure voice clarity, loudness balance, and workshop interference.
+                    </Typography>
+                  </Box>
+
+                  <Grid container spacing={2.5}>
+                    {[
+                      { factor: 'Background Noise & Workshop Clatter', weight: '30%', metric: 'Zero-Crossing Rate (ZCR) & spectral noise floor', target: 'ZCR < 0.08 (Minimal Noise)', flag: 'Heavy background noise – distracting (ZCR > 0.15)', color: '#DC2626' },
+                      { factor: 'Volume & Decibel Loudness', weight: '25%', metric: 'RMS (Root Mean Square) energy of speech frames', target: 'RMS 0.05 – 0.20 (Ideal Volume)', flag: 'Very low volume (< 0.02) or Potential clipping (> 0.3)', color: '#D97706' },
+                      { factor: 'Speech Clarity & Articulation', weight: '25%', metric: 'Spectral Flatness & high-frequency rolloff', target: 'Flatness < 0.5 (Crisp Speech)', flag: 'Poor speech clarity – very muffled (Flatness > 0.8)', color: '#0284C7' },
+                      { factor: 'Voice Quality / Harmonic Ratio', weight: '10%', metric: 'HPSS Harmonic-to-Percussive energy ratio', target: 'Ratio > 0.6 (Resonant Voice)', flag: 'Poor voice quality – noisy (Ratio < 0.3)', color: '#7C3AED' },
+                      { factor: 'Consistency & Silence Gaps', weight: '10%', metric: 'Percentile-based silence frame ratio', target: 'Silence < 25% of audio', flag: 'Excessive silence or awkward gaps (> 50%)', color: '#059669' }
+                    ].map((item, i) => (
+                      <Grid item xs={12} key={i}>
+                        <Box sx={{ p: 2.5, borderRadius: 2.5, bgcolor: '#FFFFFF', border: '1px solid #E2E8F0', display: 'flex', flexDirection: { xs: 'column', md: 'row' }, justifyContent: 'space-between', alignItems: { xs: 'flex-start', md: 'center' }, gap: 2 }}>
+                          <Box sx={{ flex: 1 }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 0.5 }}>
+                              <Typography variant="subtitle2" sx={{ fontWeight: 800, color: THEME.textPrimary }}>
+                                {item.factor}
+                              </Typography>
+                              <Chip label={`Weight: ${item.weight}`} size="small" sx={{ bgcolor: `${item.color}15`, color: item.color, fontWeight: 800, fontSize: '0.72rem' }} />
+                            </Box>
+                            <Typography variant="caption" sx={{ color: THEME.textSecondary }}>
+                              <strong>Mathematical Method:</strong> {item.metric}
+                            </Typography>
+                          </Box>
+                          <Box sx={{ display: 'flex', gap: 3, alignItems: 'center' }}>
+                            <Box sx={{ textAlign: { xs: 'left', md: 'right' } }}>
+                              <Typography variant="caption" sx={{ color: '#059669', fontWeight: 800, display: 'block' }}>
+                                Target: {item.target}
+                              </Typography>
+                              <Typography variant="caption" sx={{ color: '#DC2626', fontWeight: 600, display: 'block' }}>
+                                Issue Trigger: {item.flag}
+                              </Typography>
+                            </Box>
+                          </Box>
+                        </Box>
+                      </Grid>
+                    ))}
+                  </Grid>
+                </Box>
+              )}
+
+              {/* Tab 3: Overall Score & UI Workflow */}
+              {aiEngineTab === 3 && (
+                <Box>
+                  <Box sx={{ mb: 3 }}>
+                    <Typography variant="h6" sx={{ fontWeight: 800, color: THEME.textPrimary, mb: 0.5 }}>
+                      How Scores are Calculated & Where They Work in the UI
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: THEME.textSecondary }}>
+                      Unified quality aggregation blending technical analysis with customer feedback, piped directly into daily dashboard metrics and advisor audits.
+                    </Typography>
+                  </Box>
+
+                  {/* Formula Cards */}
+                  <Grid container spacing={3} sx={{ mb: 4 }}>
+                    <Grid item xs={12} md={6}>
+                      <Box sx={{ p: 3, borderRadius: 3, bgcolor: '#F0FDFA', border: '1.5px solid #99F6E4', height: '100%' }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#0F766E', mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <CheckCircleOutline sx={{ fontSize: 18 }} /> Formula 1: Technical Score (0 to 10)
+                        </Typography>
+                        <Box sx={{ p: 1.5, bgcolor: '#FFFFFF', borderRadius: 2, fontFamily: 'monospace', fontWeight: 700, color: '#0D9488', fontSize: '0.85rem', mb: 1.5 }}>
+                          Technical Score = (Audio Score × 0.5) + (Video Score × 0.5)
+                        </Box>
+                        <Typography variant="caption" sx={{ color: '#134E4A', lineHeight: 1.5, display: 'block' }}>
+                          Equal 50/50 split ensures a video cannot pass with crystal-clear video if the service advisor's audio is inaudible or muffled.
+                        </Typography>
+                      </Box>
+                    </Grid>
+
+                    <Grid item xs={12} md={6}>
+                      <Box sx={{ p: 3, borderRadius: 3, bgcolor: '#FFFBEB', border: '1.5px solid #FDE68A', height: '100%' }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#B45309', mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Star sx={{ fontSize: 18 }} /> Formula 2: Blended with CitNow Customer Star Rating
+                        </Typography>
+                        <Box sx={{ p: 1.5, bgcolor: '#FFFFFF', borderRadius: 2, fontFamily: 'monospace', fontWeight: 700, color: '#D97706', fontSize: '0.85rem', mb: 1.5 }}>
+                          Final Score = (Customer Star Rating × 2 × 0.6) + (Technical Score × 0.4)
+                        </Box>
+                        <Typography variant="caption" sx={{ color: '#78350F', lineHeight: 1.5, display: 'block' }}>
+                          When real customer ratings (1–5 stars) exist on the CitNow portal, QualityLens traces real customer perception (60% weight) blended with AI quality (40% weight).
+                        </Typography>
+                      </Box>
+                    </Grid>
+                  </Grid>
+
+                  {/* UI Locations Map */}
+                  <Typography variant="subtitle2" sx={{ fontWeight: 800, color: THEME.textPrimary, mb: 2 }}>
+                    📍 How These Metrics Surface Across QualityLens UI
+                  </Typography>
+
+                  <Grid container spacing={2.5}>
+                    {[
+                      {
+                        title: '1. Top Dashboard (Super Admin & Dealer)',
+                        path: '/super-admin/dashboard',
+                        desc: 'Plots overall daily trend curves, compares Audio Improvement vs Video Improvement day-by-day, and tracks dealership rank.',
+                        badge: 'Trend Telemetry'
+                      },
+                      {
+                        title: '2. Advisor Performance Leaderboard',
+                        path: '/super-admin/dashboard (Card 3)',
+                        desc: 'Displays the top 6 service advisors with interactive (i) badges. Clicking opens their video/audio breakdown and top detected issues.',
+                        badge: 'Interactive Badges'
+                      },
+                      {
+                        title: '3. Analysis Results Table & Detail Modal',
+                        path: '/results or /dealer/results',
+                        desc: 'Full row-by-row inspection log showing Video Score, Audio Score, Overall Score, Whisper transcript, and detected issues chips.',
+                        badge: 'Audit Inspection'
+                      },
+                      {
+                        title: '4. CitNow Upgrades & Simulator (This Page)',
+                        path: '/citnow-upgrades',
+                        desc: 'Interactive simulator allowing dealers to test AI Lighting Enhancement (+70%), Auto-Stabilization, and Whisper v3 Smart Captions.',
+                        badge: 'Next-Gen Tools'
+                      }
+                    ].map((item, index) => (
+                      <Grid item xs={12} sm={6} key={index}>
+                        <Box sx={{ p: 2.5, borderRadius: 2.5, bgcolor: '#FFFFFF', border: '1px solid #E2E8F0', height: '100%' }}>
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 800, color: THEME.textPrimary }}>
+                              {item.title}
+                            </Typography>
+                            <Chip label={item.badge} size="small" sx={{ bgcolor: 'rgba(13, 161, 184, 0.1)', color: THEME.primary, fontWeight: 700, fontSize: '0.68rem' }} />
+                          </Box>
+                          <Typography variant="caption" sx={{ color: THEME.textSecondary, display: 'block', mb: 1.5, lineHeight: 1.5 }}>
+                            {item.desc}
+                          </Typography>
+                          <Typography variant="caption" sx={{ color: THEME.primary, fontWeight: 700, display: 'inline-block' }}>
+                            Route: {item.path} →
+                          </Typography>
+                        </Box>
+                      </Grid>
+                    ))}
+                  </Grid>
+                </Box>
+              )}
+            </CardContent>
+          </Card>
+        </Box>
 
         {/* Gantt Chart Section */}
         <Typography variant="h5" sx={{ fontWeight: 800, mb: 1, color: THEME.textPrimary }}>
