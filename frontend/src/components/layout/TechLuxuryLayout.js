@@ -270,7 +270,13 @@ export default function TechLuxuryLayout({ children }) {
   ];
 
   return (
-    <Box sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', bgcolor: '#F4F6F9' }}>
+    <Box sx={{
+      minHeight: '100vh',
+      display: 'flex',
+      flexDirection: 'column',
+      bgcolor: '#070C12',
+      backgroundImage: 'radial-gradient(ellipse 90% 40% at 50% -10%, rgba(13, 161, 184, 0.08), transparent 70%)'
+    }}>
       {/* ─────────────────────────────────────────────────────────────
           1. TOP LUXURY AUTOMOTIVE BRAND HEADER (Matching Image 2)
          ───────────────────────────────────────────────────────────── */}
@@ -604,7 +610,8 @@ export default function TechLuxuryLayout({ children }) {
             minWidth: 0,
             display: 'flex',
             flexDirection: 'column',
-            bgcolor: '#F3F4F6',
+            bgcolor: '#070C12',
+            backgroundImage: 'radial-gradient(ellipse 90% 40% at 50% 0%, rgba(13, 161, 184, 0.08), transparent 70%)',
             overflowY: 'auto',
           }}
         >
@@ -618,8 +625,8 @@ export default function TechLuxuryLayout({ children }) {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              bgcolor: '#FFFFFF',
-              borderBottom: '1px solid #E2E8F0',
+              bgcolor: '#0A0F18',
+              borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
               px: { xs: 2.5, sm: 3.5, md: 4.5 },
               py: 2.5,
               flexShrink: 0,
@@ -653,14 +660,14 @@ export default function TechLuxuryLayout({ children }) {
                 position: 'absolute',
                 inset: 0,
                 background: {
-                  xs: 'linear-gradient(to right, #FFFFFF 0%, rgba(255, 255, 255, 0.94) 50%, rgba(255, 255, 255, 0.4) 100%)',
-                  md: 'linear-gradient(to right, #FFFFFF 0%, #FFFFFF 46%, rgba(255, 255, 255, 0.88) 52%, rgba(255, 255, 255, 0.25) 68%, transparent 88%)'
+                  xs: 'linear-gradient(to right, #0A0F18 0%, rgba(10, 15, 24, 0.94) 50%, rgba(10, 15, 24, 0.4) 100%)',
+                  md: 'linear-gradient(to right, #0A0F18 0%, #0A0F18 46%, rgba(10, 15, 24, 0.88) 52%, rgba(10, 15, 24, 0.25) 68%, transparent 88%)'
                 },
                 pointerEvents: 'none'
               }}
             />
 
-            {/* Left: Title & Subtitle sitting crisply on the light background (50% Width) */}
+            {/* Left: Title & Subtitle sitting crisply on the luxury dark background */}
             <Box sx={{ position: 'relative', zIndex: 2, p: { xs: 2, md: 3 }, maxWidth: { xs: '100%', md: '48%' } }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 0.75 }}>
                 <Typography
@@ -668,29 +675,30 @@ export default function TechLuxuryLayout({ children }) {
                     fontSize: '0.72rem',
                     fontWeight: 800,
                     letterSpacing: '0.22em',
-                    color: '#64748B',
+                    color: '#38BDF8',
                     textTransform: 'uppercase'
                   }}
                 >
                   {currentMeta.eyebrow}
                 </Typography>
-                <Box sx={{ width: 28, height: '1.5px', bgcolor: '#CBD5E1' }} />
+                <Box sx={{ width: 28, height: '1.5px', bgcolor: 'rgba(56, 189, 248, 0.4)' }} />
               </Box>
               <Typography
                 variant="h4"
                 sx={{
                   fontWeight: 700,
-                  color: '#0F172A',
+                  color: '#FFFFFF',
                   fontSize: { xs: '1.65rem', md: '2.1rem' },
                   letterSpacing: '-0.025em',
                   lineHeight: 1.2,
                   mb: 0.75,
-                  fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, sans-serif'
+                  fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, sans-serif',
+                  textShadow: '0 2px 10px rgba(0, 0, 0, 0.8)'
                 }}
               >
                 {currentMeta.title}
               </Typography>
-              <Typography sx={{ color: '#64748B', fontSize: '0.92rem', fontWeight: 400 }}>
+              <Typography sx={{ color: 'rgba(226, 232, 240, 0.75)', fontSize: '0.92rem', fontWeight: 400 }}>
                 {currentMeta.subtitle}
               </Typography>
             </Box>
@@ -743,22 +751,109 @@ export default function TechLuxuryLayout({ children }) {
               width: '100%',
               p: location.pathname === '/super-admin/dashboard' ? 0 : { xs: 2.5, sm: 3, md: 4 },
               boxSizing: 'border-box',
-              '& .MuiCard-root': {
-                borderRadius: '16px !important',
-                border: '1px solid #E2E8F0 !important',
-                boxShadow: '0 4px 20px rgba(15, 23, 42, 0.03) !important',
-                transition: 'box-shadow 0.2s ease, transform 0.2s ease',
+              // Global typography in Dark Luxury Tech
+              '& .MuiTypography-h4': {
+                color: '#FFFFFF !important',
+                textShadow: '0 2px 10px rgba(0, 0, 0, 0.7)',
               },
-              '& .MuiPaper-elevation1': {
-                borderRadius: '16px !important',
-                border: '1px solid #E2E8F0 !important',
-                boxShadow: '0 4px 20px rgba(15, 23, 42, 0.03) !important',
+              '& .MuiTypography-body1': {
+                color: 'rgba(226, 232, 240, 0.75) !important',
+              },
+              // Dark Glass Floating Filter Pill
+              '& .MuiPaper-root:has(button)': {
+                background: 'rgba(15, 23, 42, 0.85) !important',
+                border: '1px solid rgba(255, 255, 255, 0.12) !important',
+                boxShadow: '0 8px 24px rgba(0, 0, 0, 0.5) !important',
+                backdropFilter: 'blur(12px) !important',
+              },
+              // Universal Dark Luxury Tech Card Styling (Image Background + Gradient Overlay)
+              '& .MuiCard-root, & .MuiPaper-elevation1': {
+                borderRadius: '20px !important',
+                backgroundImage: 'linear-gradient(145deg, rgba(16, 24, 38, 0.94) 0%, rgba(10, 16, 26, 0.97) 100%), url(/assets/luxury_card_texture.jpg) !important',
+                backgroundSize: 'cover !important',
+                backgroundPosition: 'center !important',
+                backgroundColor: '#0B111A !important',
+                border: '1px solid rgba(56, 189, 248, 0.18) !important',
+                boxShadow: '0 12px 36px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.08) !important',
+                backdropFilter: 'blur(20px) !important',
+                color: '#FFFFFF !important',
+                transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important',
+                '&:hover': {
+                  borderColor: 'rgba(56, 189, 248, 0.45) !important',
+                  boxShadow: '0 18px 48px rgba(0, 0, 0, 0.7), 0 0 24px rgba(56, 189, 248, 0.22) !important',
+                  transform: 'translateY(-2px) !important',
+                },
+                '& .MuiTypography-root': {
+                  color: 'inherit',
+                },
+                '& .MuiTypography-h4, & .MuiTypography-h5, & .MuiTypography-h6, & .MuiTypography-subtitle1': {
+                  color: '#FFFFFF !important',
+                  textShadow: '0 2px 8px rgba(0, 0, 0, 0.6) !important',
+                },
+                '& .MuiTypography-body2, & .MuiTypography-caption': {
+                  color: 'rgba(226, 232, 240, 0.78) !important',
+                },
+                '& .MuiBox-root': {
+                  borderColor: 'rgba(255, 255, 255, 0.08)',
+                },
+                '& .recharts-cartesian-grid line': {
+                  stroke: 'rgba(255, 255, 255, 0.07) !important',
+                },
+                '& .recharts-text': {
+                  fill: 'rgba(226, 232, 240, 0.7) !important',
+                },
+                '& .recharts-legend-item-text': {
+                  color: 'rgba(255, 255, 255, 0.85) !important',
+                },
+                '& .MuiTabs-root': {
+                  '& .MuiTab-root': {
+                    color: 'rgba(226, 232, 240, 0.7) !important',
+                    fontWeight: 600,
+                    '&.Mui-selected': {
+                      color: '#38BDF8 !important',
+                    }
+                  },
+                  '& .MuiTabs-indicator': {
+                    backgroundColor: '#38BDF8 !important',
+                    height: 3,
+                    borderRadius: '3px 3px 0 0',
+                    boxShadow: '0 0 10px #38BDF8 !important',
+                  }
+                },
+                '& .MuiOutlinedInput-root': {
+                  bgcolor: 'rgba(15, 23, 42, 0.8) !important',
+                  color: '#FFFFFF !important',
+                  borderRadius: '12px !important',
+                  '& fieldset': {
+                    borderColor: 'rgba(56, 189, 248, 0.25) !important',
+                  },
+                  '&:hover fieldset': {
+                    borderColor: 'rgba(56, 189, 248, 0.5) !important',
+                  },
+                  '&.Mui-focused fieldset': {
+                    borderColor: '#38BDF8 !important',
+                  },
+                  '& .MuiSvgIcon-root': {
+                    color: '#38BDF8 !important',
+                  }
+                },
+                '& .MuiInputLabel-root': {
+                  color: 'rgba(226, 232, 240, 0.75) !important',
+                },
+                '& .recharts-default-tooltip': {
+                  backgroundColor: 'rgba(15, 23, 42, 0.96) !important',
+                  borderColor: 'rgba(56, 189, 248, 0.3) !important',
+                  borderRadius: '10px !important',
+                  boxShadow: '0 8px 30px rgba(0, 0, 0, 0.6) !important',
+                  color: '#FFFFFF !important',
+                },
               },
               '& .MuiTableContainer-root': {
-                borderRadius: '16px !important',
-                border: '1px solid #E2E8F0 !important',
-                boxShadow: '0 4px 20px rgba(15, 23, 42, 0.03) !important',
+                borderRadius: '18px !important',
+                border: '1px solid rgba(56, 189, 248, 0.16) !important',
+                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4) !important',
                 overflow: 'hidden',
+                backgroundColor: 'rgba(11, 17, 26, 0.95) !important',
               }
             }}
           >
