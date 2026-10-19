@@ -596,17 +596,47 @@ class UnifiedMediaAnalyzer:
                 os.unlink(output_audio_path)
             raise Exception(error_msg)
         
-    def analyze_audio_quality(self, audio_path):
-        """Comprehensive audio quality analysis with detailed metrics - SCORES OUT OF 10"""
+    def get_inspection_segment(self, total_duration):
+        """
+        GOLDEN RULE: Automotive CitNow walkaround videos contain:
+        - START: Dealership branding / company ad / animated logo / music bumper (~3-7s)
+        - END: Dealership outro / marketing promo card (~4-8s)
+        - CENTER: The actual physical vehicle inspection (checking car body, tyres, brakes, underbody, with technician commentary).
+        
+        This method computes the precise center inspection window so that video and audio
+        quality analysis evaluates the genuine car inspection, completely filtering out ads.
+        """
+        if total_duration <= 0:
+            return 0.0, 0.0, 0.0, "unknown"
+            
+        if total_duration < 10.0:
+            # Video is too short — consists almost entirely of intro/outro with minimal car inspection
+            return 0.0, total_duration, total_duration, "too_brief"
+            
+        # Dynamically scale intro/outro ad offsets based on total duration
+        intro_offset = min(6.0, max(2.5, total_duration * 0.08))
+        outro_offset = min(6.0, max(2.5, total_duration * 0.08))
+        
+        inspection_start = intro_offset
+        inspection_end = max(inspection_start + 3.0, total_duration - outro_offset)
+        inspection_duration = max(0.0, inspection_end - inspection_start)
+        
+        status = "normal" if inspection_duration >= 20.0 else "brief_inspection"
+        return inspection_start, inspection_end, inspection_duration, status
+        
+    def analyze_audio_quality(self, audio_path, offset=0.0, duration=None):
+        """Comprehensive audio quality analysis focused on the center inspection segment - SCORES OUT OF 10"""
         try:
             import librosa
             import numpy as np
             
-            y, sr = librosa.load(audio_path, sr=16000, duration=20)  # Optimized: 16kHz, 20s window
+            # Load audio from the center inspection window, bypassing intro/outro advertisements
+            load_duration = min(duration or 30.0, 45.0)
+            y, sr = librosa.load(audio_path, sr=16000, offset=offset, duration=load_duration)  # Optimized: 16kHz window
             if len(y) == 0:
                 return {
                     "prediction": "No Audio", "confidence": 0.0, "score": 0.0,
-                    "issues": ["No audio detected"], "clarity_level": "Very Poor",
+                    "issues": ["No audio detected in inspection window"], "clarity_level": "Very Poor",
                     "detailed_analysis": {
                         "volume_level": "Silent", "noise_level": "Unknown", 
                         "speech_clarity": "Unknown", "background_noise": "Unknown",
@@ -835,16 +865,16 @@ class UnifiedMediaAnalyzer:
             print(f"⚠️ Sequential frame extraction failed: {e}")
             return {}
 
-    def analyze_video_quality(self, video_path):
+    def analyze_video_quality(self, video_path, inspection_start=None, inspection_end=None):
         import os
         gemini_key = os.getenv("GEMINI_API_KEY")
         if gemini_key:
-            return self._analyze_video_with_gemini(video_path, gemini_key)
+            return self._analyze_video_with_gemini(video_path, gemini_key, inspection_start=inspection_start, inspection_end=inspection_end)
         else:
             print("⚠️ GEMINI_API_KEY not found in environment. Falling back to OpenCV heuristics for video analysis.")
-            return self._analyze_video_with_opencv(video_path)
+            return self._analyze_video_with_opencv(video_path, inspection_start=inspection_start, inspection_end=inspection_end)
 
-    def _analyze_video_with_gemini(self, video_path, api_key):
+    def _analyze_video_with_gemini(self, video_path, api_key, inspection_start=None, inspection_end=None):
         import google.generativeai as genai
         import json
         import time
@@ -862,13 +892,24 @@ class UnifiedMediaAnalyzer:
                 raise Exception("Could not open video file for keyframe extraction")
             
             frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-            fps = cap.get(cv2.CAP_PROP_FPS)
+            fps = cap.get(cv2.CAP_PROP_FPS) or 25
             duration = frame_count / max(fps, 1)
             cap.release()
             
-            # Sample 8 evenly-spaced keyframes across the video
-            num_keyframes = min(8, max(3, int(duration / 5)))
-            frame_indices = [int(i * frame_count / num_keyframes) for i in range(num_keyframes)]
+            # GOLDEN RULE: CitNow videos have dealership branding/ads at START & END.
+            # The core inspection of the car is strictly in the CENTER!
+            insp_start, insp_end, insp_dur, insp_status = self.get_inspection_segment(duration)
+            if inspection_start is not None and inspection_end is not None:
+                insp_start, insp_end = inspection_start, inspection_end
+                insp_dur = max(0.0, insp_end - insp_start)
+
+            # Sample keyframes exclusively from the center inspection window
+            start_frame = int(insp_start * max(fps, 1))
+            end_frame = max(start_frame + 1, min(frame_count - 1, int(insp_end * max(fps, 1))))
+            num_keyframes = min(8, max(3, int(insp_dur / 5)))
+            
+            frame_indices = [int(start_frame + (i * (end_frame - start_frame) / max(1, num_keyframes - 1))) for i in range(num_keyframes)]
+            print(f"🎯 Sampling {len(frame_indices)} keyframes strictly from center car inspection ({insp_start:.1f}s to {insp_end:.1f}s of {duration:.1f}s total)")
             
             preloaded_keyframes = self._extract_frames_sequentially(video_path, frame_indices)
             
@@ -897,15 +938,18 @@ class UnifiedMediaAnalyzer:
             for i, b64 in enumerate(keyframes_b64):
                 parts.append({"inline_data": {"mime_type": "image/jpeg", "data": b64}})
             
-            prompt = f"""You are a professional video quality analyst. I am showing you {len(keyframes_b64)} keyframes sampled evenly from a video.
-            Analyze the TECHNICAL VISUAL QUALITY only. Do NOT judge content or subject matter.
-            Grade: camera stability, lighting, focus/sharpness, framing, and overall visual clarity.
+            prompt = f"""You are a specialized automotive quality auditor auditing a dealership CitNow vehicle health check video.
+            These {len(keyframes_b64)} keyframes are sampled exclusively from the CENTER VEHICLE INSPECTION segment ({insp_start:.1f}s to {insp_end:.1f}s of {duration:.1f}s total video), completely excluding any intro/outro dealership title cards.
+            
+            CRITICAL EVALUATION RULES:
+            1. Genuine Inspection vs Brief Partial Clip: A proper vehicle health check must systematically show tyres/alloys, brake discs, body panels, underbody, or interior. If the video only shows a few seconds or a single partial area (e.g. only a quick glimpse of the front bumper/grille without inspecting tyres, brakes, or walking around the car), penalize the quality score heavily (rate Fair, Poor, or Needs Attention, below 5.0).
+            2. Technical Visual Quality: camera stability, lighting, focus/sharpness, framing of inspected components.
             
             Return ONLY valid JSON with EXACTLY these keys:
             {{
-              "quality_score": <float 1.0-10.0, where 10 is perfect cinematic quality>,
+              "quality_score": <float 1.0-10.0, where 10 is exemplary comprehensive inspection>,
               "quality_label": <one of: "Excellent", "Very Good", "Good", "Fair", "Poor", "Very Poor">,
-              "issues": [<list of specific visual problems found, e.g. "blurry", "too dark", "shaky", "overexposed">],
+              "issues": [<list of specific visual problems found, e.g. "incomplete walkaround", "only front portion shown", "blurry", "too dark", "shaky">],
               "shake_level": <"None", "Minimal", "Noticeable", or "Severe">,
               "resolution_quality": <"High Definition", "Standard Definition", or "Low Quality">,
               "detailed_analysis": {{
@@ -929,6 +973,21 @@ class UnifiedMediaAnalyzer:
             )
             
             result = json.loads(response.text)
+            
+            # Post-processing: Enforce duration realism
+            if insp_dur < 10.0 or duration < 12.0:
+                result["issues"] = list(set(result.get("issues", []) + [
+                    f"Very brief inspection ({insp_dur:.1f}s) - only partial vehicle area shown without complete walkaround"
+                ]))
+                result["quality_score"] = round(min(result.get("quality_score", 5.0), 4.2), 1)
+                result["quality_label"] = self._get_quality_label(result["quality_score"])
+            elif insp_dur < 20.0 or duration < 25.0:
+                result["issues"] = list(set(result.get("issues", []) + [
+                    f"Short inspection duration ({insp_dur:.1f}s) - limited walkaround coverage"
+                ]))
+                result["quality_score"] = round(min(result.get("quality_score", 6.0), 5.5), 1)
+                result["quality_label"] = self._get_quality_label(result["quality_score"])
+                
             print(f"✅ Gemini Keyframe Analysis Complete! Score: {result.get('quality_score')}/10 ({len(keyframes_b64)} frames analyzed)")
             return result
             
@@ -939,7 +998,7 @@ class UnifiedMediaAnalyzer:
             return self._analyze_video_with_opencv(video_path)
 
 
-    def _analyze_video_with_opencv(self, video_path):
+    def _analyze_video_with_opencv(self, video_path, inspection_start=None, inspection_end=None):
         """Comprehensive video quality analysis with stability, noise, and detail assessment - SCORES OUT OF 10"""
         try:
             cap = cv2.VideoCapture(video_path)
@@ -954,7 +1013,7 @@ class UnifiedMediaAnalyzer:
             width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
             height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
             
-            fps = cap.get(cv2.CAP_PROP_FPS)
+            fps = cap.get(cv2.CAP_PROP_FPS) or 25
             frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
             
             # Better duration calculation with fallback
@@ -975,6 +1034,12 @@ class UnifiedMediaAnalyzer:
             
             print(f"📊 Video Info: {width}x{height}, {fps:.1f} fps, {frame_count} frames, {duration:.1f}s")
             
+            # GOLDEN RULE: Sample frames strictly from the center inspection window!
+            insp_start, insp_end, insp_dur, insp_status = self.get_inspection_segment(duration)
+            if inspection_start is not None and inspection_end is not None:
+                insp_start, insp_end = inspection_start, inspection_end
+                insp_dur = max(0.0, insp_end - insp_start)
+            
             # Get resolution info
             res_label, min_res_score, max_res_score = self._get_resolution_info(width, height)
             
@@ -982,16 +1047,17 @@ class UnifiedMediaAnalyzer:
             cap.release()
             
             # Dynamic frame sampling based on video length (optimized for speed)
-            if duration > 300:
+            if insp_dur > 300:
                 num_frames_to_sample = min(60, frame_count)   # was 150
-            elif duration > 120:
+            elif insp_dur > 120:
                 num_frames_to_sample = min(35, frame_count)   # was 80
             else:
                 num_frames_to_sample = min(20, frame_count)   # was 50
                 
-            print(f"🎯 Sampling {num_frames_to_sample} frames from {frame_count} total frames")
-            
-            sample_idxs = np.linspace(0, frame_count - 1, num_frames_to_sample, dtype=int)
+            start_frame = int(insp_start * fps)
+            end_frame = max(start_frame + 1, min(frame_count - 1, int(insp_end * fps)))
+            sample_idxs = np.linspace(start_frame, end_frame, num_frames_to_sample, dtype=int)
+            print(f"🎯 Sampling {num_frames_to_sample} frames strictly from center car inspection ({insp_start:.1f}s - {insp_end:.1f}s)")
             
             # Highly optimized sequential preloading
             preloaded_frames = self._extract_frames_sequentially(video_path, sample_idxs)
@@ -1485,7 +1551,7 @@ class UnifiedMediaAnalyzer:
                 "providing structured visual condition documentation."
             )
 
-    def calculate_overall_quality(self, audio_analysis, video_analysis, citnow_metadata=None):
+    def calculate_overall_quality(self, audio_analysis, video_analysis, citnow_metadata=None, inspection_segment=None):
         """Calculate overall quality out of 10 with equal importance for audio and video, blending with CitNow rating if available"""
         try:
             audio_score = audio_analysis.get('score', 0)
@@ -1511,6 +1577,14 @@ class UnifiedMediaAnalyzer:
                 # Blend: 60% real rating, 40% technical. This makes it "trace real"
                 final_overall_score = (real_score * 0.6) + (overall_technical_score * 0.4)
                 has_real_rating = True
+
+            # GOLDEN RULE: If the center inspection segment is too brief (<10s) or incomplete,
+            # cap overall score at max 4.8 (cannot be rated "Good" or "Excellent" if no genuine vehicle inspection was conducted)
+            if inspection_segment:
+                core_dur = inspection_segment.get("core_inspection_seconds", 999)
+                coverage = inspection_segment.get("inspection_coverage")
+                if core_dur < 10.0 or coverage == "brief_or_partial":
+                    final_overall_score = min(final_overall_score, 4.8)
             
             # Quality labels for 0–10 range
             if final_overall_score >= 9:
@@ -2001,15 +2075,40 @@ class UnifiedMediaAnalyzer:
             # --- START PARALLEL AUDIO/VIDEO ANALYSIS ---
             import concurrent.futures
             
+            # GOLDEN RULE: CitNow videos feature company ads/branding at START & END.
+            # The core inspection of the car is strictly in the CENTER!
+            video_duration = self._get_video_duration_ffmpeg(video_path)
+            if video_duration <= 0:
+                try:
+                    cap_meta = cv2.VideoCapture(video_path)
+                    fcount = cap_meta.get(cv2.CAP_PROP_FRAME_COUNT)
+                    ffps = cap_meta.get(cv2.CAP_PROP_FPS) or 25
+                    video_duration = fcount / ffps if ffps > 0 else 0
+                    cap_meta.release()
+                except Exception:
+                    video_duration = 0
+
+            insp_start, insp_end, insp_dur, insp_status = self.get_inspection_segment(video_duration)
+            print(f"🎯 GOLDEN RULE: Total: {video_duration:.1f}s | Intro Ad: 0.0-{insp_start:.1f}s | Center Car Inspection: {insp_start:.1f}-{insp_end:.1f}s ({insp_dur:.1f}s) | Outro Ad: {insp_end:.1f}-{video_duration:.1f}s")
+            
+            results["inspection_segment"] = {
+                "total_video_duration": round(video_duration, 1),
+                "intro_ad_seconds": round(insp_start, 1),
+                "outro_ad_seconds": round(max(0.0, video_duration - insp_end), 1),
+                "core_inspection_seconds": round(insp_dur, 1),
+                "inspection_coverage": "brief_or_partial" if insp_dur < 12.0 else "comprehensive"
+            }
+            
             # Calculate remaining time for inner futures
             _remaining = max(30, _deadline - _time.monotonic())
             _inner_timeout = min(180, _remaining - 10)  # leave 10s headroom
             
             def run_video_analysis():
-                return self.analyze_video_quality(video_path)
+                return self.analyze_video_quality(video_path, inspection_start=insp_start, inspection_end=insp_end)
                 
             def run_audio_pipeline():
-                audio_res = self.analyze_audio_quality(audio_path)
+                # Focus audio signal processing strictly on center inspection window (ignoring intro ad music/silence)
+                audio_res = self.analyze_audio_quality(audio_path, offset=insp_start, duration=insp_dur)
                 transcription_text, detected_lang = self.transcribe_audio(
                     audio_path, 
                     transcription_language=transcription_language,
@@ -2017,7 +2116,6 @@ class UnifiedMediaAnalyzer:
                 )
                 
                 # NATIVE WHISPER TRANSLATION: 100% reliable on EC2 (avoids Google Translate IP blocks)
-                # If target is English, we natively translate audio to English text.
                 english_res = transcription_text
                 if requested_target_language == 'en':
                     if detected_lang == 'en':
@@ -2041,7 +2139,7 @@ class UnifiedMediaAnalyzer:
                 except concurrent.futures.TimeoutError:
                     print("⏱️ Video analysis timed out — using OpenCV fallback")
                     video_future.cancel()
-                    video_analysis = self._analyze_video_with_opencv(video_path) if os.path.exists(video_path) else {
+                    video_analysis = self._analyze_video_with_opencv(video_path, inspection_start=insp_start, inspection_end=insp_end) if os.path.exists(video_path) else {
                         "quality_score": 5.0, "quality_label": "Fair", "issues": ["Analysis timed out"],
                         "shake_level": "Unknown", "resolution_quality": "Unknown",
                         "detailed_analysis": {}, "component_scores": {}
@@ -2101,6 +2199,11 @@ class UnifiedMediaAnalyzer:
                     "No spoken technician voiceover detected - silent inspection"
                 ]))
                 print(f"⚠️ No spoken voiceover detected. Adjusted Audio Quality Score: {original_score} -> {penalized_score}/10")
+            elif insp_dur < 10.0 or video_duration < 12.0:
+                audio_analysis["issues"] = list(set(audio_analysis.get("issues", []) + [
+                    "Inspection audio too brief for comprehensive commentary"
+                ]))
+                audio_analysis["score"] = round(min(audio_analysis.get("score", 5.0), 4.5), 1)
             
             results["transcription"] = {
                 "text": transcription if is_valid_transcription else "",
@@ -2115,7 +2218,8 @@ class UnifiedMediaAnalyzer:
             overall_quality = self.calculate_overall_quality(
                 results["audio_analysis"], 
                 results["video_analysis"],
-                citnow_metadata=results.get("citnow_metadata")
+                citnow_metadata=results.get("citnow_metadata"),
+                inspection_segment=results.get("inspection_segment")
             )
             results["overall_quality"] = overall_quality
             results["processing_steps"].append("overall_quality_assessment")
