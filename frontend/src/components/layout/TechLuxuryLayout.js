@@ -168,15 +168,15 @@ const PAGE_META = {
   },
   '/account/profile': {
     eyebrow: 'SECURITY CREDENTIALS',
-    title: 'Master Admin Profile',
-    subtitle: 'Manage technical admin profile settings and authentication preferences',
-    sloganTop: 'AUTHENTICATED TECH.',
+    title: 'Account Profile',
+    subtitle: 'Manage administrative profile settings and authentication preferences',
+    sloganTop: 'AUTHENTICATED ACCESS.',
     sloganBottom: 'ROOT PRIVILEGE.',
   },
   '/account/password': {
     eyebrow: 'SECURITY CREDENTIALS',
     title: 'Change Password',
-    subtitle: 'Update Master Admin account credentials and security authentication',
+    subtitle: 'Update account credentials and security authentication',
     sloganTop: 'SECURE CREDENTIALS.',
     sloganBottom: 'MAXIMUM INTEGRITY.',
   },
@@ -192,12 +192,20 @@ const PAGE_META = {
 export default function TechLuxuryLayout({ children }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, logout } = useAuth();
+  const { user, role, logout } = useAuth();
+
+  const effectiveRole = role || user?.role || 'super_admin';
+  const isMasterAdmin = Boolean(
+    effectiveRole === 'master_admin' ||
+    user?.role === 'master_admin' ||
+    user?.is_master_admin === true ||
+    user?.username === 'tech@focus'
+  );
 
   const currentMeta = PAGE_META[location.pathname] ||
     Object.entries(PAGE_META).find(([key]) => key !== '/' && location.pathname.startsWith(key))?.[1] || {
       eyebrow: 'QUALITY LENS PLATFORM',
-      title: 'Tech Admin Workspace',
+      title: isMasterAdmin ? 'Tech Admin Workspace' : 'Executive Workspace',
       subtitle: 'Advanced management, diagnostics, and video quality intelligence',
       sloganTop: 'DRIVEN BY DATA.',
       sloganBottom: 'BUILT FOR BETTER.',
@@ -217,28 +225,43 @@ export default function TechLuxuryLayout({ children }) {
     {
       title: 'CORE & ANALYTICS',
       items: [
-        { label: 'Top Dashboard', path: '/super-admin/dashboard', icon: <DashboardOutlined sx={{ fontSize: 18 }} /> },
-        { label: 'Monitor', path: '/super-admin/monitor', icon: <DesktopWindows sx={{ fontSize: 18 }} /> },
+        {
+          label: 'Top Dashboard',
+          path: isMasterAdmin || effectiveRole === 'super_admin' ? '/super-admin/dashboard' : '/dealer/dashboard',
+          icon: <DashboardOutlined sx={{ fontSize: 18 }} />
+        },
+        ...(isMasterAdmin || effectiveRole === 'super_admin' ? [
+          { label: 'Monitor', path: '/super-admin/monitor', icon: <DesktopWindows sx={{ fontSize: 18 }} /> },
+          ...(!isMasterAdmin ? [{ label: 'Uploads / Queue', path: '/super-admin/uploads', icon: <AddToQueue sx={{ fontSize: 18 }} /> }] : []),
+        ] : []),
         { label: 'Analysis Results', path: '/dealer/results', icon: <AssessmentOutlined sx={{ fontSize: 18 }} /> },
         { label: 'New Analysis', path: '/dealer/new', icon: <AddCircleOutline sx={{ fontSize: 18 }} /> },
         { label: 'Bulk Upload', path: '/dealer/bulk', icon: <CloudUploadOutlined sx={{ fontSize: 18 }} /> },
       ]
     },
-    {
-      title: 'TECH & INFRASTRUCTURE',
-      items: [
-        { label: 'Tech Console', path: '/master-admin/console', icon: <Tune sx={{ fontSize: 18 }} /> },
-        { label: 'Credentials Vault', path: '/master-admin/credentials', icon: <VpnKey sx={{ fontSize: 18 }} /> },
-        { label: 'Live Activity', path: '/master-admin/live', icon: <Sensors sx={{ fontSize: 18 }} /> },
-        { label: 'Performance', path: '/master-admin/performance', icon: <Speed sx={{ fontSize: 18 }} /> },
-        { label: 'Uploads / Queue', path: '/super-admin/uploads', icon: <AddToQueue sx={{ fontSize: 18 }} /> },
-      ]
-    },
+    ...(isMasterAdmin ? [
+      {
+        title: 'TECH & INFRASTRUCTURE',
+        items: [
+          { label: 'Tech Console', path: '/master-admin/console', icon: <Tune sx={{ fontSize: 18 }} /> },
+          { label: 'Credentials Vault', path: '/master-admin/credentials', icon: <VpnKey sx={{ fontSize: 18 }} /> },
+          { label: 'Live Activity', path: '/master-admin/live', icon: <Sensors sx={{ fontSize: 18 }} /> },
+          { label: 'Performance', path: '/master-admin/performance', icon: <Speed sx={{ fontSize: 18 }} /> },
+          { label: 'Uploads / Queue', path: '/super-admin/uploads', icon: <AddToQueue sx={{ fontSize: 18 }} /> },
+        ]
+      }
+    ] : []),
     {
       title: 'MANAGEMENT & NETWORK',
       items: [
-        { label: 'Team Mgmt', path: '/super-admin/users', icon: <GroupOutlined sx={{ fontSize: 18 }} /> },
-        { label: 'Dealer Network', path: '/super-admin/dealers', icon: <Business sx={{ fontSize: 18 }} /> },
+        {
+          label: 'Team Mgmt',
+          path: isMasterAdmin || effectiveRole === 'super_admin' ? '/super-admin/users' : '/dealer/users',
+          icon: <GroupOutlined sx={{ fontSize: 18 }} />
+        },
+        ...(isMasterAdmin || effectiveRole === 'super_admin' ? [
+          { label: 'Dealer Network', path: '/super-admin/dealers', icon: <Business sx={{ fontSize: 18 }} /> },
+        ] : []),
         { label: 'CitNow Upgrades', path: '/citnow-upgrades', icon: <BoltOutlined sx={{ fontSize: 18 }} /> },
         { label: 'Configuration', path: '/config/theme', icon: <SettingsOutlined sx={{ fontSize: 18 }} /> },
         { label: 'Account', path: '/account/profile', icon: <PersonOutline sx={{ fontSize: 18 }} /> },
@@ -270,7 +293,7 @@ export default function TechLuxuryLayout({ children }) {
       >
         {/* Left: QualityLens Official Logo (Clean, Transparent, Neat & Clear) */}
         <Box
-          onClick={() => navigate('/super-admin/dashboard')}
+          onClick={() => navigate(isMasterAdmin || effectiveRole === 'super_admin' ? '/super-admin/dashboard' : '/dealer/dashboard')}
           sx={{
             display: 'flex',
             alignItems: 'center',
@@ -333,10 +356,18 @@ export default function TechLuxuryLayout({ children }) {
         >
           <Box sx={{ textAlign: 'right', display: { xs: 'none', sm: 'block' } }}>
             <Typography sx={{ color: '#FFFFFF', fontSize: '0.82rem', fontWeight: 600, lineHeight: 1.2 }}>
-              {user?.username || 'tech@focus'}
+              {user?.username || (isMasterAdmin ? 'tech@focus' : 'admin')}
             </Typography>
             <Typography sx={{ color: 'rgba(255, 255, 255, 0.5)', fontSize: '0.7rem', fontWeight: 400 }}>
-              Master Admin • Tech
+              {isMasterAdmin
+                ? 'Master Admin • Tech'
+                : effectiveRole === 'super_admin'
+                  ? 'Super Admin'
+                  : effectiveRole === 'dealer_admin'
+                    ? 'Dealer Admin'
+                    : effectiveRole === 'branch_admin'
+                      ? 'Branch Admin'
+                      : (effectiveRole.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase()) || 'Admin')}
             </Typography>
           </Box>
           <Avatar
@@ -344,13 +375,13 @@ export default function TechLuxuryLayout({ children }) {
               width: 36,
               height: 36,
               bgcolor: '#1E293B',
-              color: '#38BDF8',
+              color: isMasterAdmin ? '#38BDF8' : '#34D399',
               fontSize: '0.82rem',
               fontWeight: 700,
-              border: '1.5px solid rgba(56, 189, 248, 0.4)',
+              border: isMasterAdmin ? '1.5px solid rgba(56, 189, 248, 0.4)' : '1.5px solid rgba(52, 211, 153, 0.4)',
             }}
           >
-            TA
+            {isMasterAdmin ? 'TA' : (user?.username || 'AD').substring(0, 2).toUpperCase()}
           </Avatar>
           <KeyboardArrowDown sx={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: 18 }} />
         </Box>
@@ -371,10 +402,12 @@ export default function TechLuxuryLayout({ children }) {
             },
           }}
         >
-          <MenuItem onClick={() => { handleCloseMenu(); navigate('/master-admin/console'); }}>
-            <ListItemIcon><Tune sx={{ color: '#38BDF8', fontSize: 18 }} /></ListItemIcon>
-            Tech Console
-          </MenuItem>
+          {isMasterAdmin && (
+            <MenuItem onClick={() => { handleCloseMenu(); navigate('/master-admin/console'); }}>
+              <ListItemIcon><Tune sx={{ color: '#38BDF8', fontSize: 18 }} /></ListItemIcon>
+              Tech Console
+            </MenuItem>
+          )}
           <MenuItem onClick={() => { handleCloseMenu(); navigate('/account/profile'); }}>
             <ListItemIcon><PersonOutline sx={{ color: '#94A3B8', fontSize: 18 }} /></ListItemIcon>
             Profile

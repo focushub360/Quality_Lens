@@ -3873,7 +3873,7 @@ export default function SuperAdminDashboard() {
     return () => window.removeEventListener('ql_ui_preference_changed', handlePrefChange);
   }, [user]);
 
-  const isTech = isProTechExperience(user);
+  const isTech = Boolean(user?.role === 'master_admin' || user?.is_master_admin || user?.username === 'tech@focus');
   const [allResults, setAllResults] = useState(() => _globalAllResultsCache || []);
   const [dashboardData, setDashboardData] = useState(() => {
     if (_globalDashboardCache) return _globalDashboardCache;
