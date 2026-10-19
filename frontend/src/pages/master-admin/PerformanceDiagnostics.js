@@ -4,7 +4,7 @@ import {
   LinearProgress, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   Dialog, DialogTitle, DialogContent, DialogActions, Tooltip, Alert, Divider,
   Select, MenuItem, FormControl, InputLabel, CircularProgress, Snackbar, Slider,
-  Tabs, Tab, TextField, InputAdornment, TablePagination, Paper, Rating
+  Tabs, Tab, TextField, InputAdornment, TablePagination
 } from '@mui/material';
 import {
   Speed, Memory, DeveloperBoard, Videocam,
@@ -14,9 +14,9 @@ import {
   ElectricBolt, FlashOn, AvTimer, TrendingUp, Calculate,
   Shield, Security, VerifiedUser, HealthAndSafety,
   Sensors,
-  Insights, Search, Visibility, Star, BarChart, AutoGraph, FilterList,
-  CheckCircleOutline, ErrorOutline, InfoOutlined, Audiotrack, VideoLibrary, OpenInNew,
-  DirectionsCar, Business, Person, FileDownload
+  Insights, Search, Visibility, Star, BarChart, AutoGraph,
+  Audiotrack, VideoLibrary, OpenInNew,
+  DirectionsCar, Article
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
@@ -243,7 +243,6 @@ export default function PerformanceDiagnostics() {
   const [insightsList, setInsightsList] = useState(defaultInsightsData);
   const [insightSearch, setInsightSearch] = useState('');
   const [insightFilter, setInsightFilter] = useState('all');
-  const [insightTime, setInsightTime] = useState('all');
   const [insightPage, setInsightPage] = useState(0);
   const [insightRowsPerPage, setInsightRowsPerPage] = useState(10);
   const [selectedInsight, setSelectedInsight] = useState(null);
