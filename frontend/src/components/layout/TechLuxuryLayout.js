@@ -631,24 +631,24 @@ export default function TechLuxuryLayout({ children }) {
               flexShrink: 0,
             }}
           >
-            {/* Panoramic Alpine Road & Luxury Sports Car with 50/50 Full-Height Mask */}
+            {/* Panoramic BMW Luxury Fleet with Smooth 50/50 Full-Height Mask */}
             <Box
               sx={{
                 position: 'absolute',
                 top: 0,
                 right: 0,
                 bottom: 0,
-                width: { xs: '100%', md: '52%' },
-                backgroundImage: 'url(/assets/luxury_car_banner.jpg)',
+                width: { xs: '100%', md: '56%' },
+                backgroundImage: 'url(/assets/bmw_luxury_banner.png)',
                 backgroundSize: 'cover',
-                backgroundPosition: 'right 68%',
+                backgroundPosition: { xs: 'center 60%', md: 'center 54%' },
                 maskImage: {
-                  xs: 'linear-gradient(to right, transparent 0%, rgba(0,0,0,0.3) 30%, black 100%)',
-                  md: 'linear-gradient(to right, transparent 0%, rgba(0,0,0,0.12) 15%, rgba(0,0,0,0.65) 45%, black 85%)'
+                  xs: 'linear-gradient(to right, transparent 0%, rgba(0,0,0,0.3) 20%, black 100%)',
+                  md: 'linear-gradient(to right, transparent 0%, rgba(0,0,0,0.08) 12%, rgba(0,0,0,0.6) 36%, black 80%)'
                 },
                 WebkitMaskImage: {
-                  xs: 'linear-gradient(to right, transparent 0%, rgba(0,0,0,0.3) 30%, black 100%)',
-                  md: 'linear-gradient(to right, transparent 0%, rgba(0,0,0,0.12) 15%, rgba(0,0,0,0.65) 45%, black 85%)'
+                  xs: 'linear-gradient(to right, transparent 0%, rgba(0,0,0,0.3) 20%, black 100%)',
+                  md: 'linear-gradient(to right, transparent 0%, rgba(0,0,0,0.08) 12%, rgba(0,0,0,0.6) 36%, black 80%)'
                 },
               }}
             />
@@ -659,8 +659,8 @@ export default function TechLuxuryLayout({ children }) {
                 position: 'absolute',
                 inset: 0,
                 background: {
-                  xs: 'linear-gradient(to right, #FFFFFF 0%, rgba(255, 255, 255, 0.94) 50%, rgba(255, 255, 255, 0.4) 100%)',
-                  md: 'linear-gradient(to right, #FFFFFF 0%, #FFFFFF 46%, rgba(255, 255, 255, 0.88) 52%, rgba(255, 255, 255, 0.25) 68%, transparent 88%)'
+                  xs: 'linear-gradient(to right, #FFFFFF 0%, rgba(255, 255, 255, 0.92) 42%, rgba(255, 255, 255, 0.3) 100%)',
+                  md: 'linear-gradient(to right, #FFFFFF 0%, #FFFFFF 44%, rgba(255, 255, 255, 0.85) 50%, rgba(255, 255, 255, 0.18) 66%, transparent 85%)'
                 },
                 pointerEvents: 'none'
               }}
@@ -701,7 +701,7 @@ export default function TechLuxuryLayout({ children }) {
               </Typography>
             </Box>
 
-            {/* Right: Slogan with subtle vertical line divider (exact match to screenshot) */}
+            {/* Right: Slogan with subtle vertical line divider and frosted luxury badge */}
             <Box
               sx={{
                 position: 'relative',
@@ -709,11 +709,22 @@ export default function TechLuxuryLayout({ children }) {
                 pr: { xs: 3, md: 5 },
                 display: { xs: 'none', md: 'flex' },
                 alignItems: 'center',
-                gap: 2
+                gap: 1.5
               }}
             >
               <Box sx={{ width: '1.5px', height: 32, bgcolor: 'rgba(255, 255, 255, 0.45)' }} />
-              <Box sx={{ textAlign: 'left' }}>
+              <Box
+                sx={{
+                  textAlign: 'left',
+                  bgcolor: 'rgba(15, 23, 42, 0.65)',
+                  backdropFilter: 'blur(10px)',
+                  px: 1.75,
+                  py: 0.8,
+                  borderRadius: 2,
+                  border: '1px solid rgba(255, 255, 255, 0.2)',
+                  boxShadow: '0 4px 16px rgba(0, 0, 0, 0.25)'
+                }}
+              >
                 <Typography
                   sx={{
                     color: '#FFFFFF',
