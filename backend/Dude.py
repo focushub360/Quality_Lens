@@ -1175,6 +1175,15 @@ class UnifiedMediaAnalyzer:
             final_score = (resolution_base * 0.3) + (visual_score_o10 * 0.7)
             final_score = np.clip(final_score - (frozen_penalty / 20), 0, 10) 
             
+            # Duration penalty: CitNow vehicle inspections must be comprehensive (>30 seconds)
+            # A video of only a few seconds cannot document a complete vehicle inspection
+            if duration < 12.0:
+                issues.append(f"Very brief duration ({duration:.1f}s) - incomplete vehicle inspection")
+                final_score = max(2.5, final_score - 2.0)
+            elif duration < 25.0:
+                issues.append(f"Short duration ({duration:.1f}s) - limited walkaround coverage")
+                final_score = max(3.5, final_score - 1.0)
+
             # Bonus for high-res clear videos
             if res_label in ["4K UHD", "1440p (QHD)", "1080p (FHD)"] and visual_score_o10 > 8.5:
                 final_score = min(10.0, final_score + 0.5)
@@ -1390,7 +1399,7 @@ class UnifiedMediaAnalyzer:
             # 3. Audio parameters
             audio = results.get("audio_analysis") or {}
             audio_score = float(audio.get("score", 7.0))
-            audio_label = "Good" if audio_score >= 7.0 else ("Fair" if audio_score >= 5.0 else "Moderate")
+            audio_label = "Good" if audio_score >= 7.0 else ("Fair" if audio_score >= 5.0 else ("Moderate" if audio_score >= 4.0 else "Needs Voiceover"))
 
             # 4. Construct professional, clear, and precise executive paragraphs
             # Executive Overview
@@ -1448,14 +1457,14 @@ class UnifiedMediaAnalyzer:
             if audio_score >= 7.0:
                 acoustic_critique = (
                     f"Acoustic Environment ({audio_score:.1f}/10 • {audio_label}): "
-                    f"Ambient background noise remains low and well-controlled within the service bay. "
+                    f"Ambient background sound levels remain controlled within the service bay. "
                     f"Narration Note: No technician voiceover or verbal speech was detected, designating this as a silent visual walkaround."
                 )
             else:
                 acoustic_critique = (
                     f"Acoustic Environment ({audio_score:.1f}/10 • {audio_label}): "
-                    f"Ambient workshop acoustics were registered within acceptable operational parameters. "
-                    f"Narration Note: Conducted as a silent visual inspection without verbal technician commentary."
+                    f"Conducted as an unvoiced visual inspection without verbal technician commentary. "
+                    f"CitNow compliance standard recommends active verbal narration during customer health check presentations."
                 )
 
             # Quality Recommendation / Operational Takeaway
@@ -2066,14 +2075,32 @@ class UnifiedMediaAnalyzer:
             print(f"Audio Clarity: {results['audio_analysis']['prediction']}")
 
             # --- PROCESS TRANSCRIPTION RESULTS ---
-            # Define garbage/failure transcription patterns
-            GARBAGE_TEXTS = [",", ".", "!", "?", "the", "a", "i", "...", "No clear speech detected in audio"]
+            # Define garbage/failure/hallucinated transcription patterns
+            GARBAGE_TEXTS = [
+                ",", ".", "!", "?", "the", "a", "i", "...", "no clear speech detected in audio",
+                "thank you", "thank you.", "thank you for watching", "thank you for watching.",
+                "subtitles by", "bye bye", "mbc", "subscribe"
+            ]
+            clean_transcription = (transcription or "").strip()
             is_valid_transcription = (
-                transcription and
-                len(transcription.strip()) >= 5 and
-                transcription.strip().lower() not in GARBAGE_TEXTS and
-                not transcription.startswith("Transcription failed:")
+                clean_transcription and
+                len(clean_transcription) >= 10 and
+                clean_transcription.lower() not in GARBAGE_TEXTS and
+                not clean_transcription.startswith("Transcription failed:")
             )
+
+            # If no speech was spoken, penalize the audio quality score!
+            # A workshop vehicle inspection without technician narration is incomplete and must not receive 9+/10.
+            if not is_valid_transcription:
+                original_score = audio_analysis.get("score", 7.0)
+                penalized_score = round(min(3.5, max(1.5, original_score * 0.35)), 1)
+                audio_analysis["score"] = penalized_score
+                audio_analysis["prediction"] = "Silent (No Voiceover)"
+                audio_analysis["clarity_level"] = "Needs Voiceover"
+                audio_analysis["issues"] = list(set(audio_analysis.get("issues", []) + [
+                    "No spoken technician voiceover detected - silent inspection"
+                ]))
+                print(f"⚠️ No spoken voiceover detected. Adjusted Audio Quality Score: {original_score} -> {penalized_score}/10")
             
             results["transcription"] = {
                 "text": transcription if is_valid_transcription else "",

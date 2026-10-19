@@ -35,8 +35,24 @@ export function formatExecutiveSummary(rawSummary, resultData = {}) {
 
   // Determine if speech narrative is present
   const rawSpeech = resultData.transcription?.text || '';
-  const isSpeechGarbage = ['the', 'a', ',', '.', '...', 'no clear speech detected'].includes(rawSpeech.trim().toLowerCase());
-  const hasSpokenNarration = rawSpeech.trim().length >= 10 && !isSpeechGarbage && !rawSpeech.includes('transcription failed');
+  const isSpeechGarbage = [
+    'the', 'a', ',', '.', '...', 'no clear speech detected',
+    'thank you', 'thank you.', 'thank you for watching', 'thank you for watching.',
+    'subtitles by', 'bye bye', 'subscribe'
+  ].includes(rawSpeech.trim().toLowerCase());
+
+  const isExplicitlyNoSpeech =
+    resultData.transcription?.status === 'no_speech' ||
+    resultData.summarization?.status === 'visual_fallback' ||
+    (typeof rawSummary === 'string' && (
+      rawSummary.includes('No technician voiceover') ||
+      rawSummary.includes('silent visual walkaround') ||
+      rawSummary.includes('without verbal technician commentary') ||
+      rawSummary.includes('silent visual inspection') ||
+      rawSummary.includes('No spoken technician voiceover')
+    ));
+
+  const hasSpokenNarration = !isExplicitlyNoSpeech && rawSpeech.trim().length >= 15 && !isSpeechGarbage && !rawSpeech.includes('transcription failed');
 
   // Check if rawSummary was the robotic legacy template
   const isLegacyTemplate = !rawSummary ||
@@ -76,10 +92,8 @@ export function formatExecutiveSummary(rawSummary, resultData = {}) {
   const numAudio = Number(audioScore);
   if (hasSpokenNarration) {
     acousticText = `The service bay acoustic profile remains clean with minimal interference. Spoken technician commentary is articulate and clearly audible, providing the customer with an informative verbal walkthrough of the inspection findings.`;
-  } else if (numAudio >= 7.0) {
-    acousticText = `Ambient workshop sound levels are well-controlled with minimal acoustic interference. Note: This recording was conducted as a dedicated silent visual walkaround without verbal technician voiceover.`;
   } else {
-    acousticText = `Ambient background sound is registered within typical service bay operational limits. Conducted as a silent visual inspection without verbal technician commentary.`;
+    acousticText = `No spoken technician voiceover or verbal commentary was detected in this recording. Ambient workshop acoustic levels were registered at ${audioScore}/10 (${audioLabel}), designating this as an unvoiced visual-only walkaround. CitNow best practice recommends active verbal narration during customer inspections.`;
   }
 
   // 4. Custom spoken findings (if speech was summarized from Whisper)
