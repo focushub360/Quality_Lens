@@ -631,43 +631,43 @@ export default function TechLuxuryLayout({ children }) {
               flexShrink: 0,
             }}
           >
-            {/* Panoramic BMW 7-Series / i7 Luxury Fleet with Smooth 50/50 Full-Height Mask */}
+            {/* Panoramic BMW 7-Series / i7 Luxury Fleet with Gradient Extending Right to Text End */}
             <Box
               sx={{
                 position: 'absolute',
                 top: 0,
                 right: 0,
                 bottom: 0,
-                width: { xs: '100%', md: '56%' },
+                width: { xs: '100%', md: '72%' },
                 backgroundImage: 'url(/assets/bmw_luxury_banner.png)',
                 backgroundSize: 'cover',
-                backgroundPosition: { xs: 'center 62%', md: 'center 58%' },
+                backgroundPosition: { xs: 'center 62%', md: 'right 56%' },
                 maskImage: {
-                  xs: 'linear-gradient(to right, transparent 0%, rgba(0,0,0,0.3) 22%, black 100%)',
-                  md: 'linear-gradient(to right, transparent 0%, rgba(0,0,0,0.08) 10%, rgba(0,0,0,0.6) 35%, black 78%)'
+                  xs: 'linear-gradient(to right, transparent 0%, rgba(0,0,0,0.25) 15%, black 85%)',
+                  md: 'linear-gradient(to right, transparent 0%, transparent 20%, rgba(0,0,0,0.12) 26%, rgba(0,0,0,0.65) 40%, black 60%, black 100%)'
                 },
                 WebkitMaskImage: {
-                  xs: 'linear-gradient(to right, transparent 0%, rgba(0,0,0,0.3) 22%, black 100%)',
-                  md: 'linear-gradient(to right, transparent 0%, rgba(0,0,0,0.08) 10%, rgba(0,0,0,0.6) 35%, black 78%)'
+                  xs: 'linear-gradient(to right, transparent 0%, rgba(0,0,0,0.25) 15%, black 85%)',
+                  md: 'linear-gradient(to right, transparent 0%, transparent 20%, rgba(0,0,0,0.12) 26%, rgba(0,0,0,0.65) 40%, black 60%, black 100%)'
                 },
               }}
             />
 
-            {/* Atmospheric Misty Fade Overlay for Ultra-Smooth 50/50 Blending */}
+            {/* Atmospheric Misty Fade Overlay for Ultra-Smooth Blending Starting Right Where Text Ends */}
             <Box
               sx={{
                 position: 'absolute',
                 inset: 0,
                 background: {
-                  xs: 'linear-gradient(to right, #FFFFFF 0%, rgba(255, 255, 255, 0.92) 42%, rgba(255, 255, 255, 0.3) 100%)',
-                  md: 'linear-gradient(to right, #FFFFFF 0%, #FFFFFF 42%, rgba(255, 255, 255, 0.82) 48%, rgba(255, 255, 255, 0.18) 64%, transparent 84%)'
+                  xs: 'linear-gradient(to right, #FFFFFF 0%, rgba(255, 255, 255, 0.9) 30%, rgba(255, 255, 255, 0.2) 100%)',
+                  md: 'linear-gradient(to right, #FFFFFF 0%, #FFFFFF 33%, rgba(255, 255, 255, 0.72) 40%, rgba(255, 255, 255, 0.12) 52%, transparent 66%)'
                 },
                 pointerEvents: 'none'
               }}
             />
 
             {/* Left: Title & Subtitle sitting crisply on the clean white background */}
-            <Box sx={{ position: 'relative', zIndex: 2, p: { xs: 2, md: 3 }, maxWidth: { xs: '100%', md: '48%' } }}>
+            <Box sx={{ position: 'relative', zIndex: 2, p: { xs: 2, md: 3 }, maxWidth: { xs: '100%', md: '42%' } }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 0.75 }}>
                 <Typography
                   sx={{
