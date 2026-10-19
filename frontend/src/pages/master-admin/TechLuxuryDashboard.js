@@ -75,7 +75,7 @@ export default function TechLuxuryDashboard() {
   const [activeMenuCard, setActiveMenuCard] = useState(null);
   const [selectedAdvisorModal, setSelectedAdvisorModal] = useState(null);
 
-  // Custom Advisor Tooltip with (i) Icon Badge
+  // Custom Advisor Tooltip with (i) Icon Badge (pointerEvents: none prevents cursor jitter)
   const AdvisorBarTooltip = ({ active, payload }) => {
     if (!active || !payload || !payload.length) return null;
     const data = payload[0].payload;
@@ -83,25 +83,16 @@ export default function TechLuxuryDashboard() {
 
     return (
       <Box
-        onClick={(e) => {
-          e.stopPropagation();
-          setSelectedAdvisorModal(data);
-        }}
         sx={{
           bgcolor: '#FFFFFF',
           border: '1.5px solid #0DA1B8',
           borderRadius: 2.5,
           px: 2,
-          py: 1.25,
+          py: 1.1,
           boxShadow: '0 8px 24px rgba(13, 161, 184, 0.2)',
-          cursor: 'pointer',
           textAlign: 'center',
           userSelect: 'none',
-          transition: 'all 0.15s ease',
-          '&:hover': {
-            bgcolor: '#F0FDF4',
-            transform: 'scale(1.02)'
-          }
+          pointerEvents: 'none'
         }}
       >
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.75, mb: 0.25 }}>
@@ -127,10 +118,32 @@ export default function TechLuxuryDashboard() {
         <Typography variant="body2" sx={{ color: '#059669', fontWeight: 700, fontSize: '0.82rem' }}>
           score : {data?.score != null ? Number(data.score).toFixed(1) : '—'}
         </Typography>
-        <Typography variant="caption" sx={{ color: '#64748B', fontSize: '0.67rem', display: 'block', mt: 0.35 }}>
-          Click to view advisor details →
+        <Typography variant="caption" sx={{ color: '#0DA1B8', fontSize: '0.68rem', fontWeight: 700, display: 'block', mt: 0.35 }}>
+          💡 Click bar or chip below for details
         </Typography>
       </Box>
+    );
+  };
+
+  const renderAdvisorTick = (props) => {
+    const { x, y, payload } = props;
+    const adv = advisorTrend.find(a => a.name === payload.value) || { name: payload.value };
+    return (
+      <g transform={`translate(${x},${y})`}>
+        <text
+          x={0}
+          y={0}
+          dy={13}
+          textAnchor="middle"
+          fill="#64748B"
+          fontSize={11}
+          fontWeight={600}
+          style={{ cursor: 'pointer' }}
+          onClick={() => setSelectedAdvisorModal(adv)}
+        >
+          {payload.value}
+        </text>
+      </g>
     );
   };
 
@@ -661,15 +674,15 @@ export default function TechLuxuryDashboard() {
           </Box>
 
           {/* Dark Forest Green Bar Chart */}
-          <Box sx={{ width: '100%', minWidth: 0, height: 230, mt: 'auto' }}>
+          <Box sx={{ width: '100%', minWidth: 0, height: 195, mt: 'auto' }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={advisorTrend} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(15, 23, 42, 0.07)" />
-                <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#64748B' }} axisLine={false} tickLine={false} />
+                <XAxis dataKey="name" tick={renderAdvisorTick} axisLine={false} tickLine={false} />
                 <YAxis domain={[0, 10]} ticks={[0, 3, 6, 9, 10]} tick={{ fontSize: 11, fill: '#64748B' }} axisLine={false} tickLine={false} />
                 <RechartsTooltip 
                   content={<AdvisorBarTooltip />} 
-                  wrapperStyle={{ pointerEvents: 'auto' }}
+                  wrapperStyle={{ pointerEvents: 'none' }}
                 />
                 <Bar 
                   dataKey="score" 
@@ -684,10 +697,43 @@ export default function TechLuxuryDashboard() {
             </ResponsiveContainer>
           </Box>
 
-          {/* Legend */}
-          <Box sx={{ display: 'flex', justifyContent: 'center', gap: 1, mt: 2, height: 24, alignItems: 'center' }}>
-            <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#059669' }} />
-            <Typography sx={{ fontSize: '0.74rem', color: '#334155', fontWeight: 600 }}>Overall Score</Typography>
+          {/* Legend & Clean Clickable (i) Advisor Details Bar */}
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1, mt: 1.5, pt: 1, borderTop: '1px dashed rgba(13, 161, 184, 0.2)' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+              <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#059669' }} />
+              <Typography sx={{ fontSize: '0.74rem', color: '#334155', fontWeight: 600 }}>Overall Score</Typography>
+            </Box>
+
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6, flexWrap: 'wrap' }}>
+              <Typography sx={{ fontSize: '0.7rem', color: '#64748B', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 0.3 }}>
+                <InfoOutlined sx={{ fontSize: 13, color: '#0DA1B8' }} /> Details:
+              </Typography>
+              {advisorTrend.map((adv) => (
+                <Chip
+                  key={adv.name}
+                  icon={<InfoOutlined sx={{ fontSize: '13px !important', color: '#0DA1B8 !important' }} />}
+                  label={adv.name}
+                  size="small"
+                  onClick={() => setSelectedAdvisorModal(adv)}
+                  sx={{
+                    height: 22,
+                    fontSize: '0.69rem',
+                    fontWeight: 700,
+                    bgcolor: '#F0FDFA',
+                    border: '1px solid #99F6E4',
+                    color: '#0F766E',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                    '&:hover': {
+                      bgcolor: '#CCFBF1',
+                      borderColor: '#0D9488',
+                      transform: 'translateY(-1px)',
+                      boxShadow: '0 2px 8px rgba(13, 161, 184, 0.2)'
+                    }
+                  }}
+                />
+              ))}
+            </Box>
           </Box>
         </Card>
 
