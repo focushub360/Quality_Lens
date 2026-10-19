@@ -1,5 +1,5 @@
 // src/pages/master-admin/TechLuxuryDashboard.js
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -38,7 +38,8 @@ import {
   Tooltip as RechartsTooltip,
   ResponsiveContainer,
   BarChart,
-  Bar
+  Bar,
+  LabelList
 } from 'recharts';
 import api from '../../services/api';
 
@@ -74,74 +75,60 @@ export default function TechLuxuryDashboard() {
   const [anchorEl, setAnchorEl] = useState(null);
   const [activeMenuCard, setActiveMenuCard] = useState(null);
   const [selectedAdvisorModal, setSelectedAdvisorModal] = useState(null);
+  const [hoveredAdvisorCard, setHoveredAdvisorCard] = useState(null);
+  const isOverAdvisorCardRef = useRef(false);
+  const advisorCardTimerRef = useRef(null);
 
-  // Custom Advisor Tooltip with (i) Icon Badge (pointerEvents: none prevents cursor jitter)
-  const AdvisorBarTooltip = ({ active, payload }) => {
-    if (!active || !payload || !payload.length) return null;
-    const data = payload[0].payload;
-    if (!data) return null;
-
-    return (
-      <Box
-        sx={{
-          bgcolor: '#FFFFFF',
-          border: '1.5px solid #0DA1B8',
-          borderRadius: 2.5,
-          px: 2,
-          py: 1.1,
-          boxShadow: '0 8px 24px rgba(13, 161, 184, 0.2)',
-          textAlign: 'center',
-          userSelect: 'none',
-          pointerEvents: 'none'
-        }}
-      >
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.75, mb: 0.25 }}>
-          <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#0F172A', fontSize: '0.88rem' }}>
-            {data.fullName || data.name}
-          </Typography>
-          <Box sx={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: 17,
-            height: 17,
-            borderRadius: '50%',
-            bgcolor: '#0DA1B8',
-            color: '#FFFFFF',
-            fontSize: '11px',
-            fontWeight: 800,
-            lineHeight: 1
-          }}>
-            i
-          </Box>
-        </Box>
-        <Typography variant="body2" sx={{ color: '#059669', fontWeight: 700, fontSize: '0.82rem' }}>
-          score : {data?.score != null ? Number(data.score).toFixed(1) : '—'}
-        </Typography>
-        <Typography variant="caption" sx={{ color: '#0DA1B8', fontSize: '0.68rem', fontWeight: 700, display: 'block', mt: 0.35 }}>
-          💡 Click bar or chip below for details
-        </Typography>
-      </Box>
-    );
-  };
+  useEffect(() => {
+    return () => {
+      if (advisorCardTimerRef.current) clearTimeout(advisorCardTimerRef.current);
+    };
+  }, []);
 
   const renderAdvisorTick = (props) => {
     const { x, y, payload } = props;
-    const adv = advisorTrend.find(a => a.name === payload.value) || { name: payload.value };
+    const name = payload.value || '';
+    const adv = advisorTrend.find(a => a.name === name) || { name };
     return (
-      <g transform={`translate(${x},${y})`}>
+      <g
+        transform={`translate(${x},${y})`}
+        style={{ cursor: 'pointer' }}
+        onClick={(e) => {
+          e.stopPropagation();
+          setSelectedAdvisorModal(adv);
+        }}
+      >
+        <rect
+          x={-34}
+          y={4}
+          width={68}
+          height={22}
+          rx={11}
+          fill="#F0FDFA"
+          stroke="#99F6E4"
+          strokeWidth={1}
+        />
         <text
-          x={0}
-          y={0}
-          dy={13}
+          x={-4}
+          y={19}
           textAnchor="middle"
-          fill="#64748B"
-          fontSize={11}
-          fontWeight={600}
-          style={{ cursor: 'pointer' }}
-          onClick={() => setSelectedAdvisorModal(adv)}
+          fill="#0F172A"
+          fontSize={10.5}
+          fontWeight={700}
         >
-          {payload.value}
+          {name.length > 7 ? name.slice(0, 6) + '.' : name}
+        </text>
+        <circle cx={22} cy={15} r={5.5} fill="#0DA1B8" />
+        <text
+          x={22}
+          y={18}
+          textAnchor="middle"
+          fill="#FFFFFF"
+          fontSize={8}
+          fontWeight={800}
+          fontFamily="sans-serif"
+        >
+          i
         </text>
       </g>
     );
@@ -673,26 +660,183 @@ export default function TechLuxuryDashboard() {
             </Box>
           </Box>
 
-          {/* Dark Forest Green Bar Chart */}
-          <Box sx={{ width: '100%', minWidth: 0, height: 195, mt: 'auto' }}>
+          {/* Dark Forest Green Bar Chart with Steady Catchable Card */}
+          <Box
+            sx={{ width: '100%', minWidth: 0, height: 230, position: 'relative', mt: 'auto' }}
+            onMouseLeave={() => {
+              if (isOverAdvisorCardRef.current) return;
+              if (advisorCardTimerRef.current) clearTimeout(advisorCardTimerRef.current);
+              advisorCardTimerRef.current = setTimeout(() => {
+                setHoveredAdvisorCard(null);
+              }, 450);
+            }}
+          >
+            {/* Steady, Rock-Solid Advisor Card that NEVER runs away */}
+            {hoveredAdvisorCard && (() => {
+              const adv = hoveredAdvisorCard.data;
+              const idx = hoveredAdvisorCard.index;
+              const total = advisorTrend.length || 6;
+              const leftPercent = Math.max(18, Math.min(82, ((idx + 0.5) / total) * 100));
+
+              return (
+                <Box
+                  onMouseEnter={() => {
+                    isOverAdvisorCardRef.current = true;
+                    if (advisorCardTimerRef.current) clearTimeout(advisorCardTimerRef.current);
+                  }}
+                  onMouseLeave={() => {
+                    isOverAdvisorCardRef.current = false;
+                    if (advisorCardTimerRef.current) clearTimeout(advisorCardTimerRef.current);
+                    advisorCardTimerRef.current = setTimeout(() => {
+                      setHoveredAdvisorCard(null);
+                    }, 450);
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedAdvisorModal(adv);
+                  }}
+                  sx={{
+                    position: 'absolute',
+                    left: `${leftPercent}%`,
+                    top: 2,
+                    transform: 'translateX(-50%)',
+                    zIndex: 35,
+                    bgcolor: '#FFFFFF',
+                    border: '1.5px solid #0DA1B8',
+                    borderRadius: 2.5,
+                    px: 2,
+                    py: 1,
+                    boxShadow: '0 10px 30px rgba(13, 161, 184, 0.28)',
+                    cursor: 'pointer',
+                    textAlign: 'center',
+                    userSelect: 'none',
+                    minWidth: 195,
+                    transition: 'left 0.2s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.15s ease',
+                    '&:hover': {
+                      bgcolor: '#F0FDFA',
+                      boxShadow: '0 12px 36px rgba(13, 161, 184, 0.38)'
+                    }
+                  }}
+                >
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.8, mb: 0.25 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#0F172A', fontSize: '0.88rem' }}>
+                      {adv.fullName || adv.name}
+                    </Typography>
+                    <Box
+                      component="span"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedAdvisorModal(adv);
+                      }}
+                      sx={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: 20,
+                        height: 20,
+                        borderRadius: '50%',
+                        bgcolor: '#0DA1B8',
+                        color: '#FFFFFF',
+                        fontSize: '11px',
+                        fontWeight: 800,
+                        cursor: 'pointer',
+                        boxShadow: '0 2px 6px rgba(13, 161, 184, 0.35)',
+                        transition: 'transform 0.15s ease, background-color 0.15s ease',
+                        '&:hover': {
+                          transform: 'scale(1.25)',
+                          bgcolor: '#088395'
+                        }
+                      }}
+                    >
+                      i
+                    </Box>
+                  </Box>
+                  <Typography variant="body2" sx={{ color: '#059669', fontWeight: 700, fontSize: '0.82rem' }}>
+                    score : {adv?.score != null ? Number(adv.score).toFixed(1) : '—'}
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: '#0DA1B8', fontSize: '0.68rem', display: 'block', mt: 0.25, fontWeight: 700 }}>
+                    Click ⓘ to view advisor details →
+                  </Typography>
+                </Box>
+              );
+            })()}
+
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={advisorTrend} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+              <BarChart
+                data={advisorTrend}
+                margin={{ top: 26, right: 10, left: -25, bottom: 8 }}
+                style={{ cursor: 'pointer' }}
+                onMouseMove={(state) => {
+                  if (isOverAdvisorCardRef.current) return;
+                  if (state && state.activePayload && state.activePayload.length) {
+                    if (advisorCardTimerRef.current) clearTimeout(advisorCardTimerRef.current);
+                    const data = state.activePayload[0].payload;
+                    const idx = typeof state.activeTooltipIndex === 'number' ? state.activeTooltipIndex : 0;
+                    setHoveredAdvisorCard({ data, index: idx });
+                  }
+                }}
+                onClick={(state) => {
+                  if (state && state.activePayload && state.activePayload.length) {
+                    setSelectedAdvisorModal(state.activePayload[0].payload);
+                  }
+                }}
+              >
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(15, 23, 42, 0.07)" />
-                <XAxis dataKey="name" tick={renderAdvisorTick} axisLine={false} tickLine={false} />
-                <YAxis domain={[0, 10]} ticks={[0, 3, 6, 9, 10]} tick={{ fontSize: 11, fill: '#64748B' }} axisLine={false} tickLine={false} />
-                <RechartsTooltip 
-                  content={<AdvisorBarTooltip />} 
-                  wrapperStyle={{ pointerEvents: 'none' }}
+                <XAxis
+                  dataKey="name"
+                  tick={renderAdvisorTick}
+                  axisLine={false}
+                  tickLine={false}
+                  height={34}
                 />
-                <Bar 
-                  dataKey="score" 
-                  fill="#059669" 
-                  radius={[6, 6, 0, 0]} 
-                  maxBarSize={44} 
-                  barSize={34} 
+                <YAxis domain={[0, 10]} ticks={[0, 3, 6, 9, 10]} tick={{ fontSize: 11, fill: '#64748B' }} axisLine={false} tickLine={false} />
+                <Bar
+                  dataKey="score"
+                  fill="#059669"
+                  radius={[6, 6, 0, 0]}
+                  maxBarSize={44}
+                  barSize={34}
                   cursor="pointer"
                   onClick={(entry) => setSelectedAdvisorModal(entry?.payload || entry)}
-                />
+                >
+                  <LabelList
+                    content={(props) => {
+                      const { x, y, width, index } = props;
+                      const adv = advisorTrend[index];
+                      if (!adv) return null;
+                      const badgeY = Math.max(12, y - 13);
+                      return (
+                        <g
+                          style={{ cursor: 'pointer' }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedAdvisorModal(adv);
+                          }}
+                        >
+                          <circle
+                            cx={x + width / 2}
+                            cy={badgeY}
+                            r={8.5}
+                            fill="#0DA1B8"
+                            stroke="#FFFFFF"
+                            strokeWidth={1.5}
+                          />
+                          <text
+                            x={x + width / 2}
+                            y={badgeY + 3.5}
+                            textAnchor="middle"
+                            fill="#FFFFFF"
+                            fontSize={10}
+                            fontWeight={800}
+                            fontFamily="sans-serif"
+                          >
+                            i
+                          </text>
+                        </g>
+                      );
+                    }}
+                  />
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </Box>
