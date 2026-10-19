@@ -1806,17 +1806,19 @@ export default function BulkUpload() {
                             alignItems: 'center',
                             justifyContent: 'center',
                             pointerEvents: 'none',
+                            zIndex: 10,
                           }}
                         >
                           <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center' }}>
                             <Typography
                               component="span"
                               sx={{
-                                color: '#FFFFFF',
+                                color: '#FFFFFF !important',
                                 fontWeight: 800,
                                 fontSize: '1.75rem',
                                 lineHeight: 1,
                                 letterSpacing: '-0.5px',
+                                textShadow: '0 0 15px rgba(255, 255, 255, 0.5), 0 2px 8px rgba(0, 0, 0, 0.9)',
                               }}
                             >
                               {intPart}
@@ -1824,7 +1826,7 @@ export default function BulkUpload() {
                             <Typography
                               component="span"
                               sx={{
-                                color: 'rgba(255, 255, 255, 0.7)',
+                                color: 'rgba(255, 255, 255, 0.85) !important',
                                 fontWeight: 700,
                                 fontSize: '1.05rem',
                                 lineHeight: 1,
@@ -1835,11 +1837,12 @@ export default function BulkUpload() {
                             <Typography
                               component="span"
                               sx={{
-                                color: status.status === 'failed' ? THEME.error : '#A3E635',
+                                color: (status.status === 'failed' ? THEME.error : '#A3E635') + ' !important',
                                 fontWeight: 800,
                                 fontSize: '0.85rem',
                                 ml: 0.3,
                                 lineHeight: 1,
+                                textShadow: '0 0 8px rgba(163, 230, 53, 0.6)',
                               }}
                             >
                               %

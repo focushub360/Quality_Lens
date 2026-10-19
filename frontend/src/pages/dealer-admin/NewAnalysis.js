@@ -671,25 +671,53 @@ export default function NewAnalysis() {
                             flexDirection: 'column',
                             alignItems: 'center',
                             justifyContent: 'center',
+                            zIndex: 10,
+                            pointerEvents: 'none',
                           }}
                         >
-                          <Typography variant="h3" component="div" fontWeight="800" sx={{ 
-                            color: '#FFFFFF', 
-                            letterSpacing: '-1px',
-                            fontFamily: '"Orbitron", "Roboto", sans-serif'
-                          }}>
-                            {Math.round(progressPct)}<Box component="span" sx={{ fontSize: '1.5rem', ml: 0.5 }}>%</Box>
+                          <Typography
+                            component="div"
+                            sx={{ 
+                              color: '#FFFFFF !important', 
+                              fontWeight: 900,
+                              fontSize: '2.5rem',
+                              lineHeight: 1,
+                              letterSpacing: '-0.5px',
+                              fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, "Roboto", sans-serif',
+                              textShadow: '0 0 20px rgba(163, 230, 53, 0.5), 0 2px 10px rgba(0, 0, 0, 0.9)',
+                              display: 'flex',
+                              alignItems: 'baseline',
+                              justifyContent: 'center',
+                            }}
+                          >
+                            <span style={{ color: '#FFFFFF' }}>{Math.round(progressPct)}</span>
+                            <Box
+                              component="span"
+                              sx={{
+                                fontSize: '1.4rem',
+                                ml: 0.5,
+                                color: '#A3E635 !important',
+                                fontWeight: 800,
+                                textShadow: '0 0 10px rgba(163, 230, 53, 0.8)'
+                              }}
+                            >
+                              %
+                            </Box>
                           </Typography>
                         </Box>
                       </Box>
-                      <Typography variant="subtitle2" sx={{ 
-                        color: '#A3E635', 
-                        fontWeight: 700, 
-                        letterSpacing: '2px', 
-                        textTransform: 'uppercase',
-                        fontSize: '0.75rem',
-                        opacity: 0.9
-                      }}>
+                      <Typography
+                        variant="subtitle2"
+                        sx={{ 
+                          color: '#A3E635 !important', 
+                          fontWeight: 800, 
+                          letterSpacing: '2.5px', 
+                          textTransform: 'uppercase',
+                          fontSize: '0.8rem',
+                          textShadow: '0 0 12px rgba(163, 230, 53, 0.6), 0 2px 8px rgba(0, 0, 0, 0.9)',
+                          opacity: 1
+                        }}
+                      >
                         {currentTask.message || "ANALYZING VIDEO CONTENT"}
                       </Typography>
                       <Box sx={{ 
