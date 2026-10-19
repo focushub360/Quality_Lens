@@ -290,9 +290,9 @@ export default function TechLuxuryLayout({ children }) {
           alignItems: 'center',
           justifyContent: 'space-between',
           px: { xs: 2.5, md: 4 },
-          backgroundImage: `linear-gradient(to right, rgba(10, 14, 18, 0.95) 0%, rgba(14, 20, 28, 0.88) 45%, rgba(10, 14, 18, 0.94) 100%), url(/assets/bmw_luxury_banner.png)`,
+          backgroundImage: `linear-gradient(to right, rgba(10, 14, 18, 0.95) 0%, rgba(14, 20, 28, 0.88) 45%, rgba(10, 14, 18, 0.94) 100%), url(/assets/luxury_car_banner.jpg)`,
           backgroundSize: 'cover',
-          backgroundPosition: 'center 40%',
+          backgroundPosition: 'center 30%',
           borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
           boxShadow: '0 4px 20px rgba(0,0,0,0.25)',
         }}
@@ -631,43 +631,43 @@ export default function TechLuxuryLayout({ children }) {
               flexShrink: 0,
             }}
           >
-            {/* Panoramic BMW 7-Series / i7 Luxury Fleet with Gradient Extending Right to Text End */}
+            {/* Panoramic Alpine Road & Luxury Sports Car with 50/50 Full-Height Mask */}
             <Box
               sx={{
                 position: 'absolute',
                 top: 0,
                 right: 0,
                 bottom: 0,
-                width: { xs: '100%', md: '72%' },
-                backgroundImage: 'url(/assets/bmw_luxury_banner.png)',
+                width: { xs: '100%', md: '52%' },
+                backgroundImage: 'url(/assets/luxury_car_banner.jpg)',
                 backgroundSize: 'cover',
-                backgroundPosition: { xs: 'center 62%', md: 'right 56%' },
+                backgroundPosition: 'right 68%',
                 maskImage: {
-                  xs: 'linear-gradient(to right, transparent 0%, rgba(0,0,0,0.25) 15%, black 85%)',
-                  md: 'linear-gradient(to right, transparent 0%, transparent 20%, rgba(0,0,0,0.12) 26%, rgba(0,0,0,0.65) 40%, black 60%, black 100%)'
+                  xs: 'linear-gradient(to right, transparent 0%, rgba(0,0,0,0.3) 30%, black 100%)',
+                  md: 'linear-gradient(to right, transparent 0%, rgba(0,0,0,0.12) 15%, rgba(0,0,0,0.65) 45%, black 85%)'
                 },
                 WebkitMaskImage: {
-                  xs: 'linear-gradient(to right, transparent 0%, rgba(0,0,0,0.25) 15%, black 85%)',
-                  md: 'linear-gradient(to right, transparent 0%, transparent 20%, rgba(0,0,0,0.12) 26%, rgba(0,0,0,0.65) 40%, black 60%, black 100%)'
+                  xs: 'linear-gradient(to right, transparent 0%, rgba(0,0,0,0.3) 30%, black 100%)',
+                  md: 'linear-gradient(to right, transparent 0%, rgba(0,0,0,0.12) 15%, rgba(0,0,0,0.65) 45%, black 85%)'
                 },
               }}
             />
 
-            {/* Atmospheric Misty Fade Overlay for Ultra-Smooth Blending Starting Right Where Text Ends */}
+            {/* Atmospheric Misty Fade Overlay for Ultra-Smooth 50/50 Blending */}
             <Box
               sx={{
                 position: 'absolute',
                 inset: 0,
                 background: {
-                  xs: 'linear-gradient(to right, #FFFFFF 0%, rgba(255, 255, 255, 0.9) 30%, rgba(255, 255, 255, 0.2) 100%)',
-                  md: 'linear-gradient(to right, #FFFFFF 0%, #FFFFFF 33%, rgba(255, 255, 255, 0.72) 40%, rgba(255, 255, 255, 0.12) 52%, transparent 66%)'
+                  xs: 'linear-gradient(to right, #FFFFFF 0%, rgba(255, 255, 255, 0.94) 50%, rgba(255, 255, 255, 0.4) 100%)',
+                  md: 'linear-gradient(to right, #FFFFFF 0%, #FFFFFF 46%, rgba(255, 255, 255, 0.88) 52%, rgba(255, 255, 255, 0.25) 68%, transparent 88%)'
                 },
                 pointerEvents: 'none'
               }}
             />
 
             {/* Left: Title & Subtitle sitting crisply on the clean white background */}
-            <Box sx={{ position: 'relative', zIndex: 2, p: { xs: 2, md: 3 }, maxWidth: { xs: '100%', md: '42%' } }}>
+            <Box sx={{ position: 'relative', zIndex: 2, p: { xs: 2, md: 3 }, maxWidth: { xs: '100%', md: '48%' } }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 0.75 }}>
                 <Typography
                   sx={{
@@ -701,7 +701,7 @@ export default function TechLuxuryLayout({ children }) {
               </Typography>
             </Box>
 
-            {/* Right: Slogan with subtle vertical line divider and frosted luxury badge */}
+            {/* Right: Slogan with subtle vertical line divider (exact match to screenshot) */}
             <Box
               sx={{
                 position: 'relative',
@@ -709,22 +709,11 @@ export default function TechLuxuryLayout({ children }) {
                 pr: { xs: 3, md: 5 },
                 display: { xs: 'none', md: 'flex' },
                 alignItems: 'center',
-                gap: 1.5
+                gap: 2
               }}
             >
               <Box sx={{ width: '1.5px', height: 32, bgcolor: 'rgba(255, 255, 255, 0.45)' }} />
-              <Box
-                sx={{
-                  textAlign: 'left',
-                  bgcolor: 'rgba(15, 23, 42, 0.65)',
-                  backdropFilter: 'blur(10px)',
-                  px: 1.75,
-                  py: 0.8,
-                  borderRadius: 2,
-                  border: '1px solid rgba(255, 255, 255, 0.2)',
-                  boxShadow: '0 4px 16px rgba(0, 0, 0, 0.25)'
-                }}
-              >
+              <Box sx={{ textAlign: 'left' }}>
                 <Typography
                   sx={{
                     color: '#FFFFFF',
