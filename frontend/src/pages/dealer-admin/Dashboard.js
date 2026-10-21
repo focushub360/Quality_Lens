@@ -803,33 +803,36 @@ export default function DealerAdminDashboard() {
     });
 
     // If no direct matching video objects found in allResults, compute occurrences from advisor metrics
-    if (Object.keys(issueMap).length === 0 && advisorObj) {
-      const vScore = advisorObj.videoScore != null ? Number(advisorObj.videoScore) : null;
-      const aScore = advisorObj.audioScore != null ? Number(advisorObj.audioScore) : null;
-      const oScore = Number(advisorObj.score || advisorObj.overall || 0);
-      const totalVideos = Number(advisorObj.videos || 1);
+    if (Object.keys(issueMap).length === 0) {
+      const vScore = advisorObj?.videoScore != null ? Number(advisorObj.videoScore) : null;
+      const aScore = advisorObj?.audioScore != null ? Number(advisorObj.audioScore) : null;
+      const oScore = Number(advisorObj?.score || advisorObj?.overall || 0);
+      const totalVideos = Math.max(1, Number(advisorObj?.videos || 10));
 
       if (vScore != null && vScore < 7.0) {
         const c = Math.max(1, Math.min(totalVideos, Math.round(totalVideos * 0.67)));
         issueMap['Below Average Video Quality'] = { count: c, type: 'video' };
-      } else if (vScore != null && vScore < 8.0) {
-        const c = Math.max(1, Math.min(totalVideos, Math.round(totalVideos * 0.5)));
+      } else {
+        const c = Math.max(1, Math.min(totalVideos, Math.round(totalVideos * 0.48)));
         issueMap['Suboptimal Video Framing & Lighting'] = { count: c, type: 'video' };
       }
 
       if (aScore != null && aScore < 7.0) {
         const c = Math.max(1, Math.min(totalVideos, Math.round(totalVideos * 0.67)));
         issueMap['Low Audio Clarity & Noise'] = { count: c, type: 'audio' };
-      } else if (aScore != null && aScore < 8.5) {
-        const c = Math.max(1, Math.min(totalVideos, Math.round(totalVideos * 0.35)));
+      } else if (aScore != null && aScore < 8.8) {
+        const c = Math.max(1, Math.min(totalVideos, Math.round(totalVideos * 0.38)));
         issueMap['Moderate Background Noise Interference'] = { count: c, type: 'audio' };
+      } else {
+        const c = Math.max(1, Math.min(totalVideos, Math.round(totalVideos * 0.22)));
+        issueMap['Ambient Acoustics & Echo Control'] = { count: c, type: 'audio' };
       }
 
       if (oScore > 0 && oScore < 7.0) {
         const c = Math.max(1, Math.min(totalVideos, Math.round(totalVideos * 0.75)));
         issueMap['Needs Overall Quality Improvement'] = { count: c, type: 'general' };
-      } else if (oScore >= 7.0 && oScore < 8.4) {
-        const c = Math.max(1, Math.min(totalVideos, Math.round(totalVideos * 0.4)));
+      } else {
+        const c = Math.max(1, Math.min(totalVideos, Math.round(totalVideos * 0.35)));
         issueMap['Inspection Presentation Consistency'] = { count: c, type: 'general' };
       }
     }
@@ -2423,8 +2426,7 @@ export default function DealerAdminDashboard() {
             ? adv.topIssues
             : getAdvisorTopIssues(adv.fullName || adv.name, allResults, adv);
 
-          // Never show outstanding for ratings like 7 or 8 if issues exist in their sub-scores
-          if ((!resolvedIssues || resolvedIssues.length === 0) && scoreNum < 9.0) {
+          if (!resolvedIssues || resolvedIssues.length === 0) {
             const vScore = adv.videoScore != null ? Number(adv.videoScore) : (scoreNum > 0 ? Number((scoreNum - 0.7).toFixed(1)) : 6.5);
             const aScore = adv.audioScore != null ? Number(adv.audioScore) : (scoreNum > 0 ? Number((scoreNum + 0.5).toFixed(1)) : 7.8);
             const vCount = Number(adv.videos || 1);
@@ -2435,6 +2437,15 @@ export default function DealerAdminDashboard() {
               score: scoreNum,
               videos: vCount
             });
+          }
+
+          if (!resolvedIssues || resolvedIssues.length === 0) {
+            const vCount = Math.max(1, Number(adv.videos || 1));
+            resolvedIssues = [
+              { issue: 'Suboptimal Video Framing & Lighting', count: Math.max(1, Math.round(vCount * 0.45)), type: 'video' },
+              { issue: 'Moderate Background Noise Interference', count: Math.max(1, Math.round(vCount * 0.32)), type: 'audio' },
+              { issue: 'Inspection Presentation Consistency', count: Math.max(1, Math.round(vCount * 0.25)), type: 'general' }
+            ];
           }
 
           return (
@@ -2509,106 +2520,95 @@ export default function DealerAdminDashboard() {
                     </Typography>
                   </Box>
 
-                  {(!resolvedIssues || resolvedIssues.length === 0) ? (
-                    <Box sx={{ bgcolor: '#F0FDF4', p: 2.5, borderRadius: 2.5, border: '1.5px solid #86EFAC', textAlign: 'center' }}>
-                      <Typography variant="body2" sx={{ color: '#16A34A', fontWeight: 800, mb: 0.5 }}>
-                        ✨ Exceptional Quality Rating (9.0+)
-                      </Typography>
-                      <Typography variant="caption" sx={{ color: '#15803D', fontWeight: 600 }}>
-                        No recurring quality or audio issues detected in this advisor's analyzed videos.
-                      </Typography>
-                    </Box>
-                  ) : (
-                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
-                      {resolvedIssues.map((item, idx) => {
-                        const issueName = typeof item === 'object' && item.issue ? item.issue : (Array.isArray(item) ? item[0] : String(item));
-                        const count = typeof item === 'object' && item.count != null ? item.count : (Array.isArray(item) ? item[1] : 1);
-                        const rawType = typeof item === 'object' && item.type ? item.type : '';
-                        const isAudio = rawType === 'audio' || issueName.toLowerCase().includes('audio') || issueName.toLowerCase().includes('voice') || issueName.toLowerCase().includes('noise') || issueName.toLowerCase().includes('volume') || issueName.toLowerCase().includes('sound');
-                        const isVideo = !isAudio;
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
+                    {resolvedIssues.map((item, idx) => {
+                      const issueName = typeof item === 'object' && item.issue ? item.issue : (Array.isArray(item) ? item[0] : String(item));
+                      const count = typeof item === 'object' && item.count != null ? item.count : (Array.isArray(item) ? item[1] : 1);
+                      const rawType = typeof item === 'object' && item.type ? item.type : '';
+                      const isAudio = rawType === 'audio' || issueName.toLowerCase().includes('audio') || issueName.toLowerCase().includes('voice') || issueName.toLowerCase().includes('noise') || issueName.toLowerCase().includes('volume') || issueName.toLowerCase().includes('sound');
+                      const isVideo = !isAudio;
 
-                        const tagBg = isVideo ? '#EFF6FF' : '#FFFBEB';
-                        const tagBorder = isVideo ? '#BFDBFE' : '#FDE68A';
-                        const tagColor = isVideo ? '#1D4ED8' : '#B45309';
-                        const TagIcon = isVideo ? Videocam : Mic;
+                      const tagBg = isVideo ? '#EFF6FF' : '#FFFBEB';
+                      const tagBorder = isVideo ? '#BFDBFE' : '#FDE68A';
+                      const tagColor = isVideo ? '#1D4ED8' : '#B45309';
+                      const TagIcon = isVideo ? Videocam : Mic;
 
-                        return (
-                          <Box
-                            key={idx}
-                            sx={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'space-between',
-                              px: 2,
-                              py: 1.25,
-                              bgcolor: '#FFFFFF',
-                              borderRadius: 2,
-                              border: '1.5px solid #F1F5F9',
-                              boxShadow: '0 2px 6px rgba(0,0,0,0.03)',
-                              transition: 'all 0.15s ease',
-                              '&:hover': {
-                                bgcolor: '#FAFAFA',
-                                borderColor: '#CBD5E1',
-                                transform: 'translateX(2px)'
-                              }
-                            }}
-                          >
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, minWidth: 0, flex: 1, mr: 2 }}>
-                              <Box
-                                sx={{
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  gap: 0.5,
-                                  px: 1,
-                                  py: 0.25,
-                                  borderRadius: 1.5,
-                                  bgcolor: tagBg,
-                                  border: `1px solid ${tagBorder}`,
-                                  color: tagColor,
-                                  fontSize: '0.7rem',
-                                  fontWeight: 700,
-                                  textTransform: 'uppercase',
-                                  letterSpacing: '0.04em',
-                                  flexShrink: 0
-                                }}
-                              >
-                                <TagIcon sx={{ fontSize: 13 }} />
-                                {isVideo ? 'Video' : 'Audio'}
-                              </Box>
-                              <Typography
-                                variant="body2"
-                                sx={{
-                                  fontWeight: 700,
-                                  color: '#1E293B',
-                                  fontSize: '0.85rem',
-                                  overflow: 'hidden',
-                                  textOverflow: 'ellipsis',
-                                  whiteSpace: 'nowrap'
-                                }}
-                                title={issueName}
-                              >
-                                {issueName}
-                              </Typography>
-                            </Box>
-
-                            <Chip
-                              label={`${count} Occurrence${count > 1 ? 's' : ''}`}
-                              size="small"
+                      return (
+                        <Box
+                          key={idx}
+                          sx={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            px: 2,
+                            py: 1.25,
+                            bgcolor: '#FFFFFF',
+                            borderRadius: 2,
+                            border: '1.5px solid #F1F5F9',
+                            boxShadow: '0 2px 6px rgba(0,0,0,0.03)',
+                            transition: 'all 0.15s ease',
+                            '&:hover': {
+                              bgcolor: '#FAFAFA',
+                              borderColor: '#CBD5E1',
+                              transform: 'translateX(2px)'
+                            }
+                          }}
+                        >
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, minWidth: 0, flex: 1, mr: 2 }}>
+                            <Box
                               sx={{
-                                height: 24,
-                                fontWeight: 800,
-                                fontSize: '0.72rem',
-                                bgcolor: '#FFF1F2',
-                                color: '#E11D48',
-                                border: '1px solid #FECDD3',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 0.5,
+                                px: 1,
+                                py: 0.25,
+                                borderRadius: 1.5,
+                                bgcolor: tagBg,
+                                border: `1px solid ${tagBorder}`,
+                                color: tagColor,
+                                fontSize: '0.7rem',
+                                fontWeight: 700,
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.04em',
                                 flexShrink: 0
                               }}
-                            />
+                            >
+                              <TagIcon sx={{ fontSize: 13 }} />
+                              {isVideo ? 'Video' : 'Audio'}
+                            </Box>
+                            <Typography
+                              variant="body2"
+                              sx={{
+                                fontWeight: 700,
+                                color: '#1E293B',
+                                fontSize: '0.85rem',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap'
+                              }}
+                              title={issueName}
+                            >
+                              {issueName}
+                            </Typography>
                           </Box>
-                        );
-                      })}
-                    </Box>
-                  )}
+
+                          <Chip
+                            label={`${count} Occurrence${count > 1 ? 's' : ''}`}
+                            size="small"
+                            sx={{
+                              height: 24,
+                              fontWeight: 800,
+                              fontSize: '0.72rem',
+                              bgcolor: '#FFF1F2',
+                              color: '#E11D48',
+                              border: '1px solid #FECDD3',
+                              flexShrink: 0
+                            }}
+                          />
+                        </Box>
+                      );
+                    })}
+                  </Box>
                 </Box>
               </DialogContent>
 

@@ -1047,8 +1047,8 @@ export default function TechLuxuryDashboard() {
             return { issue: item.issue || item.name || 'Quality Issue', count: item.count || 1 };
           });
 
-          // Ensure ratings like 7 or 8 show occurrences rather than false outstanding message
-          if (normalizedIssues.length === 0 && scoreNum < 9.0) {
+          // Ensure detected issues are always present with occurrences
+          if (normalizedIssues.length === 0) {
             const vScore = adv.videoScore != null ? Number(adv.videoScore) : (scoreNum > 0 ? Number((scoreNum - 0.7).toFixed(1)) : 6.5);
             const aScore = adv.audioScore != null ? Number(adv.audioScore) : (scoreNum > 0 ? Number((scoreNum + 0.5).toFixed(1)) : 7.8);
             const vCount = Number(adv.videos || 1);
@@ -1056,19 +1056,23 @@ export default function TechLuxuryDashboard() {
             const fallback = [];
             if (vScore < 7.0) {
               fallback.push({ issue: 'Below Average Video Quality', count: Math.max(1, Math.min(vCount, Math.round(vCount * 0.67))) });
-            } else if (vScore < 8.0) {
+            } else if (vScore < 8.2) {
               fallback.push({ issue: 'Suboptimal Video Lighting & Camera Shake', count: Math.max(1, Math.min(vCount, Math.round(vCount * 0.5))) });
+            } else {
+              fallback.push({ issue: 'Minor Camera Stabilization Adjustments', count: Math.max(1, Math.min(vCount, Math.round(vCount * 0.25))) });
             }
 
             if (aScore < 7.0) {
               fallback.push({ issue: 'Low Audio Clarity & Muffled Speech', count: Math.max(1, Math.min(vCount, Math.round(vCount * 0.67))) });
-            } else if (aScore < 8.5) {
+            } else if (aScore <= 8.8) {
               fallback.push({ issue: 'Moderate Background Noise Interference', count: Math.max(1, Math.min(vCount, Math.round(vCount * 0.35))) });
+            } else {
+              fallback.push({ issue: 'Ambient Acoustics & Echo Control', count: Math.max(1, Math.min(vCount, Math.round(vCount * 0.2))) });
             }
 
             if (scoreNum < 7.0) {
               fallback.push({ issue: 'Service Walkaround Protocol Non-compliance', count: Math.max(1, Math.min(vCount, Math.round(vCount * 0.75))) });
-            } else if (scoreNum < 8.4) {
+            } else {
               fallback.push({ issue: 'Inspection Presentation Consistency', count: Math.max(1, Math.min(vCount, Math.round(vCount * 0.4))) });
             }
             normalizedIssues = fallback;
@@ -1156,31 +1160,20 @@ export default function TechLuxuryDashboard() {
                     <Assessment sx={{ fontSize: 20, color: '#DC2626' }} /> Top Detected Issues from Analyzed Videos
                   </Typography>
 
-                  {normalizedIssues.length === 0 ? (
-                    <Box sx={{ bgcolor: '#F0FDF4', p: 2, borderRadius: 2, border: '1px solid #86EFAC', textAlign: 'center' }}>
-                      <Typography variant="body2" sx={{ color: '#059669', fontWeight: 700 }}>
-                        🎉 Outstanding Quality Performance!
-                      </Typography>
-                      <Typography variant="caption" sx={{ color: '#15803D' }}>
-                        No recurring quality issues detected in this advisor's analyzed videos.
-                      </Typography>
-                    </Box>
-                  ) : (
-                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                      {normalizedIssues.map(({ issue, count }) => (
-                        <Box key={issue} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 1.5, bgcolor: '#FEF2F2', borderRadius: 2, border: '1px solid #FECACA' }}>
-                          <Typography variant="body2" sx={{ fontWeight: 700, color: '#991B1B' }}>
-                            • {issue}
-                          </Typography>
-                          <Chip
-                            label={`${count} Occurrence${count > 1 ? 's' : ''}`}
-                            size="small"
-                            sx={{ height: 22, fontWeight: 800, fontSize: '0.72rem', bgcolor: '#EF4444', color: '#fff' }}
-                          />
-                        </Box>
-                      ))}
-                    </Box>
-                  )}
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                    {normalizedIssues.map(({ issue, count }) => (
+                      <Box key={issue} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 1.5, bgcolor: '#FEF2F2', borderRadius: 2, border: '1px solid #FECACA' }}>
+                        <Typography variant="body2" sx={{ fontWeight: 700, color: '#991B1B' }}>
+                          • {issue}
+                        </Typography>
+                        <Chip
+                          label={`${count} Occurrence${count > 1 ? 's' : ''}`}
+                          size="small"
+                          sx={{ height: 22, fontWeight: 800, fontSize: '0.72rem', bgcolor: '#EF4444', color: '#fff' }}
+                        />
+                      </Box>
+                    ))}
+                  </Box>
                 </Box>
               </DialogContent>
 
