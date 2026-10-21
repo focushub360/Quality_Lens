@@ -4121,6 +4121,10 @@ export default function SuperAdminDashboard() {
   const [compareDealerB, setCompareDealerB] = useState('');
   const [subTab, setSubTab] = useState(0);
   const [selectedTrendDealer, setSelectedTrendDealer] = useState('all'); // 0: Performance Trend, 1: Dealer Performance Comparison
+  const handleDealerFilterChange = (dealerId) => {
+    setSelectedFilterDealer(dealerId);
+    setSelectedTrendDealer(dealerId);
+  };
   const [invalidAlerts, setInvalidAlerts] = useState([]);
   const [alertsLoading, setAlertsLoading] = useState(false);
 
@@ -4738,7 +4742,7 @@ export default function SuperAdminDashboard() {
             Key performance indicators and metrics across your dealership network
           </Typography>
 
-          {/* Controls Bar: Dealer Filter Dropdown & Time Range Tabs */}
+          {/* Controls Bar: Time Range Tabs */}
           <Box sx={{
             display: 'flex',
             flexWrap: 'wrap',
@@ -4747,43 +4751,6 @@ export default function SuperAdminDashboard() {
             gap: 2,
             mb: 4
           }}>
-            {/* Dealer-wise Filter Dropdown */}
-            <Paper sx={{
-              background: '#FFFFFF',
-              border: `1px solid ${THEME.border}`,
-              borderRadius: 50,
-              display: 'inline-flex',
-              alignItems: 'center',
-              px: 2,
-              py: 0.5,
-              boxShadow: '0 4px 16px rgba(15, 23, 42, 0.04)',
-              minHeight: 46
-            }}>
-              <Storefront sx={{ color: THEME.primary, mr: 1, fontSize: 20 }} />
-              <FormControl size="small" variant="standard" sx={{ minWidth: 200 }}>
-                <Select
-                  disableUnderline
-                  value={selectedFilterDealer}
-                  onChange={(e) => setSelectedFilterDealer(e.target.value)}
-                  sx={{
-                    fontSize: '14px',
-                    fontWeight: 600,
-                    color: THEME.textPrimary,
-                    '& .MuiSelect-select': {
-                      py: 0.5,
-                      pr: 3
-                    }
-                  }}
-                >
-                  <MenuItem value="all" sx={{ fontWeight: 600 }}>All Dealerships</MenuItem>
-                  {dashboardData.dealerRankings.map((dealer) => (
-                    <MenuItem key={dealer.id} value={dealer.id} sx={{ fontWeight: 500 }}>
-                      {dealer.name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Paper>
 
             {/* Time Range Tabs */}
             <Paper sx={{
@@ -4848,20 +4815,20 @@ export default function SuperAdminDashboard() {
             alignItems: 'stretch'
           }}>
             <StatCard
-              title={selectedFilterDealer === 'all' ? "Total Dealers" : "Dealership"}
-              value={selectedFilterDealer === 'all' ? dashboardData.overview.totalDealers : (dashboardData.dealerRankings.find(d => normalizeDealerId(d.id) === normalizeDealerId(selectedFilterDealer))?.name || selectedFilterDealer)}
-              change={selectedFilterDealer === 'all' ? `${dashboardData.overview.totalDealers} active dealership${dashboardData.overview.totalDealers !== 1 ? 's' : ''}` : "Selected Active Dealership"}
+              title="Total Dealers"
+              value={dashboardData.overview.totalDealers}
+              change={`${dashboardData.overview.totalDealers} active dealership${dashboardData.overview.totalDealers !== 1 ? 's' : ''}`}
               changeType="positive"
               icon={<Business />}
               color={THEME.primary}
             />
             <StatCard
               title="Total Videos"
-              value={selectedFilterDealer === 'all' ? dashboardData.overview.totalVideos : (dashboardData.dealerRankings.find(d => normalizeDealerId(d.id) === normalizeDealerId(selectedFilterDealer))?.videos || 0)}
+              value={dashboardData.overview.totalVideos}
               change={
-                selectedFilterDealer === 'all'
-                  ? (dashboardData.overview.totalVideos > 0 ? `${dashboardData.overview.totalVideos} analyses completed` : 'No analyses yet')
-                  : `${dashboardData.dealerRankings.find(d => normalizeDealerId(d.id) === normalizeDealerId(selectedFilterDealer))?.videos || 0} analyses completed`
+                dashboardData.overview.totalVideos > 0
+                  ? `${dashboardData.overview.totalVideos} analyses completed`
+                  : 'No analyses yet'
               }
               changeType="positive"
               icon={<VideoLibrary />}
@@ -4869,16 +4836,8 @@ export default function SuperAdminDashboard() {
             />
             <StatCard
               title="Avg Quality Score"
-              value={
-                selectedFilterDealer === 'all'
-                  ? (dashboardData.overview.averageScore ? dashboardData.overview.averageScore.toFixed(1) : '7.4')
-                  : ((dashboardData.dealerRankings.find(d => normalizeDealerId(d.id) === normalizeDealerId(selectedFilterDealer))?.overall || 0).toFixed(1))
-              }
-              change={
-                selectedFilterDealer === 'all'
-                  ? `${(dashboardData.overview.averageScore ? dashboardData.overview.averageScore.toFixed(1) : '7.4')}/10 network average`
-                  : `${((dashboardData.dealerRankings.find(d => normalizeDealerId(d.id) === normalizeDealerId(selectedFilterDealer))?.overall || 0).toFixed(1))}/10 dealership rating`
-              }
+              value={dashboardData.overview.averageScore ? dashboardData.overview.averageScore.toFixed(1) : '7.4'}
+              change={`${dashboardData.overview.averageScore ? dashboardData.overview.averageScore.toFixed(1) : '7.4'}/10 network average`}
               changeType="positive"
               icon={<Star />}
               color={THEME.warning}
@@ -4886,16 +4845,8 @@ export default function SuperAdminDashboard() {
             />
             <StatCard
               title="Total Users"
-              value={
-                selectedFilterDealer === 'all'
-                  ? dashboardData.overview.totalUsers
-                  : (dashboardData.dealerRankings.find(d => normalizeDealerId(d.id) === normalizeDealerId(selectedFilterDealer))?.users || 0)
-              }
-              change={
-                selectedFilterDealer === 'all'
-                  ? `${dashboardData.overview.totalUsers} registered user${dashboardData.overview.totalUsers !== 1 ? 's' : ''}`
-                  : `${dashboardData.dealerRankings.find(d => normalizeDealerId(d.id) === normalizeDealerId(selectedFilterDealer))?.users || 0} active user accounts`
-              }
+              value={dashboardData.overview.totalUsers}
+              change={`${dashboardData.overview.totalUsers} registered user${dashboardData.overview.totalUsers !== 1 ? 's' : ''}`}
               changeType="positive"
               icon={<Group />}
               color={THEME.success}
@@ -4950,6 +4901,72 @@ export default function SuperAdminDashboard() {
             Detailed performance analysis and network-wide insights
           </Typography>
 
+          {/* Dealership Filter Controls for Analytics & Insights */}
+          <Box sx={{
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            mb: 4
+          }}>
+            <Paper sx={{
+              background: '#FFFFFF',
+              border: `1px solid ${THEME.border}`,
+              borderRadius: 50,
+              display: 'inline-flex',
+              alignItems: 'center',
+              px: 2.5,
+              py: 0.75,
+              boxShadow: '0 4px 16px rgba(15, 23, 42, 0.05)',
+              gap: 1.5
+            }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Storefront sx={{ color: THEME.primary, fontSize: 20 }} />
+                <Typography sx={{ fontSize: '13px', fontWeight: 700, color: THEME.textSecondary, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Filter Dealership:
+                </Typography>
+              </Box>
+              <FormControl size="small" variant="standard" sx={{ minWidth: 220 }}>
+                <Select
+                  disableUnderline
+                  value={selectedFilterDealer}
+                  onChange={(e) => handleDealerFilterChange(e.target.value)}
+                  sx={{
+                    fontSize: '14px',
+                    fontWeight: 700,
+                    color: THEME.primary,
+                    '& .MuiSelect-select': {
+                      py: 0.25,
+                      pr: 3
+                    }
+                  }}
+                >
+                  <MenuItem value="all" sx={{ fontWeight: 600 }}>All Dealerships (Network Wide)</MenuItem>
+                  {dashboardData.dealerRankings.map((dealer) => (
+                    <MenuItem key={dealer.id} value={dealer.id} sx={{ fontWeight: 500 }}>
+                      {dealer.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              {selectedFilterDealer !== 'all' && (
+                <Chip
+                  label="Reset"
+                  size="small"
+                  onClick={() => handleDealerFilterChange('all')}
+                  sx={{
+                    cursor: 'pointer',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    height: 24,
+                    bgcolor: '#F1F5F9',
+                    color: THEME.textSecondary,
+                    '&:hover': { bgcolor: '#E2E8F0', color: THEME.textPrimary }
+                  }}
+                />
+              )}
+            </Paper>
+          </Box>
+
           {/* Top Row: Quality Distribution & Top 5 Performers (50/50 Flex Layout) */}
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3, mb: 3 }}>
             {/* 1. Quality Distribution */}
@@ -4981,7 +4998,7 @@ export default function SuperAdminDashboard() {
                       fontWeight: 700,
                       fontSize: '1.05rem'
                     }}>
-                      Quality Distribution
+                      Quality Distribution {selectedFilterDealer !== 'all' ? `(${dashboardData.dealerRankings.find(d => normalizeDealerId(d.id) === normalizeDealerId(selectedFilterDealer))?.name || selectedFilterDealer})` : ''}
                     </Typography>
                   </Box>
                   <Box sx={{ flex: 1, minHeight: 300, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -5038,7 +5055,9 @@ export default function SuperAdminDashboard() {
                       fontWeight: 700,
                       fontSize: '1.05rem'
                     }}>
-                      {selectedFilterDealer === 'all' ? 'Top 5 Performers' : 'Top 5 Users'}
+                      {selectedFilterDealer === 'all' 
+                        ? 'Top 5 Performers' 
+                        : `Top Users (${dashboardData.dealerRankings.find(d => normalizeDealerId(d.id) === normalizeDealerId(selectedFilterDealer))?.name || selectedFilterDealer})`}
                     </Typography>
                   </Box>
 
@@ -5151,7 +5170,7 @@ export default function SuperAdminDashboard() {
                         size="small"
                         label="Select Dealership"
                         value={selectedTrendDealer}
-                        onChange={(e) => setSelectedTrendDealer(e.target.value)}
+                        onChange={(e) => handleDealerFilterChange(e.target.value)}
                         sx={{
                           minWidth: 230,
                           '& .MuiOutlinedInput-root': {

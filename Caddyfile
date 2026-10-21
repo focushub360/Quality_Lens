@@ -1,8 +1,15 @@
+{
+    servers {
+        protocols h1 h2
+    }
+}
+
 api.focusengineeringapp.com {
     reverse_proxy backend:8000
 }
 
-qualitylens.focusengineeringapp.com, :80, :443 {
+
+qualitylens.focusengineeringapp.com {
     # Serve static frontend files
     root * /srv/build
 
