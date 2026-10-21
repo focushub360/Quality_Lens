@@ -3,7 +3,12 @@ import axios from 'axios';
 // Primary Production Domain: https://qualitylens.focusengineeringapp.com
 // Production Backend SSL Endpoint: https://api.focusengineeringapp.com
 const EC2_BACKEND_URL = 'https://api.focusengineeringapp.com';
-const API_BASE = process.env.REACT_APP_API_URL || EC2_BACKEND_URL;
+let API_BASE = process.env.REACT_APP_API_URL || EC2_BACKEND_URL;
+
+// Guard against legacy, stale, or offline endpoints baked into older builds
+if (!API_BASE || API_BASE.includes('duckdns') || API_BASE.includes('kdns') || API_BASE.includes('3.110.138.205')) {
+  API_BASE = EC2_BACKEND_URL;
+}
 
 const api = axios.create({ baseURL: API_BASE });
 

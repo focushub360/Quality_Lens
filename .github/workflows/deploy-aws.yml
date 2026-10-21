@@ -75,7 +75,8 @@ jobs:
                 docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
 
               docker compose -f docker-compose.aws.yml pull backend
-              docker compose -f docker-compose.aws.yml up -d --build
+              docker compose -f docker-compose.aws.yml build --no-cache caddy
+              docker compose -f docker-compose.aws.yml up -d
               echo "✅ Successfully deployed at $dir"
             else
               echo "⚠️ Directory $dir does not exist, skipping."

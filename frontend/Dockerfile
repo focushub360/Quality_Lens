@@ -10,7 +10,7 @@ RUN npm ci
 COPY frontend/ .
 
 # Build-time environment variables for React
-ARG REACT_APP_API_URL=https://qualitylensfocustech.duckdns.org
+ARG REACT_APP_API_URL=https://api.focusengineeringapp.com
 ENV REACT_APP_API_URL=$REACT_APP_API_URL
 
 # Build the React production static bundle
