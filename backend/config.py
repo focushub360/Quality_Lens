@@ -14,8 +14,8 @@ MONGODB_URI = os.getenv("MONGODB_URI", "mongodb://localhost:27017/")
 MONGODB_DB_NAME = os.getenv("MONGODB_DB_NAME", "videoanalysis")
 
 # --- Application Configuration ---
-MAX_WORKERS = int(os.getenv("MAX_WORKERS", "4"))
-CONCURRENCY_LIMIT = int(os.getenv("CONCURRENCY_LIMIT", "2"))
+MAX_WORKERS = int(os.getenv("MAX_WORKERS", "6"))
+CONCURRENCY_LIMIT = int(os.getenv("CONCURRENCY_LIMIT", "6"))
 PROCESS_TIMEOUT_SECONDS = int(os.getenv("PROCESS_TIMEOUT_SECONDS", "900"))
 
 # --- Logging Configuration ---
