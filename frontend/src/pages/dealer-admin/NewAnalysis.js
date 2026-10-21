@@ -1264,12 +1264,14 @@ export default function NewAnalysis() {
                       'summarization failed', 'no meaningful summary', 'let me get out of here',
                       'it\'s not made because i hate it', 'thank you for watching', 'subtitles by'
                     ]
-                    const rawText = resultData.transcription?.text || ''
+                    const rawText = typeof resultData.transcription === 'string'
+                      ? resultData.transcription
+                      : (resultData.transcription?.text || resultData.audio_analysis?.transcription || resultData.audio_analysis?.transcription_text || '')
                     // Check if repeating hallucination pattern
                     const isRepeating = /(..+?)\1{4,}/.test(rawText)
                     const isGarbage = isRepeating || GARBAGE.includes(rawText.trim().toLowerCase()) || GARBAGE_PHRASES.some(p => rawText.trim().toLowerCase().includes(p))
                     const hasSpeech = rawText.trim().length >= 5 && !isGarbage
-                    const spokenLang = resultData.transcription?.language || resultData.transcription_language || 'Auto'
+                    const spokenLang = (typeof resultData.transcription === 'object' && resultData.transcription?.language) || resultData.transcription_language || 'Auto'
 
                     return (
                       <Paper elevation={0} sx={{
@@ -1322,12 +1324,14 @@ export default function NewAnalysis() {
                       'summarization failed', 'no meaningful summary', 'let me get out of here',
                       'it\'s not made because i hate it', 'thank you for watching', 'subtitles by'
                     ]
-                    const rawTranslation = resultData.translation?.translated_text || ''
+                    const rawTranslation = typeof resultData.translation === 'string'
+                      ? resultData.translation
+                      : (resultData.translation?.translated_text || resultData.audio_analysis?.translation || resultData.audio_analysis?.translated_text || '')
                     const isRepeating = /(..+?)\1{4,}/.test(rawTranslation)
                     const isVisualSummary = rawTranslation.includes('documents a walkaround') || rawTranslation.includes('visual inspection walkaround') || rawTranslation.includes('The lighting is clean')
                     const isGarbage = isRepeating || GARBAGE.includes(rawTranslation.trim().toLowerCase()) || GARBAGE_PHRASES.some(p => rawTranslation.trim().toLowerCase().includes(p)) || isVisualSummary
-                    const hasTranslation = rawTranslation.trim().length >= 3 && !isGarbage && resultData.translation?.status !== 'no_speech' && resultData.translation?.status !== 'visual_fallback'
-                    const targetLang = resultData.translation?.target_language || resultData.target_language_used || 'EN'
+                    const hasTranslation = rawTranslation.trim().length >= 3 && !isGarbage
+                    const targetLang = (typeof resultData.translation === 'object' && resultData.translation?.target_language) || resultData.target_language_used || 'EN'
 
                     return (
                       <Paper elevation={0} sx={{

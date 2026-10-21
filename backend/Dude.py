@@ -1681,10 +1681,10 @@ class UnifiedMediaAnalyzer:
                 condition_on_previous_text=False, # Prevents hallucination repetition loops
                 vad_filter=True,
                 vad_parameters=dict(
-                    min_silence_duration_ms=500,
-                    speech_pad_ms=300
+                    min_silence_duration_ms=1000,
+                    speech_pad_ms=400
                 ),
-                no_speech_threshold=0.5, # Stricter silence threshold
+                no_speech_threshold=0.65,
             )
 
             print(f"🔊 Detected language: '{info.language}' (probability: {info.language_probability:.2f})")
@@ -1722,12 +1722,11 @@ class UnifiedMediaAnalyzer:
             last_segment = ""
             
             for segment in segments:
-                # Reject segments that faster-whisper flags as noise/silence
-                if getattr(segment, 'no_speech_prob', 0) > 0.40:
-                    print(f"🔇 Skipping segment with high no_speech_prob ({segment.no_speech_prob:.2f}): '{segment.text.strip()}'")
-                    continue
-                if getattr(segment, 'avg_logprob', 0) < -1.0:
-                    print(f"🔇 Skipping low confidence segment ({segment.avg_logprob:.2f}): '{segment.text.strip()}'")
+                # Reject segments that faster-whisper flags with high confidence as noise/silence
+                no_speech_prob = getattr(segment, 'no_speech_prob', 0.0)
+                avg_logprob = getattr(segment, 'avg_logprob', 0.0)
+                if no_speech_prob > 0.75 and avg_logprob < -1.4:
+                    print(f"🔇 Skipping noise/silence segment (no_speech_prob={no_speech_prob:.2f}, avg_logprob={avg_logprob:.2f}): '{segment.text.strip()}'")
                     continue
 
                 clean_text = segment.text.strip()
