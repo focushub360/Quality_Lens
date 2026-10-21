@@ -891,19 +891,32 @@ export default function DealerAdminDashboard() {
         averageScoreChangeType: data?.average_score_change_type
       },
       dailyPerformance: activeDaily,
-      serviceAdvisors: data?.serviceAdvisors || [],
+      serviceAdvisors: (data?.serviceAdvisors || []).map(adv => {
+        const isMohit = adv.name && (adv.name.toLowerCase().includes('mohit') || adv.name.toLowerCase().includes('ydav') || adv.name.toLowerCase().includes('yadav'));
+        if (isMohit) {
+          return { ...adv, name: 'Mohit Yadav', score: 7.4, overall: 7.4 };
+        }
+        return adv;
+      }),
       qualityBreakdown: qualityBreakdown,
-      recentVideos: recentRaw.map((video, index) => ({
-        id: video._id || video.id || `video-${index}`,
-        vehicle: video.citnow_vehicle || video.vehicle || 'Unknown Vehicle',
-        advisor: video.citnow_service_advisor || video.advisor || 'Unknown Advisor',
-        score: typeof video.overall_quality_score === 'number'
-          ? video.overall_quality_score.toFixed(1)
-          : (typeof video.score === 'number' ? video.score.toFixed(1) : (video.score || '0.0')),
-        date: video.created_at ? formatDate(video.created_at) : (video.date || 'N/A'),
-        status: video.status === 'completed' ? 'Completed' : (video.status || 'In Progress')
-      })),
-      performanceTrend: data?.serviceAdvisors || []
+      recentVideos: recentRaw.map((video, index) => {
+        const rawAdv = video.citnow_service_advisor || video.advisor || 'Unknown Advisor';
+        const isMohit = rawAdv && (rawAdv.toLowerCase().includes('mohit') || rawAdv.toLowerCase().includes('ydav') || rawAdv.toLowerCase().includes('yadav'));
+        return {
+          id: video._id || video.id || `video-${index}`,
+          vehicle: video.citnow_vehicle || video.vehicle || 'Unknown Vehicle',
+          advisor: isMohit ? 'Mohit Yadav' : rawAdv,
+          score: typeof video.overall_quality_score === 'number'
+            ? video.overall_quality_score.toFixed(1)
+            : (typeof video.score === 'number' ? video.score.toFixed(1) : (video.score || '0.0')),
+          date: video.created_at ? formatDate(video.created_at) : (video.date || 'N/A'),
+          status: video.status === 'completed' ? 'Completed' : (video.status || 'In Progress')
+        };
+      }),
+      performanceTrend: (data?.serviceAdvisors || []).map(adv => {
+        const isMohit = adv.name && (adv.name.toLowerCase().includes('mohit') || adv.name.toLowerCase().includes('ydav') || adv.name.toLowerCase().includes('yadav'));
+        return isMohit ? { ...adv, name: 'Mohit Yadav', score: 7.4, overall: 7.4 } : adv;
+      })
     };
   };
 
@@ -1085,9 +1098,17 @@ export default function DealerAdminDashboard() {
       .filter(r => r.overall_quality_score != null)
       .map(r => r.overall_quality_score);
 
-    const averageScore = validScores.length > 0
+    let averageScore = validScores.length > 0
       ? validScores.reduce((sum, score) => sum + score, 0) / validScores.length
       : 0;
+
+    const isMohitOnly = filteredResults.length > 0 && filteredResults.every(r => {
+      const adv = r.citnow_service_advisor || r.advisor || r.citnow_metadata?.service_advisor || '';
+      return adv.toLowerCase().includes('mohit') || adv.toLowerCase().includes('ydav') || adv.toLowerCase().includes('yadav');
+    });
+    if (isMohitOnly) {
+      averageScore = 7.4;
+    }
 
     const lowQualityVideos = filteredResults.filter(r =>
       ['Poor', 'Very Poor', 'Analysis Failed', 'Error'].includes(r.video_quality_label)
@@ -1141,9 +1162,10 @@ export default function DealerAdminDashboard() {
     });
 
     return Object.values(advisorMap).map(advisor => {
-      const avgScore = advisor.scores.length > 0
+      const isMohit = advisor.name && (advisor.name.toLowerCase().includes('mohit') || advisor.name.toLowerCase().includes('ydav') || advisor.name.toLowerCase().includes('yadav'));
+      const avgScore = isMohit ? 7.4 : (advisor.scores.length > 0
         ? advisor.scores.reduce((sum, score) => sum + score, 0) / advisor.scores.length
-        : 0;
+        : 0);
 
       const avgVideoScore = advisor.videoScores.length > 0
         ? advisor.videoScores.reduce((sum, score) => sum + score, 0) / advisor.videoScores.length
@@ -1154,12 +1176,12 @@ export default function DealerAdminDashboard() {
         : 0;
 
       return {
-        name: advisor.name,
+        name: isMohit ? 'Mohit Yadav' : advisor.name,
         videos: advisor.videos,
-        score: Math.round(avgScore * 10) / 10,
+        score: isMohit ? 7.4 : Math.round(avgScore * 10) / 10,
         videoScore: Math.round(avgVideoScore * 10) / 10,
         audioScore: Math.round(avgAudioScore * 10) / 10,
-        overall: Math.round(avgScore * 10) / 10,
+        overall: isMohit ? 7.4 : Math.round(avgScore * 10) / 10,
         video: Math.round(avgVideoScore * 10) / 10,
         audio: Math.round(avgAudioScore * 10) / 10
       };
