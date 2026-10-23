@@ -1783,7 +1783,7 @@ export default function Results() {
                                 Duration:
                               </Typography>
                               <Typography variant="body2" sx={{ color: THEME.textSecondary, fontSize: '0.8rem' }}>
-                                {selectedResult.video_analysis?.detailed_analysis?.duration || 'N/A'}
+                                {selectedResult.video_duration_formatted || selectedResult.video_analysis?.detailed_analysis?.duration || (selectedResult.video_duration ? `${selectedResult.video_duration}s` : 'N/A')}
                               </Typography>
                             </Grid>
                             <Grid item xs={6}>
@@ -2508,8 +2508,14 @@ export default function Results() {
                               fontSize: '0.875rem'
                             }}>
                               {(() => {
-                                const txt = selectedResult.translation?.translated_text || '';
-                                if (!txt || txt.includes('documents a walkaround') || txt.includes('visual inspection walkaround')) {
+                                const rawTrans = selectedResult.translation?.translated_text || selectedResult.translation?.text || (typeof selectedResult.translation === 'string' ? selectedResult.translation : '') || selectedResult.native_english_transcription || '';
+                                const rawTranscript = typeof selectedResult.transcription === 'string' ? selectedResult.transcription : (selectedResult.transcription?.text || '');
+                                const spokenLang = ((typeof selectedResult.transcription === 'object' && selectedResult.transcription?.language) || selectedResult.transcription_language || '').toLowerCase();
+                                let txt = rawTrans;
+                                if ((!txt || txt.trim().length < 3) && (spokenLang.includes('en') || spokenLang === '') && rawTranscript.trim().length >= 5) {
+                                  txt = rawTranscript;
+                                }
+                                if (!txt || txt.includes('documents a walkaround') || txt.includes('visual inspection walkaround') || /(..+?)\1{4,}/.test(txt)) {
                                   return 'No spoken words in video (pure visual inspection walkaround)';
                                 }
                                 return txt;

@@ -835,42 +835,82 @@ export default function NewAnalysis() {
               )}
 
               {/* ─── Inline Result Display ─── */}
-              {resultData && (
-                <Box sx={{ mt: 3, pt: 3, borderTop: `1.5px dashed ${THEME.border}` }}>
-                  {/* Result Header with Badges */}
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap', mb: 2.5 }}>
-                    <Typography variant="h6" fontWeight="800" sx={{
-                      color: THEME.textPrimary,
-                      display: 'flex', alignItems: 'center', gap: 1, fontSize: '1.2rem'
-                    }}>
-                      <Check sx={{ color: THEME.success, fontSize: 26 }} /> Analysis Result
-                    </Typography>
+              {resultData && (() => {
+                const formatDurationDisplay = (val) => {
+                  if (!val && val !== 0) return null;
+                  const num = typeof val === 'number' ? val : parseFloat(String(val).replace('s', ''));
+                  if (isNaN(num) || num <= 0) return null;
+                  const mins = Math.floor(num / 60);
+                  const secs = Math.round(num % 60);
+                  if (mins > 0) {
+                    return `${mins}m ${secs < 10 ? '0' : ''}${secs}s (${num.toFixed(1)}s)`;
+                  }
+                  return `${num.toFixed(1)}s`;
+                };
 
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                      {resultData.overall_quality?.overall_label && (
-                        <Chip
-                          label={`Quality: ${resultData.overall_quality.overall_label}`}
-                          size="small"
-                          sx={{
-                            fontWeight: 800,
-                            background: THEME.primaryUltraLight,
-                            color: THEME.primary,
-                            border: `1px solid ${THEME.primary}30`,
-                            borderRadius: 1.5,
-                            fontSize: '0.78rem'
-                          }}
-                        />
-                      )}
-                      {resultData.citnow_metadata?.service_advisor && (
-                        <Chip
-                          label={`Advisor: ${resultData.citnow_metadata.service_advisor}`}
-                          size="small"
-                          variant="outlined"
-                          sx={{ fontWeight: 700, borderRadius: 1.5, borderColor: THEME.border, color: THEME.textSecondary, fontSize: '0.78rem' }}
-                        />
-                      )}
+                const rawDuration = resultData.video_duration_formatted ||
+                  resultData.video_duration ||
+                  resultData.inspection_segment?.total_video_duration_formatted ||
+                  resultData.inspection_segment?.total_video_duration ||
+                  resultData.video_analysis?.detailed_analysis?.duration ||
+                  resultData.duration ||
+                  resultData.citnow_metadata?.duration ||
+                  null;
+
+                const videoLengthFormatted = typeof rawDuration === 'string' && rawDuration.includes('m')
+                  ? rawDuration
+                  : formatDurationDisplay(rawDuration);
+
+                return (
+                  <Box sx={{ mt: 3, pt: 3, borderTop: `1.5px dashed ${THEME.border}` }}>
+                    {/* Result Header with Badges */}
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap', mb: 2.5 }}>
+                      <Typography variant="h6" fontWeight="800" sx={{
+                        color: THEME.textPrimary,
+                        display: 'flex', alignItems: 'center', gap: 1, fontSize: '1.2rem'
+                      }}>
+                        <Check sx={{ color: THEME.success, fontSize: 26 }} /> Analysis Result
+                      </Typography>
+
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                        {videoLengthFormatted && (
+                          <Chip
+                            label={`⏱️ Video Length: ${videoLengthFormatted}`}
+                            size="small"
+                            sx={{
+                              fontWeight: 800,
+                              background: '#FEF3C7',
+                              color: '#92400E',
+                              border: '1px solid #F59E0B60',
+                              borderRadius: 1.5,
+                              fontSize: '0.78rem'
+                            }}
+                          />
+                        )}
+                        {resultData.overall_quality?.overall_label && (
+                          <Chip
+                            label={`Quality: ${resultData.overall_quality.overall_label}`}
+                            size="small"
+                            sx={{
+                              fontWeight: 800,
+                              background: THEME.primaryUltraLight,
+                              color: THEME.primary,
+                              border: `1px solid ${THEME.primary}30`,
+                              borderRadius: 1.5,
+                              fontSize: '0.78rem'
+                            }}
+                          />
+                        )}
+                        {resultData.citnow_metadata?.service_advisor && (
+                          <Chip
+                            label={`Advisor: ${resultData.citnow_metadata.service_advisor}`}
+                            size="small"
+                            variant="outlined"
+                            sx={{ fontWeight: 700, borderRadius: 1.5, borderColor: THEME.border, color: THEME.textSecondary, fontSize: '0.78rem' }}
+                          />
+                        )}
+                      </Box>
                     </Box>
-                  </Box>
 
                   {/* Full Cover Rating Score Cards */}
                   <Box sx={{
@@ -1033,11 +1073,12 @@ export default function NewAnalysis() {
                   </Box>
 
                   {/* Vehicle & Case Details */}
-                  {resultData.citnow_metadata && (() => {
-                    const m = resultData.citnow_metadata;
+                  {(() => {
+                    const m = resultData.citnow_metadata || {};
                     const vehicleName = m.vehicle && m.vehicle !== m.registration ? m.vehicle : (m.brand ? `${m.brand} Vehicle` : null);
                     const completedDt = resultData.created_at || resultData.processing_timestamp || m.date || m.created_at;
                     const details = [
+                      ...(videoLengthFormatted ? [{ label: '⏱️ Video Length / Duration', value: videoLengthFormatted }] : []),
                       ...(vehicleName ? [{ label: '🚗 Vehicle', value: vehicleName }] : []),
                       { label: '🔖 Registration', value: m.registration || m.reg_no || m.vehicle || '—' },
                       { label: '🔢 VIN', value: m.vin || '—' },
@@ -1318,20 +1359,37 @@ export default function NewAnalysis() {
 
                   {/* Translation */}
                   {(() => {
-                    const GARBAGE = ['the', 'a', ',', '.', '!', '?', '...', ',.']
+                    const GARBAGE = ['the', 'a', ',', '.', '!', '?', '...', ',.'];
                     const GARBAGE_PHRASES = [
                       'no clear speech detected', 'transcription failed', 'translation failed', 
                       'summarization failed', 'no meaningful summary', 'let me get out of here',
                       'it\'s not made because i hate it', 'thank you for watching', 'subtitles by'
-                    ]
-                    const rawTranslation = typeof resultData.translation === 'string'
+                    ];
+
+                    const rawTranscription = typeof resultData.transcription === 'string'
+                      ? resultData.transcription
+                      : (resultData.transcription?.text || resultData.audio_analysis?.transcription || resultData.audio_analysis?.transcription_text || '');
+                    
+                    const isRepeatingTranscription = /(..+?)\1{4,}/.test(rawTranscription);
+                    const hasValidSpeech = rawTranscription.trim().length >= 5 && !isRepeatingTranscription && !GARBAGE.includes(rawTranscription.trim().toLowerCase()) && !GARBAGE_PHRASES.some(p => rawTranscription.trim().toLowerCase().includes(p));
+
+                    let rawTranslation = typeof resultData.translation === 'string'
                       ? resultData.translation
-                      : (resultData.translation?.translated_text || resultData.audio_analysis?.translation || resultData.audio_analysis?.translated_text || '')
-                    const isRepeating = /(..+?)\1{4,}/.test(rawTranslation)
-                    const isVisualSummary = rawTranslation.includes('documents a walkaround') || rawTranslation.includes('visual inspection walkaround') || rawTranslation.includes('The lighting is clean')
-                    const isGarbage = isRepeating || GARBAGE.includes(rawTranslation.trim().toLowerCase()) || GARBAGE_PHRASES.some(p => rawTranslation.trim().toLowerCase().includes(p)) || isVisualSummary
-                    const hasTranslation = rawTranslation.trim().length >= 3 && !isGarbage
-                    const targetLang = (typeof resultData.translation === 'object' && resultData.translation?.target_language) || resultData.target_language_used || 'EN'
+                      : (resultData.translation?.translated_text || resultData.translation?.text || resultData.audio_analysis?.translation || resultData.audio_analysis?.translated_text || resultData.native_english_transcription || '');
+                    
+                    const spokenLang = ((typeof resultData.transcription === 'object' && resultData.transcription?.language) || resultData.transcription_language || '').toLowerCase();
+                    const isEnglishSpoken = spokenLang.includes('en') || spokenLang === '';
+
+                    // If translation is empty or not provided, but valid English speech was spoken, use transcription as translation
+                    if ((!rawTranslation || rawTranslation.trim().length < 3) && isEnglishSpoken && hasValidSpeech) {
+                      rawTranslation = rawTranscription;
+                    }
+
+                    const isRepeating = /(..+?)\1{4,}/.test(rawTranslation);
+                    const isVisualSummary = rawTranslation.includes('documents a walkaround') || rawTranslation.includes('visual inspection walkaround') || rawTranslation.includes('The lighting is clean');
+                    const isGarbage = isRepeating || GARBAGE.includes(rawTranslation.trim().toLowerCase()) || GARBAGE_PHRASES.some(p => rawTranslation.trim().toLowerCase().includes(p)) || isVisualSummary;
+                    const hasTranslation = rawTranslation.trim().length >= 3 && !isGarbage;
+                    const targetLang = (typeof resultData.translation === 'object' && resultData.translation?.target_language) || resultData.target_language_used || 'EN';
 
                     return (
                       <Paper elevation={0} sx={{
@@ -1376,7 +1434,8 @@ export default function NewAnalysis() {
                     );
                   })()}
                 </Box>
-              )}
+              );
+            })()}
               {/* Help section */}
               {!currentTask && (
                 <Paper
