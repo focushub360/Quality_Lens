@@ -181,8 +181,8 @@ logger = logging.getLogger("citnow_analyzer")
 APP_TITLE = "CitNow Analyzer API"
 APP_VERSION = "1.0.0"
 
-MAX_WORKERS = int(os.getenv("MAX_WORKERS", "6"))
-CONCURRENCY_LIMIT = int(os.getenv("CONCURRENCY_LIMIT", "6"))
+MAX_WORKERS = int(os.getenv("MAX_WORKERS", "2"))
+CONCURRENCY_LIMIT = int(os.getenv("CONCURRENCY_LIMIT", "2"))
 # Give the analyzer's 900-second deadline room to return its fallback result.
 PROCESS_TIMEOUT_SECONDS = int(os.getenv("PROCESS_TIMEOUT_SECONDS", "960"))
 

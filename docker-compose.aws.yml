@@ -32,9 +32,9 @@ services:
       - FRONTEND_URLS=https://qualitylens.focusengineeringapp.com,https://api.focusengineeringapp.com,http://localhost:3000,https://main.d26c7jks4sa4os.amplifyapp.com,https://qualitylens.focusengineering.in
       # ML settings
       - WHISPER_MODEL=base
-      # CPU Resource Optimization (Upgraded 8-core CPU instance)
-      - MAX_WORKERS=6
-      - CONCURRENCY_LIMIT=6
+      # CPU Resource Optimization (2-core CPU instance)
+      - MAX_WORKERS=2
+      - CONCURRENCY_LIMIT=2
       - PROCESS_TIMEOUT_SECONDS=960
       - VIDEO_HARD_DEADLINE_SECONDS=900
     depends_on:
