@@ -31,6 +31,7 @@ import ThemeSettings from './pages/config/ThemeSettings';
 import CitNowUpgrades from './pages/CitNowUpgrades';
 import GlobalTaskNotification from './components/common/GlobalTaskNotification';
 import TechLuxuryDashboard from './pages/master-admin/TechLuxuryDashboard';
+import Presentation from './pages/Presentation';
 import { useAuth } from './contexts/AuthContext';
 
 export default function App() {
@@ -40,6 +41,9 @@ export default function App() {
         <CssBaseline />
         <TaskProvider>
           <Routes>
+            <Route path="/presentation" element={<Presentation />} />
+            <Route path="/portal" element={<Presentation />} />
+            <Route path="/showcase" element={<Presentation />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/logout" element={<Logout />} />
 

@@ -360,6 +360,25 @@ export default function LoginPage() {
                 >
                   {loading ? 'Authenticating...' : 'Sign In'}
                 </Button>
+
+                <Box sx={{ textAlign: 'center', mt: 2 }}>
+                  <Button
+                    onClick={() => navigate('/presentation')}
+                    variant="text"
+                    size="small"
+                    sx={{
+                      color: THEME.primaryDark,
+                      fontWeight: 700,
+                      fontSize: '0.82rem',
+                      textTransform: 'none',
+                      '&:hover': {
+                        background: THEME.primaryUltraLight
+                      }
+                    }}
+                  >
+                    🌐 Explore Product Tour &amp; Presentation →
+                  </Button>
+                </Box>
               </Box>
             </form>
           </CardContent>
