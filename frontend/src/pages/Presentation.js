@@ -43,7 +43,14 @@ import {
   Compass,
   Cpu,
   Database,
-  CheckCircle
+  CheckCircle,
+  Download,
+  FileText,
+  Target,
+  Star,
+  ExternalLink,
+  Maximize,
+  Minimize
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { useNavigate } from 'react-router-dom';
@@ -53,22 +60,39 @@ export default function Presentation() {
   const navigate = useNavigate();
   const viewportRef = useRef(null);
 
-  // Slide state (0 to 6)
-  const [currentSlide, setCurrentSlide] = useState(0);
-
+  // 7 High-Impact Presentation Slides: Objectives, Analysis, Live Link, Portal Experience, Portal Operations, Competitive Advantage, AI Architecture & Simulator
   const slides = [
-    { id: 'overview', title: 'Executive Overview', label: '01 Overview' },
-    { id: 'rating', title: '4-Pillar Rating Formula', label: '02 Rating Formula' },
-    { id: 'roles', title: 'Role-Based Portals', label: '03 Role Portals' },
-    { id: 'demo', title: 'Live AI Simulator', label: '04 Live Demo' },
-    { id: 'ai', title: 'AI Core Architecture', label: '05 AI Pipeline' },
-    { id: 'roi', title: 'Dealership ROI Model', label: '06 ROI Model' },
-    { id: 'faq', title: 'Launch & FAQ', label: '07 Launch & FAQ' },
+    { id: 'slide-1', title: 'Objectives & Problem Solved', label: '01 Objectives' },
+    { id: 'slide-2', title: 'How We Analyse Every Video', label: '02 Analysis Flow' },
+    { id: 'slide-3', title: 'Live Link & Business Impact', label: '03 Live Link & Impact' },
+    { id: 'slide-4', title: 'Live Portal: Executive Dashboard & Video Inspector', label: '04 Portal Experience' },
+    { id: 'slide-5', title: 'Live Portal: Batch Ingestion & Coaching Leaderboard', label: '05 Bulk & Coaching' },
+    { id: 'slide-6', title: 'Competitive Advantage & 6-Platform Benchmark', label: '06 Benchmark & Wins' },
+    { id: 'slide-7', title: 'AI Architecture, Formula & Live Simulator', label: '07 Tech & Simulator' }
   ];
 
-  // Modals
+  const [currentSlide, setCurrentSlide] = useState(0);
   const [demoModalOpen, setDemoModalOpen] = useState(false);
-  const [loginModalOpen, setLoginModalOpen] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Toggle true browser full-view presentation mode
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().then(() => setIsFullscreen(true)).catch(() => {});
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen().then(() => setIsFullscreen(false)).catch(() => {});
+      }
+    }
+  };
+
+  useEffect(() => {
+    const onFsChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', onFsChange);
+    return () => document.removeEventListener('fullscreenchange', onFsChange);
+  }, []);
 
   // Navigate to slide
   const goToSlide = useCallback((index) => {
@@ -95,9 +119,7 @@ export default function Presentation() {
   // Keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e) => {
-      // Don't intercept if user is typing in an input
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-
       if (e.key === 'ArrowDown' || e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') {
         e.preventDefault();
         goToNext();
@@ -106,31 +128,24 @@ export default function Presentation() {
         goToPrev();
       }
     };
-
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [goToNext, goToPrev]);
 
-  // Scroll listener to sync current slide indicator
+  // Sync current slide on scroll
   useEffect(() => {
-    const observerOptions = {
-      root: null,
-      rootMargin: '0px',
-      threshold: 0.55
-    };
-
-    const handleIntersect = (entries) => {
-      entries.forEach((entry) => {
-        if (entry.isIntersecting) {
-          const index = slides.findIndex((s) => s.id === entry.target.id);
-          if (index !== -1) {
-            setCurrentSlide(index);
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            const index = slides.findIndex((s) => s.id === entry.target.id);
+            if (index !== -1) setCurrentSlide(index);
           }
-        }
-      });
-    };
+        });
+      },
+      { threshold: 0.55 }
+    );
 
-    const observer = new IntersectionObserver(handleIntersect, observerOptions);
     slides.forEach((slide) => {
       const el = document.getElementById(slide.id);
       if (el) observer.observe(el);
@@ -139,7 +154,7 @@ export default function Presentation() {
     return () => observer.disconnect();
   }, [slides]);
 
-  // Simulator State
+  // Simulator Presets
   const samplePresets = [
     {
       id: 'bmw',
@@ -201,7 +216,6 @@ export default function Presentation() {
   ];
 
   const [selectedPreset, setSelectedPreset] = useState(samplePresets[0]);
-  const [simUrl, setSimUrl] = useState(samplePresets[0].url);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [simProgress, setSimProgress] = useState(100);
   const [simResults, setSimResults] = useState(samplePresets[0]);
@@ -225,166 +239,22 @@ export default function Presentation() {
 
   const handleSelectPreset = (preset) => {
     setSelectedPreset(preset);
-    setSimUrl(preset.url);
     setSimResults(preset);
   };
 
-  // Roles State
-  const [activeRole, setActiveRole] = useState('technician');
+  // Competitive Comparison Active Tab
+  const [activeCompetitor, setActiveCompetitor] = useState('myKaarma');
 
-  const roleProfiles = {
-    technician: {
-      id: 'technician',
-      title: 'Technician / Workshop Floor',
-      pill: 'Workshop Bay Operations',
-      pillBg: 'rgba(245, 158, 11, 0.15)',
-      pillColor: '#f59e0b',
-      icon: Wrench,
-      email: 'tech.suresh@dealership.com',
-      password: '••••••••••••',
-      loginType: 'Workshop Mobile PIN / SSO',
-      summary: 'Technicians record vehicle walkarounds directly on their smartphones or CitNow app. QualityLens provides instant feedback so videos are never rejected for dark footage or missing safety checks.',
-      highlights: [
-        'Instant mobile scorecard within 60s of upload',
-        'Camera stability & lighting coaching (flags dark underbody shots)',
-        'Speak naturally in Hindi, Tamil, Telugu, or Marathi — AI translates to clear English',
-        'Personal monthly quality score & technician bonus leaderboard'
-      ],
-      mockHeader: 'Technician Station • Suresh Kumar (Bay 04)',
-      mockMetrics: [
-        { label: 'Videos Recorded Today', value: '6 / 6', sub: '100% QA Passed' },
-        { label: 'Avg Quality Score', value: '9.3 / 10', sub: 'Top 5% in Workshop' }
-      ],
-      mockCardTitle: 'Latest Walkaround: BMW 3-Series (MH-02-CD-4512)',
-      mockCardNotes: [
-        '✔ Lighting: High (Underbody LED engaged)',
-        '✔ Duration: 2m 16s (Optimal 90s - 3.5m window)',
-        '💡 AI Coach: Great sweep across brake calipers! Hold camera steady for 3s on tyre tread for optimal customer clarity.'
-      ]
-    },
-    advisor: {
-      id: 'advisor',
-      title: 'Service Advisor / Customer Front',
-      pill: 'Customer Interaction & Approvals',
-      pillBg: 'rgba(37, 99, 235, 0.15)',
-      pillColor: '#60a5fa',
-      icon: Users,
-      email: 'advisor.rajesh@dealership.com',
-      password: '••••••••••••',
-      loginType: 'Service Desk Portal',
-      summary: 'Service advisors review translated walkarounds in under 30 seconds, generate one-click WhatsApp customer summaries, and track customer repair approvals with zero language friction.',
-      highlights: [
-        'Real-time English translation of technician vernacular audio',
-        'One-click WhatsApp summary card with verified repair recommendations',
-        'Proven repair approval uplift: customers approve +28% more recommended work',
-        'Direct link to original CitNow recording with timestamped checkpoints'
-      ],
-      mockHeader: 'Advisor Console • Rajesh Verma (Desk 02)',
-      mockMetrics: [
-        { label: 'Customer Videos Sent', value: '18 Today', sub: 'Avg view rate: 94%' },
-        { label: 'Repair Approval Rate', value: '84.6%', sub: '+28% vs. manual audio' }
-      ],
-      mockCardTitle: 'Customer Ready: Audi A6 (DL-01-AX-9901) — Mr. Rohit Bansal',
-      mockCardNotes: [
-        '🌐 Translated Speech: "Rear brake pads at 15% life (3mm). Replacement strongly advised."',
-        '📋 Protocol QA: 5/5 Checks Passed (Greeting & VIN matched)',
-        '📲 Action: WhatsApp Summary Dispatched • Customer View Confirmed at 11:42 AM'
-      ]
-    },
-    dealerAdmin: {
-      id: 'dealerAdmin',
-      title: 'Dealership GM & QA Manager',
-      pill: 'Branch Quality Governance',
-      pillBg: 'rgba(16, 185, 129, 0.15)',
-      pillColor: '#34d399',
-      icon: Shield,
-      email: 'gm@landmarkmotors.com',
-      password: '••••••••••••',
-      loginType: 'Executive Dashboard SSO',
-      summary: 'General Managers and QA heads achieve 100% automated video auditing across all service bays. Eliminates manual video spot-checking while catching protocol violations before customers see them.',
-      highlights: [
-        '100% video inspection coverage (replaces 5% manual spot-checking)',
-        'Automated red-flag alerts for rushed (<60s) or dark underbody videos',
-        'Technician quality leaderboards and monthly bonus grading',
-        'Warranty & OEM protocol compliance audit exports in one click'
-      ],
-      mockHeader: 'Branch QA Dashboard • Landmark BMW Mumbai West',
-      mockMetrics: [
-        { label: 'Branch Compliance', value: '95.4%', sub: 'Target: 90% (Passed)' },
-        { label: 'Flagged for Review', value: '2 of 48', sub: '1 dark footage, 1 rushed' }
-      ],
-      mockCardTitle: 'Dealership Video Stream (Live 48 Vehicles Today)',
-      mockCardNotes: [
-        'Top Technician: Suresh Kumar (Score: 9.6/10 across 14 videos)',
-        'Flagged: Bay 07 (Underbody illumination below 40% threshold — alerted advisor)',
-        'Export: Monthly Brand QA Audit Report Ready (PDF / Excel)'
-      ]
-    },
-    superAdmin: {
-      id: 'superAdmin',
-      title: 'OEM / Group Super Admin',
-      pill: 'Multi-Dealer Network Governance',
-      pillBg: 'rgba(139, 92, 246, 0.15)',
-      pillColor: '#a78bfa',
-      icon: Activity,
-      email: 'admin@focusengineeringapp.com',
-      password: '••••••••••••',
-      loginType: 'Master Enterprise Cloud',
-      summary: 'Super Admins and dealer group principals oversee network-wide consistency across 10 to 50+ dealerships. Real-time multi-dealer benchmarks, automated sync engines, and system-wide AI configuration.',
-      highlights: [
-        'Cross-dealership benchmark matrix and compliance ranking',
-        'Automated background CitNow API synchronization pipelines',
-        'Configurable scoring thresholds tailored to OEM brand standards',
-        'Multi-tenant dealer onboarding and technician access controls'
-      ],
-      mockHeader: 'Enterprise Command • 14 Dealer Outlets Across India & UK',
-      mockMetrics: [
-        { label: 'Total Walkarounds', value: '2,480 This Mo', sub: '+18% Month-on-Month' },
-        { label: 'Network Avg QA', value: '9.4 / 10', sub: 'Target: 9.0 (Exceeded)' }
-      ],
-      mockCardTitle: 'OEM Brand Consistency Audit (October 2026)',
-      mockCardNotes: [
-        'Top Performing Outlet: Landmark Worli (Score: 9.7/10)',
-        'Auto-Sync Engine: 24 background jobs active across 14 dealer portals',
-        'System Status: All ML inference nodes operational (p99 latency: 42s)'
-      ]
-    }
+  // Trigger PPT Download
+  const handleDownloadPpt = () => {
+    const link = document.createElement('a');
+    link.href = '/QualityLens_Project_Overview.pptx';
+    link.download = 'QualityLens_Project_Overview.pptx';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    confetti({ particleCount: 60, spread: 70, origin: { y: 0.3 } });
   };
-
-  // ROI Calculator State
-  const [videoVolume, setVideoVolume] = useState(800);
-  const [avgRoValue, setAvgRoValue] = useState(450);
-
-  const calculateRoi = () => {
-    const additionalApprovals = Math.round(videoVolume * 0.184);
-    const annualRevenue = Math.round(additionalApprovals * avgRoValue * 12);
-    const hoursSaved = Math.round((videoVolume * 10) / 60);
-    return { additionalApprovals, annualRevenue, hoursSaved };
-  };
-
-  const roiStats = calculateRoi();
-
-  // FAQ Accordion State
-  const [openFaq, setOpenFaq] = useState(0);
-
-  const faqs = [
-    {
-      q: 'How does QualityLens integrate with CitNow?',
-      a: 'QualityLens integrates with CitNow through secure automated background webhooks and daily synchronization pipelines. As soon as a technician completes a video walkaround, the video URL is automatically received, analyzed by AI within 60 seconds, and displayed with scorecards and translations on your dealership console.'
-    },
-    {
-      q: 'Which vernacular languages are supported for translation?',
-      a: 'QualityLens supports zero-shot translation for Indian and regional vernacular languages including Hindi, Tamil, Telugu, Kannada, Gujarati, Marathi, Punjabi, Bengali, and Malayalam, translating spoken technical commentary into polished, professional English for customers and management.'
-    },
-    {
-      q: 'Can dealerships customize the 4-pillar scoring formula?',
-      a: 'Yes. While the standard 35% Visual / 15% Duration / 25% Audio / 25% Protocol formula is scientifically benchmarked across leading luxury brands (BMW, Audi, Mercedes), Super Admins and Dealer Group GMs can configure custom category weights, minimum acceptable thresholds, and manufacturer-specific compliance items.'
-    },
-    {
-      q: 'How long does deployment take for a dealership network?',
-      a: 'Because QualityLens is cloud-hosted and requires no hardware installation in workshop bays, single dealerships go live within 24 hours. Multi-outlet dealer groups with 10–50 locations typically onboard within 3 to 5 business days, including technician orientation.'
-    }
-  ];
 
   return (
     <div className="presentation-screen">
@@ -394,914 +264,1282 @@ export default function Presentation() {
         style={{ width: `${((currentSlide + 1) / slides.length) * 100}%` }}
       />
 
-      {/* 2. SLIM GLASS PRESENTATION HEADER */}
+      {/* 2. DUAL-BRAND HEADER (Focus Engineering + QualityLens) */}
       <header className="presentation-header">
         <div className="header-left">
-          <div className="brand-badge-box" onClick={() => goToSlide(0)}>
-            <img src="/qualitylens-logo.png" alt="QualityLens" className="brand-logo" />
-            <span className="brand-edition-tag">ENTERPRISE KEYNOTE</span>
+          {/* Focus Engineering Logo */}
+          <div className="brand-logo-wrap" onClick={() => goToSlide(0)} title="Focus Engineering">
+            <img src="/focus-engineering-logo.png" alt="Focus Engineering" className="focus-logo-img" />
           </div>
+
           <div className="partner-divider" />
+
+          {/* QualityLens Logo */}
+          <div className="brand-logo-wrap" onClick={() => goToSlide(0)} title="QualityLens">
+            <img src="/qualitylens-logo.png" alt="QualityLens" className="ql-logo-img" />
+          </div>
+
+          <div className="partner-divider" />
+
           <div className="citnow-badge">
             <span className="citnow-dot"></span>
-            <span>CitNow Certified QA Engine</span>
+            <span>CitNOW Ecosystem Partner</span>
           </div>
         </div>
 
         {/* Center Current Slide Pill */}
         <div className="header-center">
           <div className="slide-counter-chip">
-            <span className="slide-number">SLIDE 0{currentSlide + 1} / 0{slides.length}</span>
+            <span className="slide-number">SLIDE {String(currentSlide + 1).padStart(2, '0')} / {String(slides.length).padStart(2, '0')}</span>
             <span className="slide-separator">•</span>
             <span className="slide-current-title">{slides[currentSlide].title}</span>
           </div>
         </div>
 
-        {/* Right Action Buttons */}
+        {/* Right Actions */}
         <div className="header-right">
+          {/* Full View Toggle Button */}
+          <button
+            className={`btn-fullview-toggle ${isFullscreen ? 'active' : ''}`}
+            onClick={toggleFullscreen}
+            title={isFullscreen ? 'Exit Full View (Esc)' : 'Enter Full View Mode'}
+          >
+            {isFullscreen ? <Minimize size={14} /> : <Maximize size={14} />}
+            <span>{isFullscreen ? 'Exit Full View' : 'Full View'}</span>
+          </button>
+
+          {/* PPT Download Button */}
+          <button className="btn-ppt-download" onClick={handleDownloadPpt} title="Download PowerPoint Presentation (.pptx)">
+            <Download size={15} />
+            <span>Download PPT</span>
+            <span className="ppt-ext-badge">.pptx</span>
+          </button>
+
           <button className="btn-demo-glow" onClick={() => setDemoModalOpen(true)}>
             <Sparkles size={14} /> Book Demo
           </button>
+
           <button className="btn-portal-pill" onClick={() => navigate('/login')}>
             <Lock size={13} /> Portal Login
           </button>
         </div>
       </header>
 
-      {/* 3. MAIN PRESENTATION VIEWPORT (Scroll-Snap Container) */}
+      {/* 3. MAIN SLIDES VIEWPORT */}
       <main className="slides-viewport" ref={viewportRef}>
         {/* ============================================================== */}
-        {/* SLIDE 1: EXECUTIVE OVERVIEW & VISION */}
+        {/* SLIDE 1: OBJECTIVES & PROBLEM SOLVED (Matches User Slide 1) */}
         {/* ============================================================== */}
-        <section id="overview" className="keynote-slide slide-hero">
-          <div className="slide-bg-glow glow-blue" />
+        <section id="slide-1" className="keynote-slide slide-ppt-card">
           <div className="slide-content">
-            <div className="hero-split-grid">
-              {/* Left Column: Vision & Value Props */}
-              <div className="hero-text-col">
-                <div className="hero-pill-badge">
-                  <Sparkles size={14} className="sparkle-icon" />
-                  <span>ALL-IN-ONE AUTOMOTIVE VIDEO QA PLATFORM</span>
+            {/* Slide Header with Dual Logos & Section Title */}
+            <div className="ppt-slide-topbar">
+              <div className="ppt-dual-logos">
+                <img src="/focus-engineering-logo.png" alt="Focus Engineering" className="ppt-focus-logo" />
+                <img src="/qualitylens-logo.png" alt="QualityLens" className="ppt-ql-logo" />
+              </div>
+              <h1 className="ppt-slide-title">Objectives &amp; Problem Solved</h1>
+            </div>
+
+            {/* Two Side-by-Side Cards (Exact Layout from PowerPoint) */}
+            <div className="ppt-cards-grid">
+              {/* Left Dark Navy Card: Objective */}
+              <div className="ppt-card-navy">
+                <div className="ppt-icon-circle-cyan">
+                  <Target size={28} />
                 </div>
-
-                <h1 className="hero-main-heading">
-                  Complete &amp; Intelligent <br />
-                  <span className="gradient-text">Workshop Video QA</span> Software
-                </h1>
-
-                <p className="hero-description">
-                  Designed specifically for premium automotive dealership networks to automatically
-                  audit technician CitNow videos, translate vernacular speech into clear English, evaluate
-                  camera stability, and score protocol compliance in one seamless platform.
-                </p>
-
-                {/* 4 Feature Badges */}
-                <div className="hero-feature-chips">
-                  <div className="feature-chip">
-                    <CheckCircle2 size={16} className="chip-check" />
-                    <span>CitNow Direct Video Link Sync</span>
-                  </div>
-                  <div className="feature-chip">
-                    <CheckCircle2 size={16} className="chip-check" />
-                    <span>Zero-Shot Vernacular Translation</span>
-                  </div>
-                  <div className="feature-chip">
-                    <CheckCircle2 size={16} className="chip-check" />
-                    <span>5-Point Manufacturer QA Compliance</span>
-                  </div>
-                  <div className="feature-chip">
-                    <CheckCircle2 size={16} className="chip-check" />
-                    <span>Multi-Dealership Network Benchmarks</span>
-                  </div>
-                </div>
-
-                {/* Hero CTAs */}
-                <div className="hero-cta-group">
-                  <button className="btn-primary-glow" onClick={goToNext}>
-                    How Rating Works <ArrowRight size={16} />
-                  </button>
-                  <button className="btn-secondary-glass" onClick={() => goToSlide(3)}>
-                    <Play size={15} fill="currentColor" /> Launch Live Preview
-                  </button>
+                <div className="ppt-navy-label">OBJECTIVE</div>
+                <h2 className="ppt-navy-main-text">
+                  Make every dealer walk-around video a better sales tool by checking its quality automatically.
+                </h2>
+                <div className="ppt-navy-subtext">
+                  Built by Focus Engineering directly on top of CitNOW workflows to guarantee 100% video inspection standards across dealership networks.
                 </div>
               </div>
 
-              {/* Right Column: 3D Angled Glass Console Mockup */}
-              <div className="hero-graphic-col">
-                <div className="glass-console-window">
-                  {/* Console Title Bar */}
-                  <div className="console-window-bar">
-                    <div className="window-dots">
-                      <span className="dot red" />
-                      <span className="dot yellow" />
-                      <span className="dot green" />
+              {/* Right White Card: Problem Solved */}
+              <div className="ppt-card-white">
+                <div className="ppt-card-white-header">
+                  <span className="ppt-cyan-tag">PROBLEM SOLVED</span>
+                  <p className="ppt-problem-desc">
+                    Dealer videos vary a lot: shaky, too bright, dull colours, hard to hear. Checking them by hand is slow and inconsistent.
+                  </p>
+                </div>
+
+                <div className="ppt-feature-list">
+                  <div className="ppt-feature-item">
+                    <div className="ppt-feature-icon-box">
+                      <Star size={18} fill="currentColor" />
                     </div>
-                    <div className="window-title">QualityLens • Dealership Inspector Console</div>
-                    <div className="window-status">
-                      <span className="pulse-dot" /> Live Sync
+                    <div>
+                      <div className="ppt-feature-title">Instant score out of 10</div>
+                      <div className="ppt-feature-desc">Every video gets a clear quality rating</div>
                     </div>
                   </div>
 
-                  {/* Console Body */}
-                  <div className="console-body">
-                    {/* Top KPI Metrics */}
-                    <div className="console-kpi-row">
-                      <div className="console-kpi-card">
-                        <span className="kpi-label">Videos Analyzed</span>
-                        <div className="kpi-number">2,480</div>
-                        <span className="kpi-tag positive">
-                          <TrendingUp size={12} /> 100% QA Audited
-                        </span>
-                      </div>
-                      <div className="console-kpi-card">
-                        <span className="kpi-label">Average QA Score</span>
-                        <div className="kpi-number">
-                          9.4<span className="kpi-sub">/10</span>
+                  <div className="ppt-feature-item">
+                    <div className="ppt-feature-icon-box">
+                      <Wrench size={18} />
+                    </div>
+                    <div>
+                      <div className="ppt-feature-title">Tells you what to fix</div>
+                      <div className="ppt-feature-desc">Lighting, steadiness, colour or sound</div>
+                    </div>
+                  </div>
+
+                  <div className="ppt-feature-item">
+                    <div className="ppt-feature-icon-box">
+                      <Layers size={18} />
+                    </div>
+                    <div>
+                      <div className="ppt-feature-title">Checks hundreds at once</div>
+                      <div className="ppt-feature-desc">No more video-by-video review</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Slide Footer */}
+            <div className="ppt-slide-footer">
+              <span>QualityLens | Sales &amp; Marketing Overview</span>
+              <span>1</span>
+            </div>
+
+            <div className="slide-next-prompt" onClick={goToNext}>
+              <span>Next: How We Analyse Every Video</span>
+              <ChevronDown size={16} className="bounce-arrow" />
+            </div>
+          </div>
+        </section>
+
+        {/* ============================================================== */}
+        {/* SLIDE 2: HOW WE ANALYSE EVERY VIDEO (Matches User Slide 2) */}
+        {/* ============================================================== */}
+        <section id="slide-2" className="keynote-slide slide-ppt-card">
+          <div className="slide-content">
+            <div className="ppt-slide-topbar">
+              <div className="ppt-dual-logos">
+                <img src="/focus-engineering-logo.png" alt="Focus Engineering" className="ppt-focus-logo" />
+                <img src="/qualitylens-logo.png" alt="QualityLens" className="ppt-ql-logo" />
+              </div>
+              <h1 className="ppt-slide-title">How We Analyse Every Video</h1>
+            </div>
+
+            {/* Two Side-by-Side Cards */}
+            <div className="ppt-cards-grid">
+              {/* Left Dark Navy Card: 4 Steps */}
+              <div className="ppt-card-navy">
+                <div className="ppt-step-rows">
+                  <div className="ppt-step-row">
+                    <div className="ppt-step-num-icon">
+                      <ExternalLink size={18} />
+                    </div>
+                    <div>
+                      <div className="ppt-step-title">1. Paste the video page link</div>
+                      <div className="ppt-step-sub">We pull dealer, vehicle and advisor details</div>
+                    </div>
+                  </div>
+
+                  <div className="ppt-step-row">
+                    <div className="ppt-step-num-icon">
+                      <Eye size={18} />
+                    </div>
+                    <div>
+                      <div className="ppt-step-title">2. Watch the picture</div>
+                      <div className="ppt-step-sub">Scores sharpness, brightness, colour, steadiness</div>
+                    </div>
+                  </div>
+
+                  <div className="ppt-step-row">
+                    <div className="ppt-step-num-icon">
+                      <Languages size={18} />
+                    </div>
+                    <div>
+                      <div className="ppt-step-title">3. Listen to the sound</div>
+                      <div className="ppt-step-sub">Rates audio as Clear, Moderate or Poor</div>
+                    </div>
+                  </div>
+
+                  <div className="ppt-step-row">
+                    <div className="ppt-step-num-icon">
+                      <FileText size={18} />
+                    </div>
+                    <div>
+                      <div className="ppt-step-title">4. Summarise what is said</div>
+                      <div className="ppt-step-sub">Written transcript, short summary, translation</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right White Card: SAMPLE RESULT with Bar Chart */}
+              <div className="ppt-card-white">
+                <div className="ppt-sample-result-header">
+                  <span className="ppt-cyan-tag">SAMPLE RESULT</span>
+                  <div className="ppt-score-big-box">
+                    <span className="ppt-score-num">3.3</span>
+                    <span className="ppt-score-denom">/ 10</span>
+                    <span className="ppt-score-poor-badge">Poor</span>
+                  </div>
+                </div>
+
+                {/* Horizontal Progress Breakdown (from Screenshot) */}
+                <div className="ppt-bars-chart">
+                  <div className="ppt-bar-row">
+                    <span className="ppt-bar-label">Sharpness</span>
+                    <div className="ppt-bar-track">
+                      <div className="ppt-bar-fill fill-amber" style={{ width: '43.9%' }}></div>
+                    </div>
+                    <span className="ppt-bar-val">43.9%</span>
+                  </div>
+
+                  <div className="ppt-bar-row">
+                    <span className="ppt-bar-label">Brightness</span>
+                    <div className="ppt-bar-track">
+                      <div className="ppt-bar-fill fill-amber" style={{ width: '36.9%' }}></div>
+                    </div>
+                    <span className="ppt-bar-val">36.9%</span>
+                  </div>
+
+                  <div className="ppt-bar-row">
+                    <span className="ppt-bar-label">Colour vibrancy</span>
+                    <div className="ppt-bar-track">
+                      <div className="ppt-bar-fill fill-red" style={{ width: '17.2%' }}></div>
+                    </div>
+                    <span className="ppt-bar-val">17.2%</span>
+                  </div>
+
+                  <div className="ppt-bar-row">
+                    <span className="ppt-bar-label">Steadiness</span>
+                    <div className="ppt-bar-track">
+                      <div className="ppt-bar-fill fill-empty" style={{ width: '2%' }}></div>
+                    </div>
+                    <span className="ppt-bar-val text-red">0.0%</span>
+                  </div>
+
+                  <div className="ppt-bar-row">
+                    <span className="ppt-bar-label">Cleanliness</span>
+                    <div className="ppt-bar-track">
+                      <div className="ppt-bar-fill fill-green" style={{ width: '77.8%' }}></div>
+                    </div>
+                    <span className="ppt-bar-val text-green">77.8%</span>
+                  </div>
+                </div>
+
+                <div className="ppt-coach-note">
+                  <strong>💡 AI Coaching Diagnosis:</strong> Severe camera shake detected via Optical Flow. Vehicle parts out of focus. Lighting below OEM threshold in wheel arch.
+                </div>
+              </div>
+            </div>
+
+            <div className="ppt-slide-footer">
+              <span>QualityLens | Sales &amp; Marketing Overview</span>
+              <span>2</span>
+            </div>
+
+            <div className="slide-next-prompt" onClick={goToNext}>
+              <span>Next: Live Link &amp; Business Impact</span>
+              <ChevronDown size={16} className="bounce-arrow" />
+            </div>
+          </div>
+        </section>
+
+        {/* ============================================================== */}
+        {/* SLIDE 3: LIVE LINK & BUSINESS IMPACT (Matches User Slide 3) */}
+        {/* ============================================================== */}
+        <section id="slide-3" className="keynote-slide slide-ppt-card">
+          <div className="slide-content">
+            <div className="ppt-slide-topbar">
+              <div className="ppt-dual-logos">
+                <img src="/focus-engineering-logo.png" alt="Focus Engineering" className="ppt-focus-logo" />
+                <img src="/qualitylens-logo.png" alt="QualityLens" className="ppt-ql-logo" />
+              </div>
+              <h1 className="ppt-slide-title">Live Link &amp; Business Impact</h1>
+            </div>
+
+            {/* Two Side-by-Side Cards */}
+            <div className="ppt-cards-grid">
+              {/* Left White Card: Live Demo Link & Credentials */}
+              <div className="ppt-card-white">
+                <div className="ppt-icon-circle-cyan">
+                  <Activity size={26} />
+                </div>
+                <div className="ppt-cyan-tag mt-2">LIVE DEMO LINK</div>
+                <div className="ppt-live-url-display">qualitylens.focusengineeringapp.com</div>
+                <p className="ppt-live-url-sub">Open it, paste a video link, see the score</p>
+
+                <div className="ppt-demo-btn-row">
+                  <button className="ppt-btn-open-demo" onClick={() => navigate('/login')}>
+                    Open Live Demo <ArrowRight size={16} />
+                  </button>
+                </div>
+
+                <div className="ppt-creds-box">
+                  <div className="cred-col">
+                    <span className="cred-role">Super Admin:</span>
+                    <span className="cred-val">admin</span>
+                    <span className="cred-pass">admin123</span>
+                  </div>
+                  <div className="cred-divider" />
+                  <div className="cred-col">
+                    <span className="cred-role">Dealer Admin:</span>
+                    <span className="cred-val">bmw_admin</span>
+                    <span className="cred-pass">bmw_secret</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Dark Navy Card: Why It Matters for Sales */}
+              <div className="ppt-card-navy">
+                <div className="ppt-navy-label cyan-text">WHY IT MATTERS FOR SALES</div>
+
+                <div className="ppt-sales-list">
+                  <div className="ppt-sales-item">
+                    <div className="ppt-sales-icon-box">
+                      <TrendingUp size={18} />
+                    </div>
+                    <div>
+                      <div className="ppt-sales-title">Spot weak videos fast</div>
+                      <div className="ppt-sales-desc">Fix them before customers see them</div>
+                    </div>
+                  </div>
+
+                  <div className="ppt-sales-item">
+                    <div className="ppt-sales-icon-box">
+                      <Users size={18} />
+                    </div>
+                    <div>
+                      <div className="ppt-sales-title">Coach dealers with facts</div>
+                      <div className="ppt-sales-desc">Show exactly what to improve</div>
+                    </div>
+                  </div>
+
+                  <div className="ppt-sales-item">
+                    <div className="ppt-sales-icon-box">
+                      <FileSpreadsheet size={18} />
+                    </div>
+                    <div>
+                      <div className="ppt-sales-title">Scale with one Excel file</div>
+                      <div className="ppt-sales-desc">Hundreds of links, runs in background</div>
+                    </div>
+                  </div>
+
+                  <div className="ppt-sales-item">
+                    <div className="ppt-sales-icon-box">
+                      <Database size={18} />
+                    </div>
+                    <div>
+                      <div className="ppt-sales-title">Every result saved</div>
+                      <div className="ppt-sales-desc">Dealer, vehicle and advisor on record</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="ppt-slide-footer">
+              <span>QualityLens | Sales &amp; Marketing Overview</span>
+              <span>3</span>
+            </div>
+
+            <div className="slide-next-prompt" onClick={goToNext}>
+              <span>Next: Live Portal: Executive Dashboard &amp; Video Inspector</span>
+              <ChevronDown size={16} className="bounce-arrow" />
+            </div>
+          </div>
+        </section>
+
+        {/* ============================================================== */}
+        {/* SLIDE 4: LIVE PORTAL — EXECUTIVE DASHBOARD & VIDEO INSPECTOR */}
+        {/* ============================================================== */}
+        <section id="slide-4" className="keynote-slide slide-ppt-card">
+          <div className="slide-content">
+            <div className="ppt-slide-topbar">
+              <div className="ppt-dual-logos">
+                <img src="/focus-engineering-logo.png" alt="Focus Engineering" className="ppt-focus-logo" />
+                <img src="/qualitylens-logo.png" alt="QualityLens" className="ppt-ql-logo" />
+              </div>
+              <h1 className="ppt-slide-title">Live Portal: Executive Dashboard &amp; Video Inspector</h1>
+            </div>
+
+            {/* Portal Window Mockup */}
+            <div className="portal-window-wrap">
+              {/* Chrome Header */}
+              <div className="portal-chrome-header">
+                <div className="portal-chrome-left">
+                  <div className="portal-dots">
+                    <span className="portal-dot red" />
+                    <span className="portal-dot yellow" />
+                    <span className="portal-dot green" />
+                  </div>
+                  <div className="portal-breadcrumb">
+                    <span>QualityLens AI Suite</span>
+                    <span>/</span>
+                    <span>Executive Analytics &amp; Inspection</span>
+                    <span>/</span>
+                    <strong>BMW Landmark Auto Chennai</strong>
+                  </div>
+                </div>
+                <div className="portal-chrome-right">
+                  <div className="portal-dealer-badge">
+                    <Car size={13} /> CitNOW Video: CitNOW-94809 (BMW 320d)
+                  </div>
+                  <div className="portal-live-status-pill">
+                    <span className="pulse-circle" /> 14,930 Audited • Real-Time AI
+                  </div>
+                </div>
+              </div>
+
+              {/* 2-Column Split: Left Executive Dashboard / Right Live Video Inspector */}
+              <div className="portal-dash-split" style={{ padding: '1.25rem 1.5rem', background: '#f8fafc', gridTemplateColumns: '1.05fr 1.15fr', gap: '1.25rem' }}>
+                {/* Left Column: KPI Cockpit & Defect Analytics */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.95rem' }}>
+                  {/* 4 Mini KPI Cards */}
+                  <div className="portal-kpi-row" style={{ gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.75rem' }}>
+                    <div className="portal-kpi-card" style={{ padding: '0.75rem 0.95rem' }}>
+                      <span className="portal-kpi-label"><Gauge size={13} /> Fleet Quality Index</span>
+                      <span className="portal-kpi-val text-blue" style={{ fontSize: '1.45rem' }}>8.4<small style={{ fontSize: '0.85rem', color: '#64748b' }}> / 10</small></span>
+                      <span className="portal-kpi-sub green">↑ +14.2% MoM (Target: 8.0)</span>
+                    </div>
+                    <div className="portal-kpi-card" style={{ padding: '0.75rem 0.95rem' }}>
+                      <span className="portal-kpi-label"><CheckCircle2 size={13} /> CitNOW Compliance</span>
+                      <span className="portal-kpi-val text-green" style={{ fontSize: '1.45rem' }}>91.8%</span>
+                      <span className="portal-kpi-sub green">13,705 videos pass OEM standard</span>
+                    </div>
+                    <div className="portal-kpi-card" style={{ padding: '0.75rem 0.95rem' }}>
+                      <span className="portal-kpi-label"><AlertTriangle size={13} /> Re-Records Prevented</span>
+                      <span className="portal-kpi-val text-red" style={{ fontSize: '1.45rem' }}>1,280</span>
+                      <span className="portal-kpi-sub red">Intercepted before customer view</span>
+                    </div>
+                    <div className="portal-kpi-card" style={{ padding: '0.75rem 0.95rem' }}>
+                      <span className="portal-kpi-label"><Users size={13} /> Advisor Resolution</span>
+                      <span className="portal-kpi-val text-cyan" style={{ fontSize: '1.45rem' }}>96.4%</span>
+                      <span className="portal-kpi-sub blue">Micro-coaching completed &lt;48h</span>
+                    </div>
+                  </div>
+
+                  {/* 30-Day Video Quality Evolution SVG Chart */}
+                  <div className="portal-chart-box" style={{ padding: '0.95rem 1.15rem' }}>
+                    <div className="portal-box-header">
+                      <span className="portal-box-title" style={{ fontSize: '0.82rem' }}>
+                        <TrendingUp size={14} className="text-blue" /> 30-Day Quality Evolution Curve
+                      </span>
+                      <span className="ppt-cyan-tag" style={{ fontSize: '0.65rem', padding: '0.1rem 0.45rem' }}>LIVE FLEET</span>
+                    </div>
+                    <svg className="portal-chart-svg" viewBox="0 0 480 110" style={{ height: '110px' }}>
+                      <defs>
+                        <linearGradient id="chartGrad7" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#2563eb" stopOpacity="0.25" />
+                          <stop offset="100%" stopColor="#2563eb" stopOpacity="0.0" />
+                        </linearGradient>
+                      </defs>
+                      <line x1="30" y1="20" x2="460" y2="20" stroke="#f1f5f9" strokeWidth="1" />
+                      <line x1="30" y1="55" x2="460" y2="55" stroke="#f1f5f9" strokeWidth="1" />
+                      <line x1="30" y1="36" x2="460" y2="36" stroke="#10b981" strokeWidth="1.2" strokeDasharray="3 3" />
+                      <text x="360" y="32" fill="#10b981" fontSize="8.5" fontWeight="700">OEM Target (8.0)</text>
+                      <polygon points="30,95 80,82 140,78 200,60 260,54 320,42 380,34 430,26 460,20 460,100 30,100" fill="url(#chartGrad7)" />
+                      <polyline points="30,95 80,82 140,78 200,60 260,54 320,42 380,34 430,26 460,20" fill="none" stroke="#2563eb" strokeWidth="2.5" strokeLinecap="round" />
+                      <circle cx="30" cy="95" r="3.5" fill="#ffffff" stroke="#2563eb" strokeWidth="2" />
+                      <circle cx="200" cy="60" r="3.5" fill="#ffffff" stroke="#2563eb" strokeWidth="2" />
+                      <circle cx="460" cy="20" r="4.5" fill="#10b981" stroke="#ffffff" strokeWidth="2" />
+                      <text x="30" y="106" fill="#94a3b8" fontSize="8" fontWeight="600">Day 01 (6.1)</text>
+                      <text x="200" y="106" fill="#94a3b8" fontSize="8" fontWeight="600">Day 15 (7.8)</text>
+                      <text x="420" y="106" fill="#2563eb" fontSize="8" fontWeight="800">Today (8.4)</text>
+                    </svg>
+                  </div>
+
+                  {/* Top Detected Flaws */}
+                  <div className="portal-chart-box" style={{ padding: '0.85rem 1.15rem' }}>
+                    <div className="portal-box-header" style={{ marginBottom: '0.35rem' }}>
+                      <span className="portal-box-title" style={{ fontSize: '0.82rem' }}>
+                        <Sliders size={14} className="text-cyan" /> Root-Cause Signal Flaws
+                      </span>
+                      <span style={{ fontSize: '0.68rem', color: '#64748b' }}>OCTOBER STATS</span>
+                    </div>
+                    <div className="defect-bars-list" style={{ gap: '0.5rem' }}>
+                      <div className="defect-bar-item">
+                        <div className="defect-bar-info" style={{ fontSize: '0.72rem' }}>
+                          <span>📹 Camera Shake (Optical Flow &gt; 3.2px)</span>
+                          <strong className="text-red">42% (538 videos)</strong>
                         </div>
-                        <span className="kpi-tag blue">
-                          <Award size={12} /> 14 Dealerships Active
-                        </span>
+                        <div className="defect-bar-track" style={{ height: '6px' }}>
+                          <div className="defect-bar-fill fill-red" style={{ width: '42%' }} />
+                        </div>
+                      </div>
+                      <div className="defect-bar-item">
+                        <div className="defect-bar-info" style={{ fontSize: '0.72rem' }}>
+                          <span>🎙️ Pneumatic Tool Noise (SNR &lt; 18 dB)</span>
+                          <strong style={{ color: '#d97706' }}>28% (358 videos)</strong>
+                        </div>
+                        <div className="defect-bar-track" style={{ height: '6px' }}>
+                          <div className="defect-bar-fill fill-amber" style={{ width: '28%' }} />
+                        </div>
+                      </div>
+                      <div className="defect-bar-item">
+                        <div className="defect-bar-info" style={{ fontSize: '0.72rem' }}>
+                          <span>💡 Wheelarch Backlighting (Lum &lt; 85)</span>
+                          <strong style={{ color: '#d97706' }}>18% (230 videos)</strong>
+                        </div>
+                        <div className="defect-bar-track" style={{ height: '6px' }}>
+                          <div className="defect-bar-fill fill-amber" style={{ width: '18%' }} />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right Column: Live Video Inspector with Laser Scanner & Audio Spectrum */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                  {/* Player Container */}
+                  <div className="portal-player-mockup">
+                    <div className="player-screen-area" style={{ height: '200px' }}>
+                      {/* Sweeping Laser Scan Line */}
+                      <div className="laser-scan-beam" />
+                      <div style={{ position: 'relative', width: '92%', height: '88%', background: '#131b2e', borderRadius: '8px', border: '1px solid #1e293b', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Car size={70} color="#334155" style={{ opacity: 0.6 }} />
+                        <div className="frame-defect-box" style={{ top: '22%', left: '15%' }}>
+                          <AlertTriangle size={12} />
+                          <span>FRAME 01:42 | Handheld Shake (3.4px)</span>
+                        </div>
+                        <div style={{ position: 'absolute', top: '8px', left: '10px', background: 'rgba(15, 23, 42, 0.85)', padding: '0.15rem 0.5rem', borderRadius: '4px', fontSize: '0.65rem', color: '#38bdf8', fontFamily: 'monospace' }}>
+                          CITNOW 1080p60 STREAM • BAY 5
+                        </div>
                       </div>
                     </div>
 
-                    {/* Live Stream List */}
-                    <div className="console-feed-title">
-                      <span>Real-Time Inspection Feed</span>
-                      <span className="feed-counter">Live Queue Active</span>
-                    </div>
-
-                    <div className="console-feed-cards">
-                      <div className="feed-row-item">
-                        <div className="feed-brand-badge bmw">BMW</div>
-                        <div className="feed-info">
-                          <div className="feed-title">BMW 320d: Brake &amp; Disc Walkaround</div>
-                          <div className="feed-meta">Tech: Suresh Kumar • 2m 16s • Hindi → English</div>
+                    {/* Bottom Audio Spectrum Controls */}
+                    <div className="player-controls-bottom" style={{ padding: '0.5rem 0.85rem' }}>
+                      <div className="player-scrub-bar"><div className="player-scrub-fill" style={{ width: '52%' }} /></div>
+                      <div className="player-toolbar">
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <Play size={13} color="#38bdf8" />
+                          <span className="player-time-badge">01:42 / 03:15</span>
                         </div>
-                        <div className="feed-score-badge high">9.4 / 10</div>
-                      </div>
-
-                      <div className="feed-row-item">
-                        <div className="feed-brand-badge audi">AUDI</div>
-                        <div className="feed-info">
-                          <div className="feed-title">Audi Q5: Suspension &amp; Exhaust Check</div>
-                          <div className="feed-meta">Tech: Rajesh V. • Pure Visual • 1080p 60fps</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <span style={{ fontSize: '0.65rem', color: '#94a3b8', fontWeight: 600 }}>ACOUSTIC DSP EQUALIZER:</span>
+                          <div className="eq-spectrum-wrap">
+                            <span className="eq-bar" />
+                            <span className="eq-bar" />
+                            <span className="eq-bar" />
+                            <span className="eq-bar" />
+                            <span className="eq-bar" />
+                            <span className="eq-bar" />
+                            <span className="eq-bar" />
+                            <span className="eq-bar" />
+                            <span className="eq-bar" />
+                            <span className="eq-bar" />
+                          </div>
                         </div>
-                        <div className="feed-score-badge high">9.8 / 10</div>
-                      </div>
-
-                      <div className="feed-row-item">
-                        <div className="feed-brand-badge mb">MB</div>
-                        <div className="feed-info">
-                          <div className="feed-title">Mercedes C200: Tyre Tread Depth</div>
-                          <div className="feed-meta">Tech: David P. • Audio: 9.6/10 • QA Passed</div>
-                        </div>
-                        <div className="feed-score-badge high">9.2 / 10</div>
                       </div>
                     </div>
+                  </div>
 
-                    {/* Console Action Prompt */}
-                    <button className="console-footer-cta" onClick={goToNext}>
-                      View Exact AI Rating Formula <ArrowRight size={14} />
+                  {/* Diagnostic Scores & Multilingual Transcript */}
+                  <div className="inspector-detail-card" style={{ padding: '0.95rem 1.15rem', gap: '0.65rem' }}>
+                    <div className="inspector-score-header">
+                      <div className="inspector-score-pill">
+                        <span className="score-main" style={{ fontSize: '1.6rem' }}>3.3</span>
+                        <span className="score-base">/ 10</span>
+                        <span className="score-flag">Poor Quality Flag</span>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <span style={{ fontSize: '0.68rem', color: '#64748b', fontWeight: 700 }}>AUDIT STATUS</span>
+                        <div style={{ fontSize: '0.78rem', fontWeight: 800, color: '#dc2626' }}>RE-RECORD RECOMMENDED</div>
+                      </div>
+                    </div>
+
+                    {/* Multilingual Card */}
+                    <div className="transcript-card" style={{ padding: '0.55rem 0.75rem' }}>
+                      <div className="transcript-header-row">
+                        <span><Languages size={12} style={{ verticalAlign: 'middle', marginRight: '4px' }} /> OpenAI Whisper + Meta NLLB-200</span>
+                        <span style={{ color: '#2563eb', fontWeight: 800 }}>Tamil → English</span>
+                      </div>
+                      <div className="orig-text" style={{ fontSize: '0.74rem' }}>"வணக்கம் சார், பிரேக் பேட் 3mm தான் இருக்கு, மாத்தணும்..."</div>
+                      <div className="trans-english" style={{ fontSize: '0.76rem', padding: '0.3rem 0.5rem' }}>
+                        <strong>AI English Translation:</strong> "Hello sir, your brake pad thickness is only 3mm remaining and requires immediate replacement."
+                      </div>
+                    </div>
+
+                    <div className="ppt-coach-note" style={{ padding: '0.5rem 0.75rem', fontSize: '0.74rem' }}>
+                      <strong>💡 AI Coaching:</strong> Hold camera steady with two hands for 3s on brake rotor. Pneumatic impact wrench in adjacent bay caused 14.2 dB SNR drop.
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="ppt-slide-footer">
+              <span>QualityLens | Live Dealership Enterprise Portal Suite</span>
+              <span>4</span>
+            </div>
+
+            <div className="slide-next-prompt" onClick={goToNext}>
+              <span>Next: Live Portal: Batch Ingestion &amp; Coaching Leaderboard</span>
+              <ChevronDown size={16} className="bounce-arrow" />
+            </div>
+          </div>
+        </section>
+
+        {/* ============================================================== */}
+        {/* SLIDE 5: LIVE PORTAL — BATCH INGESTION & COACHING LEADERBOARD */}
+        {/* ============================================================== */}
+        <section id="slide-5" className="keynote-slide slide-ppt-card">
+          <div className="slide-content">
+            <div className="ppt-slide-topbar">
+              <div className="ppt-dual-logos">
+                <img src="/focus-engineering-logo.png" alt="Focus Engineering" className="ppt-focus-logo" />
+                <img src="/qualitylens-logo.png" alt="QualityLens" className="ppt-ql-logo" />
+              </div>
+              <h1 className="ppt-slide-title">Live Portal: Batch Ingestion &amp; Coaching Leaderboard</h1>
+            </div>
+
+            <div className="portal-window-wrap">
+              <div className="portal-chrome-header">
+                <div className="portal-chrome-left">
+                  <div className="portal-dots">
+                    <span className="portal-dot red" />
+                    <span className="portal-dot yellow" />
+                    <span className="portal-dot green" />
+                  </div>
+                  <div className="portal-breadcrumb">
+                    <span>QualityLens Operations</span>
+                    <span>/</span>
+                    <span>Bulk Upload &amp; Technician Coaching</span>
+                    <span>/</span>
+                    <strong>Automated Dealership Quality Engine</strong>
+                  </div>
+                </div>
+                <div className="portal-chrome-right">
+                  <div className="portal-dealer-badge">
+                    <Layers size={13} /> 8 Parallel Worker Threads
+                  </div>
+                  <div className="portal-live-status-pill">
+                    <span className="pulse-circle" /> MongoDB Atlas Replicated
+                  </div>
+                </div>
+              </div>
+
+              {/* Body: Left Bulk Ingestion / Right Leaderboard */}
+              <div className="portal-batch-grid">
+                {/* Left: Bulk Excel Upload & Ingestion Engine */}
+                <div className="batch-upload-box">
+                  <div className="portal-box-header">
+                    <span className="portal-box-title"><FileSpreadsheet size={16} className="text-blue" /> CitNOW Bulk Excel (.xlsx) Pipeline</span>
+                    <span className="ppt-cyan-tag" style={{ fontSize: '0.68rem' }}>ZERO API RETRAINING</span>
+                  </div>
+
+                  <div className="dropzone-mockup">
+                    <FileSpreadsheet size={32} color="#2563eb" />
+                    <span className="dropzone-title">CitNOW_Batch_Export_October.xlsx</span>
+                    <span className="dropzone-sub">450 CitNOW video URLs ingested across 6 Dealership Service Bays</span>
+                  </div>
+
+                  <div className="batch-queue-list">
+                    <div className="batch-queue-item">
+                      <div className="batch-file-info">
+                        <CheckCircle size={15} color="#15803d" />
+                        <div>
+                          <div style={{ fontSize: '0.8rem', fontWeight: 800, color: '#0f172a' }}>Batch_Morning_Run.xlsx</div>
+                          <div style={{ fontSize: '0.7rem', color: '#64748b' }}>150 videos audited • Avg score: 8.6/10</div>
+                        </div>
+                      </div>
+                      <span className="batch-status-chip done">100% AUDITED</span>
+                    </div>
+
+                    <div className="batch-queue-item">
+                      <div className="batch-file-info">
+                        <RefreshCw size={15} color="#2563eb" className="animate-spin" />
+                        <div>
+                          <div style={{ fontSize: '0.8rem', fontWeight: 800, color: '#0f172a' }}>Batch_Afternoon_Run.xlsx</div>
+                          <div style={{ fontSize: '0.7rem', color: '#64748b' }}>260 / 300 processed • 8 async threads</div>
+                        </div>
+                      </div>
+                      <span className="batch-status-chip processing">PROCESSING 86%</span>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.35rem' }}>
+                    <button className="ppt-btn-open-demo" style={{ flex: 1, padding: '0.55rem', fontSize: '0.82rem', justifyContent: 'center' }}>
+                      <Download size={14} /> Export OEM Compliance Report (.csv)
                     </button>
                   </div>
                 </div>
 
-                {/* Floating Floating Trust Chip */}
-                <div className="floating-stat-card">
-                  <div className="stat-icon-wrap">
-                    <Shield size={18} />
-                  </div>
-                  <div>
-                    <div className="stat-title">100% Automated QA Coverage</div>
-                    <div className="stat-desc">Audited CitNow Protocol Sequences</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Bottom Next Trigger */}
-            <div className="slide-next-prompt" onClick={goToNext}>
-              <span>Next: Scientific Video Rating Formula</span>
-              <ChevronDown size={16} className="bounce-arrow" />
-            </div>
-          </div>
-        </section>
-
-        {/* ============================================================== */}
-        {/* SLIDE 2: HOW VIDEO RATING WORKS (4-PILLAR FORMULA) */}
-        {/* ============================================================== */}
-        <section id="rating" className="keynote-slide slide-rating">
-          <div className="slide-bg-glow glow-cyan" />
-          <div className="slide-content">
-            <div className="slide-header-box">
-              <div className="slide-pill">
-                <Gauge size={14} />
-                <span>SCIENTIFIC EVALUATION</span>
-              </div>
-              <h2 className="slide-heading">How Video Rating Works</h2>
-              <p className="slide-subheading">
-                Every workshop walkaround video is automatically evaluated against 4 weighted pillars using
-                computer vision, acoustic filtering, and natural language processing.
-              </p>
-            </div>
-
-            {/* Composite Mathematical Formula Banner */}
-            <div className="formula-banner-card">
-              <div className="formula-title">THE QUALITYLENS COMPOSITE SCORING FORMULA</div>
-              <div className="formula-math">
-                <span className="formula-highlight">Overall Score</span> =
-                (<span className="formula-term visuals">0.35 × Visuals</span>) +
-                (<span className="formula-term duration">0.15 × Duration</span>) +
-                (<span className="formula-term audio">0.25 × Audio/Translation</span>) +
-                (<span className="formula-term protocol">0.25 × Protocol</span>)
-              </div>
-              <div className="formula-caption">Normalized on a strict 0.0 to 10.0 scale for OEM brand governance.</div>
-            </div>
-
-            {/* 4 Graphic Pillar Cards Grid */}
-            <div className="four-pillars-grid">
-              {/* Pillar 1 */}
-              <div className="pillar-card border-visuals">
-                <div className="pillar-header">
-                  <div className="pillar-icon-box bg-visuals">
-                    <Camera size={20} />
-                  </div>
-                  <div className="pillar-weight-badge badge-visuals">35% Weight</div>
-                </div>
-                <h3 className="pillar-title">1. Visual Quality &amp; Evidence</h3>
-                <p className="pillar-desc">
-                  Computer vision verifies camera stability, lighting adequacy, 1080p resolution, and clear inspection of brake discs, tyre tread, and underbody components.
-                </p>
-                <div className="pillar-checklist">
-                  <div className="check-row"><Check size={14} className="text-emerald" /> Motion Blur &amp; Shake Detection</div>
-                  <div className="check-row"><Check size={14} className="text-emerald" /> Underbody Dark Footage Detection</div>
-                  <div className="check-row"><Check size={14} className="text-emerald" /> Critical Component Frame Verification</div>
-                </div>
-              </div>
-
-              {/* Pillar 2 */}
-              <div className="pillar-card border-duration">
-                <div className="pillar-header">
-                  <div className="pillar-icon-box bg-duration">
-                    <Clock size={20} />
-                  </div>
-                  <div className="pillar-weight-badge badge-duration">15% Weight</div>
-                </div>
-                <h3 className="pillar-title">2. Pacing &amp; Video Duration</h3>
-                <p className="pillar-desc">
-                  Evaluates total walkaround length against OEM optimums (target: 90s to 180s). Penalizes rushed under-60s sweeps and excessively long videos that cause customer drop-off.
-                </p>
-                <div className="pillar-checklist">
-                  <div className="check-row"><Check size={14} className="text-emerald" /> Optimal 90s–180s Benchmark</div>
-                  <div className="check-row"><Check size={14} className="text-emerald" /> Rushed Video Red Flag Alert</div>
-                  <div className="check-row"><Check size={14} className="text-emerald" /> Pacing Consistency Scoring</div>
-                </div>
-              </div>
-
-              {/* Pillar 3 */}
-              <div className="pillar-card border-audio">
-                <div className="pillar-header">
-                  <div className="pillar-icon-box bg-audio">
-                    <Languages size={20} />
-                  </div>
-                  <div className="pillar-weight-badge badge-audio">25% Weight</div>
-                </div>
-                <h3 className="pillar-title">3. Audio &amp; Vernacular Translation</h3>
-                <p className="pillar-desc">
-                  Acoustic filtering separates workshop pneumatic noise from technician voice. Zero-shot Whisper AI translates vernacular speech (Hindi, Tamil, Gujarati) into clean English.
-                </p>
-                <div className="pillar-checklist">
-                  <div className="check-row"><Check size={14} className="text-emerald" /> Background Noise &amp; Clatter Filter</div>
-                  <div className="check-row"><Check size={14} className="text-emerald" /> Zero-Shot Regional Translation</div>
-                  <div className="check-row"><Check size={14} className="text-emerald" /> Professional Tone &amp; Clarity Audit</div>
-                </div>
-              </div>
-
-              {/* Pillar 4 */}
-              <div className="pillar-card border-protocol">
-                <div className="pillar-header">
-                  <div className="pillar-icon-box bg-protocol">
-                    <FileCheck size={20} />
-                  </div>
-                  <div className="pillar-weight-badge badge-protocol">25% Weight</div>
-                </div>
-                <h3 className="pillar-title">4. Manufacturer QA Compliance</h3>
-                <p className="pillar-desc">
-                  Scores adherence to OEM brand protocol: Advisor intro, vehicle registration &amp; VIN check, clear safety tyre wear callouts, and structured recommendations.
-                </p>
-                <div className="pillar-checklist">
-                  <div className="check-row"><Check size={14} className="text-emerald" /> Customer Greeting &amp; VIN Match</div>
-                  <div className="check-row"><Check size={14} className="text-emerald" /> Red / Amber / Green Wear Callouts</div>
-                  <div className="check-row"><Check size={14} className="text-emerald" /> Structured Next-Steps Conclusion</div>
-                </div>
-              </div>
-            </div>
-
-            {/* Bottom Next Trigger */}
-            <div className="slide-next-prompt" onClick={goToNext}>
-              <span>Next: Role-Based Workshop Portals</span>
-              <ChevronDown size={16} className="bounce-arrow" />
-            </div>
-          </div>
-        </section>
-
-        {/* ============================================================== */}
-        {/* SLIDE 3: ROLE-BASED PORTALS (HOW IT WORKS FOR EACH ROLE) */}
-        {/* ============================================================== */}
-        <section id="roles" className="keynote-slide slide-roles">
-          <div className="slide-bg-glow glow-purple" />
-          <div className="slide-content">
-            <div className="slide-header-box">
-              <div className="slide-pill">
-                <Users size={14} />
-                <span>ROLE-BASED WORKSPACES</span>
-              </div>
-              <h2 className="slide-heading">Dedicated Portals for Every Stakeholder</h2>
-              <p className="slide-subheading">
-                QualityLens delivers tailored, role-specific experiences from workshop floor technicians up to dealership General Managers and Group Super Admins.
-              </p>
-            </div>
-
-            {/* Role Selector Tabs */}
-            <div className="role-nav-pills">
-              <button
-                className={`role-tab-btn ${activeRole === 'technician' ? 'active' : ''}`}
-                onClick={() => setActiveRole('technician')}
-              >
-                <Wrench size={16} /> Technician / Floor
-              </button>
-              <button
-                className={`role-tab-btn ${activeRole === 'advisor' ? 'active' : ''}`}
-                onClick={() => setActiveRole('advisor')}
-              >
-                <Users size={16} /> Service Advisor
-              </button>
-              <button
-                className={`role-tab-btn ${activeRole === 'dealerAdmin' ? 'active' : ''}`}
-                onClick={() => setActiveRole('dealerAdmin')}
-              >
-                <Shield size={16} /> Dealership GM &amp; QA
-              </button>
-              <button
-                className={`role-tab-btn ${activeRole === 'superAdmin' ? 'active' : ''}`}
-                onClick={() => setActiveRole('superAdmin')}
-              >
-                <Activity size={16} /> Group Super Admin
-              </button>
-            </div>
-
-            {/* Active Role Showcase Card */}
-            <div className="role-display-grid">
-              {/* Left Column: Role Details & Value */}
-              <div className="role-details-panel">
-                <div
-                  className="role-badge-pill"
-                  style={{
-                    background: roleProfiles[activeRole].pillBg,
-                    color: roleProfiles[activeRole].pillColor
-                  }}
-                >
-                  {roleProfiles[activeRole].pill}
-                </div>
-
-                <h3 className="role-main-title">{roleProfiles[activeRole].title}</h3>
-                <p className="role-summary-text">{roleProfiles[activeRole].summary}</p>
-
-                <div className="role-features-list">
-                  {roleProfiles[activeRole].highlights.map((highlight, idx) => (
-                    <div key={idx} className="role-highlight-item">
-                      <CheckCircle2 size={16} className="text-emerald flex-shrink" />
-                      <span>{highlight}</span>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Login Spec Pill */}
-                <div className="role-login-hint">
-                  <Lock size={14} />
-                  <span>Access Mode: <strong>{roleProfiles[activeRole].loginType}</strong></span>
-                </div>
-              </div>
-
-              {/* Right Column: Simulated Live UI Card for that role */}
-              <div className="role-mockup-panel">
-                <div className="mockup-window-frame">
-                  <div className="mockup-header-bar">
-                    <div className="window-dots">
-                      <span className="dot red" />
-                      <span className="dot yellow" />
-                      <span className="dot green" />
-                    </div>
-                    <span className="mockup-title">{roleProfiles[activeRole].mockHeader}</span>
-                    <span className="mockup-status-live">● Live</span>
+                {/* Right: Dealership Technician Coaching Leaderboard */}
+                <div className="leaderboard-box">
+                  <div className="portal-box-header">
+                    <span className="portal-box-title"><Award size={16} className="text-yellow-600" /> Workshop Technician Leaderboard</span>
+                    <span style={{ fontSize: '0.72rem', color: '#64748b' }}>MONTH-TO-DATE</span>
                   </div>
 
-                  <div className="mockup-content">
-                    {/* Simulated KPI Metrics */}
-                    <div className="mockup-metrics-row">
-                      {roleProfiles[activeRole].mockMetrics.map((metric, i) => (
-                        <div key={i} className="mockup-metric-card">
-                          <span className="mockup-metric-label">{metric.label}</span>
-                          <span className="mockup-metric-val">{metric.value}</span>
-                          <span className="mockup-metric-sub">{metric.sub}</span>
+                  <div className="leaderboard-list">
+                    <div className="leader-item">
+                      <div className="leader-rank-info">
+                        <span className="rank-badge top-1">1</span>
+                        <div>
+                          <div className="leader-name">Rajesh K. <span className="ppt-cyan-tag" style={{ fontSize: '0.62rem', padding: '0.1rem 0.35rem' }}>TOP PERFORMER</span></div>
+                          <div className="leader-bay">Bay 2 • 142 videos • 0 defects</div>
                         </div>
+                      </div>
+                      <span className="leader-score high">9.4 / 10</span>
+                    </div>
+
+                    <div className="leader-item">
+                      <div className="leader-rank-info">
+                        <span className="rank-badge top-2">2</span>
+                        <div>
+                          <div className="leader-name">David V.</div>
+                          <div className="leader-bay">Bay 4 • 118 videos • 98% clarity</div>
+                        </div>
+                      </div>
+                      <span className="leader-score high">9.1 / 10</span>
+                    </div>
+
+                    <div className="leader-item">
+                      <div className="leader-rank-info">
+                        <span className="rank-badge">3</span>
+                        <div>
+                          <div className="leader-name">Amit S.</div>
+                          <div className="leader-bay">Bay 1 • 96 videos • Steady camera</div>
+                        </div>
+                      </div>
+                      <span className="leader-score high">8.6 / 10</span>
+                    </div>
+
+                    <div className="leader-item" style={{ background: '#fff5f5', borderColor: '#fecaca' }}>
+                      <div className="leader-rank-info">
+                        <span className="rank-badge flagged">!</span>
+                        <div>
+                          <div className="leader-name" style={{ color: '#991b1b' }}>Suresh M.</div>
+                          <div className="leader-bay" style={{ color: '#b91c1c' }}>Bay 5 • 82 videos • Camera shake flagged</div>
+                        </div>
+                      </div>
+                      <span className="leader-score low">4.1 / 10</span>
+                    </div>
+                  </div>
+
+                  {/* Automated WhatsApp Dispatch Card */}
+                  <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', padding: '0.65rem 0.85rem', fontSize: '0.76rem', color: '#1e40af', display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                    <Smartphone size={20} color="#2563eb" style={{ flexShrink: 0 }} />
+                    <div>
+                      <strong>Automated Coaching Webhook:</strong> WhatsApp micro-lesson automatically dispatched to Suresh M. (Bay 5) with a 15-second video tip on 2-handed camera stability.
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="ppt-slide-footer">
+              <span>QualityLens | Live Dealership Enterprise Portal Suite</span>
+              <span>5</span>
+            </div>
+
+            <div className="slide-next-prompt" onClick={goToNext}>
+              <span>Next: Competitive Advantage &amp; 6-Platform Benchmark</span>
+              <ChevronDown size={16} className="bounce-arrow" />
+            </div>
+          </div>
+        </section>
+
+        {/* ============================================================== */}
+        {/* SLIDE 6: COMPETITIVE ADVANTAGE & 6-PLATFORM BENCHMARK */}
+        {/* ============================================================== */}
+        <section id="slide-6" className="keynote-slide slide-ppt-card">
+          <div className="slide-content">
+            <div className="ppt-slide-topbar">
+              <div className="ppt-dual-logos">
+                <img src="/focus-engineering-logo.png" alt="Focus Engineering" className="ppt-focus-logo" />
+                <img src="/qualitylens-logo.png" alt="QualityLens" className="ppt-ql-logo" />
+              </div>
+              <h1 className="ppt-slide-title">Competitive Advantage &amp; 6-Platform Benchmark</h1>
+            </div>
+
+            {/* Competitor Switcher */}
+            <div className="competitor-nav-tabs" style={{ marginBottom: '0.85rem' }}>
+              <button
+                className={`comp-tab-btn ${activeCompetitor === 'myKaarma' ? 'active' : ''}`}
+                onClick={() => setActiveCompetitor('myKaarma')}
+              >
+                vs. myKaarma (Tech Video Grader)
+              </button>
+              <button
+                className={`comp-tab-btn ${activeCompetitor === 'TwelveLabs' ? 'active' : ''}`}
+                onClick={() => setActiveCompetitor('TwelveLabs')}
+              >
+                vs. TwelveLabs (Marengo / Pegasus)
+              </button>
+              <button
+                className={`comp-tab-btn ${activeCompetitor === 'Kimoby' ? 'active' : ''}`}
+                onClick={() => setActiveCompetitor('Kimoby')}
+              >
+                vs. Kimoby &amp; TruVideo
+              </button>
+            </div>
+
+            {/* Active Competitor Analysis Card: Full View 2-Column Split Layout */}
+            <div className="head-to-head-card" style={{ padding: '1.15rem 1.35rem', gap: '0.85rem' }}>
+              {activeCompetitor === 'myKaarma' && (
+                <>
+                  <div className="h2h-header-banner" style={{ padding: '0.65rem 1rem' }}>
+                    <div>
+                      <span className="h2h-comp-badge">INCUMBENT LIMITATION</span>
+                      <strong style={{ marginLeft: '0.65rem', color: '#0f172a', fontSize: '0.88rem' }}>myKaarma AI Tech Video Grader (ServiceCart™)</strong>
+                    </div>
+                    <span className="h2h-ql-badge">QUALITYLENS ADVANTAGE: 100% CITNOW NATIVE</span>
+                  </div>
+
+                  <div className="h2h-split-grid" style={{ gap: '1rem' }}>
+                    <div className="h2h-competitor-col" style={{ padding: '0.95rem 1.15rem', gap: '0.65rem' }}>
+                      <div className="h2h-col-title" style={{ fontSize: '0.92rem' }}>
+                        <AlertTriangle size={16} /> myKaarma Architectural Bottlenecks
+                      </div>
+                      <div className="h2h-flaws-list" style={{ gap: '0.55rem' }}>
+                        <div className="h2h-flaw-item" style={{ fontSize: '0.78rem' }}>
+                          <span className="flaw-x-icon">✕</span>
+                          <div><strong>Requires App Replacement:</strong> Dealerships must discard CitNOW and force technicians onto myKaarma mobile apps, violating OEM partner mandates.</div>
+                        </div>
+                        <div className="h2h-flaw-item" style={{ fontSize: '0.78rem' }}>
+                          <span className="flaw-x-icon">✕</span>
+                          <div><strong>Black-Box Pass/Fail:</strong> Only provides a coarse binary label. Does not measure physical 2D Laplacian focus or Optical Flow camera shake.</div>
+                        </div>
+                        <div className="h2h-flaw-item" style={{ fontSize: '0.78rem' }}>
+                          <span className="flaw-x-icon">✕</span>
+                          <div><strong>No Indian Language Support:</strong> Strictly English/Spanish; fails when Indian technicians speak Tamil, Telugu, Hindi, or Gujarati.</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="h2h-qualitylens-col" style={{ padding: '0.95rem 1.15rem', gap: '0.65rem' }}>
+                      <div className="h2h-ql-title" style={{ fontSize: '0.92rem' }}>
+                        <Award size={16} /> Why QualityLens Dominates
+                      </div>
+                      <div className="h2h-points-grid" style={{ gap: '0.55rem' }}>
+                        <div className="h2h-point" style={{ fontSize: '0.78rem' }}>
+                          <span className="point-num">1</span>
+                          <div><strong>Zero App Change (100% CitNOW Native):</strong> Automated AI QA layer directly on CitNOW URLs and bulk Excel exports with zero workflow disruption.</div>
+                        </div>
+                        <div className="h2h-point" style={{ fontSize: '0.78rem' }}>
+                          <span className="point-num">2</span>
+                          <div><strong>Deterministic Signal Physics:</strong> 2D Laplacian focus variance, Farnebäck Dense Optical Flow, 8×8 DCT, and Spectral SNR in dB for root-cause diagnosis.</div>
+                        </div>
+                        <div className="h2h-point" style={{ fontSize: '0.78rem' }}>
+                          <span className="point-num">3</span>
+                          <div><strong>14+ Indian Regional Dialects:</strong> Seamless zero-shot transcription and translation via OpenAI Whisper + Meta NLLB-200 into corporate English.</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="h2h-showdown-strip" style={{ padding: '0.65rem 0.95rem' }}>
+                    <div className="showdown-spec-col">
+                      <span className="spec-dim">CitNOW Compatibility</span>
+                      <span className="spec-ql-val"><CheckCircle2 size={12} /> 100% Native (.xlsx)</span>
+                      <span className="spec-comp-val">Requires App Swap</span>
+                    </div>
+                    <div className="showdown-spec-col">
+                      <span className="spec-dim">Camera Shake Physics</span>
+                      <span className="spec-ql-val"><CheckCircle2 size={12} /> Optical Flow Math</span>
+                      <span className="spec-comp-val">None (Coarse Check)</span>
+                    </div>
+                    <div className="showdown-spec-col">
+                      <span className="spec-dim">Indian Regional NLP</span>
+                      <span className="spec-ql-val"><CheckCircle2 size={12} /> 14+ Dialects</span>
+                      <span className="spec-comp-val">English / Spanish Only</span>
+                    </div>
+                    <div className="showdown-spec-col">
+                      <span className="spec-dim">Dealership Setup Time</span>
+                      <span className="spec-ql-val"><CheckCircle2 size={12} /> Instant (No Install)</span>
+                      <span className="spec-comp-val">3–6 Months Retraining</span>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {activeCompetitor === 'TwelveLabs' && (
+                <>
+                  <div className="h2h-header-banner" style={{ padding: '0.65rem 1rem' }}>
+                    <div>
+                      <span className="h2h-comp-badge">HORIZONTAL API</span>
+                      <strong style={{ marginLeft: '0.65rem', color: '#0f172a', fontSize: '0.88rem' }}>TwelveLabs Marengo 3.5 &amp; Pegasus 1.6 Video Foundation Models</strong>
+                    </div>
+                    <span className="h2h-ql-badge">QUALITYLENS ADVANTAGE: TURNKEY AUTOMOTIVE SAAS</span>
+                  </div>
+
+                  <div className="h2h-split-grid" style={{ gap: '1rem' }}>
+                    <div className="h2h-competitor-col" style={{ padding: '0.95rem 1.15rem', gap: '0.65rem' }}>
+                      <div className="h2h-col-title" style={{ fontSize: '0.92rem' }}>
+                        <AlertTriangle size={16} /> TwelveLabs Developer Infrastructure Limits
+                      </div>
+                      <div className="h2h-flaws-list" style={{ gap: '0.55rem' }}>
+                        <div className="h2h-flaw-item" style={{ fontSize: '0.78rem' }}>
+                          <span className="flaw-x-icon">✕</span>
+                          <div><strong>Raw Developer API, No Product:</strong> No dealer dashboards, no CitNOW scraper, no VIN parser, and no technician coaching scorecards.</div>
+                        </div>
+                        <div className="h2h-flaw-item" style={{ fontSize: '0.78rem' }}>
+                          <span className="flaw-x-icon">✕</span>
+                          <div><strong>Vectors Cannot Measure Physics:</strong> 512d semantic vectors smooth over pixel blur, camera shake, and audio SNR.</div>
+                        </div>
+                        <div className="h2h-flaw-item" style={{ fontSize: '0.78rem' }}>
+                          <span className="flaw-x-icon">✕</span>
+                          <div><strong>Prohibitive Per-Minute API Costs:</strong> Indexing tens of thousands of 3-minute walkarounds incurs huge monthly recurring cloud fees.</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="h2h-qualitylens-col" style={{ padding: '0.95rem 1.15rem', gap: '0.65rem' }}>
+                      <div className="h2h-ql-title" style={{ fontSize: '0.92rem' }}>
+                        <Award size={16} /> Why QualityLens Dominates
+                      </div>
+                      <div className="h2h-points-grid" style={{ gap: '0.55rem' }}>
+                        <div className="h2h-point" style={{ fontSize: '0.78rem' }}>
+                          <span className="point-num">1</span>
+                          <div><strong>Turnkey Automotive Vertical SaaS:</strong> Ready on Day 1 for BMW, Audi, and Mercedes dealerships with pre-configured OEM standards.</div>
+                        </div>
+                        <div className="h2h-point" style={{ fontSize: '0.78rem' }}>
+                          <span className="point-num">2</span>
+                          <div><strong>Deterministic Physical Defect Isolation:</strong> Pinpoints exact millisecond of camera shake or loud workshop tool noise.</div>
+                        </div>
+                        <div className="h2h-point" style={{ fontSize: '0.78rem' }}>
+                          <span className="point-num">3</span>
+                          <div><strong>Sub-Second Local EC2 Compute:</strong> High-speed OpenCV and Librosa math computed locally without expensive vector token fees.</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="h2h-showdown-strip" style={{ padding: '0.65rem 0.95rem' }}>
+                    <div className="showdown-spec-col">
+                      <span className="spec-dim">Platform Category</span>
+                      <span className="spec-ql-val"><CheckCircle2 size={12} /> Turnkey Dealership SaaS</span>
+                      <span className="spec-comp-val">Raw Infrastructure API</span>
+                    </div>
+                    <div className="showdown-spec-col">
+                      <span className="spec-dim">Blur &amp; Shake Math</span>
+                      <span className="spec-ql-val"><CheckCircle2 size={12} /> Exact Signal Physics</span>
+                      <span className="spec-comp-val">None (Semantic Vectors)</span>
+                    </div>
+                    <div className="showdown-spec-col">
+                      <span className="spec-dim">CitNOW Link Scraper</span>
+                      <span className="spec-ql-val"><CheckCircle2 size={12} /> Built-in Async Scraper</span>
+                      <span className="spec-comp-val">Must Code from Scratch</span>
+                    </div>
+                    <div className="showdown-spec-col">
+                      <span className="spec-dim">Operating Cost</span>
+                      <span className="spec-ql-val"><CheckCircle2 size={12} /> Lightweight EC2 Compute</span>
+                      <span className="spec-comp-val">High Per-Minute API Fee</span>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {activeCompetitor === 'Kimoby' && (
+                <>
+                  <div className="h2h-header-banner" style={{ padding: '0.65rem 1rem' }}>
+                    <div>
+                      <span className="h2h-comp-badge">PROPRIETARY CAPTURE APP</span>
+                      <strong style={{ marginLeft: '0.65rem', color: '#0f172a', fontSize: '0.88rem' }}>Kimoby &amp; TruVideo Dealership Video Systems</strong>
+                    </div>
+                    <span className="h2h-ql-badge">QUALITYLENS ADVANTAGE: 0 LOCK-IN + AUDIT PHILOSOPHY</span>
+                  </div>
+
+                  <div className="h2h-split-grid" style={{ gap: '1rem' }}>
+                    <div className="h2h-competitor-col" style={{ padding: '0.95rem 1.15rem', gap: '0.65rem' }}>
+                      <div className="h2h-col-title" style={{ fontSize: '0.92rem' }}>
+                        <AlertTriangle size={16} /> Kimoby &amp; TruVideo Vendor Lock-In
+                      </div>
+                      <div className="h2h-flaws-list" style={{ gap: '0.55rem' }}>
+                        <div className="h2h-flaw-item" style={{ fontSize: '0.78rem' }}>
+                          <span className="flaw-x-icon">✕</span>
+                          <div><strong>Aggressive Rip-and-Replace:</strong> Demands terminating existing CitNOW agreements and replacing dealership hardware with proprietary apps.</div>
+                        </div>
+                        <div className="h2h-flaw-item" style={{ fontSize: '0.78rem' }}>
+                          <span className="flaw-x-icon">✕</span>
+                          <div><strong>Masks Noise Instead of Auditing:</strong> TruVideo uses destructive generative noise gates that garble technician voices during impact tool firing.</div>
+                        </div>
+                        <div className="h2h-flaw-item" style={{ fontSize: '0.78rem' }}>
+                          <span className="flaw-x-icon">✕</span>
+                          <div><strong>Zero Indian Dialect Intelligence:</strong> Built for North American/European DMS without localized Indian dealership awareness.</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="h2h-qualitylens-col" style={{ padding: '0.95rem 1.15rem', gap: '0.65rem' }}>
+                      <div className="h2h-ql-title" style={{ fontSize: '0.92rem' }}>
+                        <Award size={16} /> Why QualityLens Dominates
+                      </div>
+                      <div className="h2h-points-grid" style={{ gap: '0.55rem' }}>
+                        <div className="h2h-point" style={{ fontSize: '0.78rem' }}>
+                          <span className="point-num">1</span>
+                          <div><strong>Zero Vendor Friction:</strong> Preserves existing CitNOW contracts, OEM accreditation, and technician habits completely intact.</div>
+                        </div>
+                        <div className="h2h-point" style={{ fontSize: '0.78rem' }}>
+                          <span className="point-num">2</span>
+                          <div><strong>Diagnostic Acoustic Auditing:</strong> Quantifies Harmonic-to-Noise Ratio (HNR) and RMS dBFS so managers coach proper microphone discipline.</div>
+                        </div>
+                        <div className="h2h-point" style={{ fontSize: '0.78rem' }}>
+                          <span className="point-num">3</span>
+                          <div><strong>Multi-Tenant Dual-Cluster MongoDB:</strong> Enterprise multi-brand portal with custom scoring thresholds configured for each dealership network.</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="h2h-showdown-strip" style={{ padding: '0.65rem 0.95rem' }}>
+                    <div className="showdown-spec-col">
+                      <span className="spec-dim">Vendor Lock-In</span>
+                      <span className="spec-ql-val"><CheckCircle2 size={12} /> Zero (CitNOW Partner)</span>
+                      <span className="spec-comp-val">Forced App Lock-in</span>
+                    </div>
+                    <div className="showdown-spec-col">
+                      <span className="spec-dim">Audio Philosophy</span>
+                      <span className="spec-ql-val"><CheckCircle2 size={12} /> Scientific Signal Audit</span>
+                      <span className="spec-comp-val">Destructive Masking</span>
+                    </div>
+                    <div className="showdown-spec-col">
+                      <span className="spec-dim">Automated Coaching</span>
+                      <span className="spec-ql-val"><CheckCircle2 size={12} /> WhatsApp Micro-Lessons</span>
+                      <span className="spec-comp-val">Generic DMS SMS</span>
+                    </div>
+                    <div className="showdown-spec-col">
+                      <span className="spec-dim">Database Architecture</span>
+                      <span className="spec-ql-val"><CheckCircle2 size={12} /> Dual-Cluster HA Atlas</span>
+                      <span className="spec-comp-val">Single-Region Silos</span>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Quick 6-Platform Master Benchmark Matrix */}
+            <div className="matrix-table-wrap" style={{ marginTop: '0.85rem' }}>
+              <table className="matrix-table">
+                <thead>
+                  <tr>
+                    <th>Capability</th>
+                    <th className="highlight-col">QualityLens (Focus Eng.)</th>
+                    <th>myKaarma</th>
+                    <th>TwelveLabs</th>
+                    <th>Kimoby</th>
+                    <th>TruVideo</th>
+                    <th>CitNOW Workshop</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td className="dim-title">Platform Category</td>
+                    <td className="highlight-cell">CitNOW AI QA Layer</td>
+                    <td>Service Lane Suite</td>
+                    <td>Raw Foundation API</td>
+                    <td>DMS Messaging App</td>
+                    <td>Video App + GenAI</td>
+                    <td>OEM Video Capture</td>
+                  </tr>
+                  <tr>
+                    <td className="dim-title">CitNOW Integration</td>
+                    <td className="highlight-cell">Native (URLs &amp; Bulk .xlsx)</td>
+                    <td>Requires App Swap</td>
+                    <td>Must Code Custom</td>
+                    <td>Requires Kimoby App</td>
+                    <td>Requires TruVideo App</td>
+                    <td>Native App Capture</td>
+                  </tr>
+                  <tr>
+                    <td className="dim-title">Visual Signal Physics</td>
+                    <td className="highlight-cell">Laplacian, Optical Flow, DCT</td>
+                    <td>Part Framing Check</td>
+                    <td>None (Semantic Vectors)</td>
+                    <td>LLM Visual Check</td>
+                    <td>Stream Checks</td>
+                    <td>Manual Video Review</td>
+                  </tr>
+                  <tr>
+                    <td className="dim-title">Indian Regional NLP</td>
+                    <td className="highlight-cell">14+ Languages (Whisper + NLLB)</td>
+                    <td>English / Spanish Only</td>
+                    <td>Moderate (36 langs)</td>
+                    <td>North America Only</td>
+                    <td>Moderate (50+ langs)</td>
+                    <td>None</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div className="ppt-slide-footer">
+              <span>QualityLens | Strategic Advantage &amp; Competitive Intelligence Report v3.0</span>
+              <span>6</span>
+            </div>
+
+            <div className="slide-next-prompt" onClick={goToNext}>
+              <span>Next: AI Architecture, Formula &amp; Live Simulator</span>
+              <ChevronDown size={16} className="bounce-arrow" />
+            </div>
+          </div>
+        </section>
+
+        {/* ============================================================== */}
+        {/* SLIDE 7: AI ARCHITECTURE, FORMULA & LIVE SIMULATOR */}
+        {/* ============================================================== */}
+        <section id="slide-7" className="keynote-slide slide-ppt-card">
+          <div className="slide-content">
+            <div className="ppt-slide-topbar">
+              <div className="ppt-dual-logos">
+                <img src="/focus-engineering-logo.png" alt="Focus Engineering" className="ppt-focus-logo" />
+                <img src="/qualitylens-logo.png" alt="QualityLens" className="ppt-ql-logo" />
+              </div>
+              <h1 className="ppt-slide-title">AI Architecture, Formula &amp; Live Simulator</h1>
+            </div>
+
+            <div className="sim-roadmap-grid">
+              {/* Left Column: Stack & Formulas */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <div className="tech-stack-card" style={{ padding: '1.25rem 1.35rem' }}>
+                  <h3 className="tech-card-title" style={{ fontSize: '1.05rem', marginBottom: '0.65rem' }}>Multi-Modal Processing Stack</h3>
+                  <div className="stack-layer-item">
+                    <div className="stack-layer-name">Ingestion &amp; API:</div>
+                    <div className="stack-layer-detail">FastAPI, Uvicorn, Async CitNOW link scraper &amp; chunked MP4 download</div>
+                  </div>
+                  <div className="stack-layer-item">
+                    <div className="stack-layer-name">Computer Vision (55%):</div>
+                    <div className="stack-layer-detail">OpenCV 4.x, FFmpeg, NumPy (Sharpness 30%, Stability 30%, DCT 20%, Lighting 20%)</div>
+                  </div>
+                  <div className="stack-layer-item">
+                    <div className="stack-layer-name">Acoustic DSP (45%):</div>
+                    <div className="stack-layer-detail">Librosa, PyDub, SciPy (Speech Clarity 40%, Spectral SNR dB 35%, RMS Volume 25%)</div>
+                  </div>
+                  <div className="stack-layer-item">
+                    <div className="stack-layer-name">Speech &amp; NLP Pipeline:</div>
+                    <div className="stack-layer-detail">OpenAI Whisper ASR, Meta NLLB-200 (14+ languages), Facebook BART-large-CNN</div>
+                  </div>
+                </div>
+
+                <div className="scoring-formula-card" style={{ padding: '1.15rem 1.35rem' }}>
+                  <h3 className="tech-card-title" style={{ fontSize: '1rem', marginBottom: '0.5rem' }}>Mathematical Scoring Formula (0.0 to 10.0)</h3>
+                  <div className="formula-box" style={{ padding: '0.65rem 0.85rem', gap: '0.3rem' }}>
+                    <div className="math-line" style={{ fontSize: '0.74rem' }}>
+                      <strong>Video Quality</strong> = 0.30(Sharpness) + 0.30(Stability) + 0.20(Resolution) + 0.20(Lighting) - P_defects
+                    </div>
+                    <div className="math-line" style={{ fontSize: '0.74rem' }}>
+                      <strong>Audio Quality</strong> = 0.40(Clarity) + 0.35(SNR_dB) + 0.25(RMS_Volume) - P_defects
+                    </div>
+                    <div className="math-line highlight" style={{ fontSize: '0.78rem' }}>
+                      <strong>Overall Quality Score</strong> = 0.55 × VideoQuality + 0.45 × AudioQuality - P_critical
+                    </div>
+                  </div>
+
+                  <div className="tier-pills-row" style={{ marginTop: '0.65rem' }}>
+                    <div className="tier-badge-pill excellent" style={{ padding: '0.35rem 0.65rem' }}>
+                      <span style={{ fontSize: '0.76rem' }}>⭐ Excellent (8.0–10.0)</span>
+                    </div>
+                    <div className="tier-badge-pill good" style={{ padding: '0.35rem 0.65rem' }}>
+                      <span style={{ fontSize: '0.76rem' }}>✔ Good (6.0–7.9)</span>
+                    </div>
+                    <div className="tier-badge-pill fair" style={{ padding: '0.35rem 0.65rem' }}>
+                      <span style={{ fontSize: '0.76rem' }}>⚠️ Fair (4.0–5.9)</span>
+                    </div>
+                    <div className="tier-badge-pill poor" style={{ padding: '0.35rem 0.65rem' }}>
+                      <span style={{ fontSize: '0.76rem' }}>❌ Poor (&lt;4.0)</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Column: Live AI Simulator & 2026 Roadmap */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <div className="sim-live-box" style={{ padding: '1.25rem 1.35rem' }}>
+                  <div className="sim-live-header" style={{ marginBottom: '0.85rem' }}>
+                    <span className="ppt-cyan-tag">LIVE CITNOW AI TESTBENCH</span>
+                    <div className="sim-presets-inline">
+                      {samplePresets.map((p) => (
+                        <button
+                          key={p.id}
+                          className={`preset-pill ${selectedPreset.id === p.id ? 'active' : ''}`}
+                          onClick={() => handleSelectPreset(p)}
+                        >
+                          {p.label.split(' ')[1]}
+                        </button>
                       ))}
                     </div>
+                  </div>
 
-                    {/* Simulated Activity Stream */}
-                    <div className="mockup-card-body">
-                      <div className="mockup-card-title">{roleProfiles[activeRole].mockCardTitle}</div>
-                      <div className="mockup-notes-list">
-                        {roleProfiles[activeRole].mockCardNotes.map((note, idx) => (
-                          <div key={idx} className="mockup-note-row">
-                            {note}
-                          </div>
-                        ))}
+                  <div className="sim-live-body" style={{ gap: '0.75rem' }}>
+                    <div className="sim-score-strip-clean">
+                      <div className="clean-score-box">
+                        <span className="cs-label">Overall Score</span>
+                        <span className="cs-val text-green">{simResults.overallScore}</span>
+                      </div>
+                      <div className="clean-score-box">
+                        <span className="cs-label">Video Visuals</span>
+                        <span className="cs-val text-blue">{simResults.videoScore}</span>
+                      </div>
+                      <div className="clean-score-box">
+                        <span className="cs-label">Audio Clarity</span>
+                        <span className="cs-val text-cyan">{simResults.audioScore}</span>
                       </div>
                     </div>
 
-                    {/* Mockup Action Button */}
-                    <button className="mockup-action-btn" onClick={() => navigate('/login')}>
-                      Enter {roleProfiles[activeRole].title} Portal <ArrowRight size={14} />
+                    <div className="sim-trans-box">
+                      <div className="trans-header">
+                        <Languages size={13} /> Zero-Shot Regional Translation: <strong>{simResults.lang}</strong>
+                      </div>
+                      <div className="trans-body">"{simResults.translation}"</div>
+                    </div>
+
+                    <button className="btn-sim-test-now" onClick={handleRunAnalysis} disabled={isAnalyzing}>
+                      {isAnalyzing ? `Analyzing Frames (${simProgress}%)...` : '⚡ Re-Run QualityLens Engine'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* 2026 Strategic Roadmap & CTAs */}
+                <div className="roadmap-box" style={{ padding: '1.15rem 1.35rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                    <h3 className="roadmap-title" style={{ margin: 0, fontSize: '0.98rem' }}>2026 Strategic Advantage Roadmap</h3>
+                    <span className="ppt-cyan-tag" style={{ fontSize: '0.65rem' }}>BEATING GLOBAL RIVALS</span>
+                  </div>
+
+                  <div className="roadmap-items-list" style={{ gap: '0.55rem' }}>
+                    <div className="roadmap-item" style={{ gap: '0.65rem' }}>
+                      <div className="roadmap-badge" style={{ width: '20px', height: '20px', fontSize: '0.7rem' }}>1</div>
+                      <div style={{ fontSize: '0.78rem' }}>
+                        <strong>Visual-Verbal Alignment (Beating Kimoby):</strong> Cross-checks Whisper transcript with vision keyframes to verify camera points at spoken parts.
+                      </div>
+                    </div>
+                    <div className="roadmap-item" style={{ gap: '0.65rem' }}>
+                      <div className="roadmap-badge" style={{ width: '20px', height: '20px', fontSize: '0.7rem' }}>2</div>
+                      <div style={{ fontSize: '0.78rem' }}>
+                        <strong>Pre-Send Quality Webhook (Beating myKaarma):</strong> Dispatches instant WhatsApp alert if Score &lt; 4.0 for technician re-shoot before car leaves bay.
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="roadmap-cta-row" style={{ marginTop: '0.85rem' }}>
+                    <button className="btn-launch-primary" onClick={() => navigate('/login')}>
+                      Launch QualityLens Portal <ArrowRight size={14} />
+                    </button>
+                    <button className="btn-download-deck" onClick={handleDownloadPpt}>
+                      <Download size={14} /> Download Full Deck (.pptx)
                     </button>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Bottom Next Trigger */}
-            <div className="slide-next-prompt" onClick={goToNext}>
-              <span>Next: Live Interactive Video QA Simulator</span>
-              <ChevronDown size={16} className="bounce-arrow" />
-            </div>
-          </div>
-        </section>
-
-        {/* ============================================================== */}
-        {/* SLIDE 4: LIVE INTERACTIVE VIDEO QA SIMULATOR */}
-        {/* ============================================================== */}
-        <section id="demo" className="keynote-slide slide-demo">
-          <div className="slide-bg-glow glow-blue" />
-          <div className="slide-content">
-            <div className="slide-header-box">
-              <div className="slide-pill">
-                <Sparkles size={14} />
-                <span>INTERACTIVE TESTBENCH</span>
-              </div>
-              <h2 className="slide-heading">Experience Live AI Video QA</h2>
-              <p className="slide-subheading">
-                Test how QualityLens analyzes sample CitNow workshop walkarounds with vernacular speech translation, video quality scoring, and compliance checking.
-              </p>
+            <div className="ppt-slide-footer">
+              <span>QualityLens | Strategic Advantage &amp; Competitive Intelligence Report v3.0</span>
+              <span>7</span>
             </div>
 
-            {/* Vehicle Preset Selector */}
-            <div className="preset-selector-row">
-              {samplePresets.map((preset) => (
-                <button
-                  key={preset.id}
-                  className={`preset-btn ${selectedPreset.id === preset.id ? 'active' : ''}`}
-                  onClick={() => handleSelectPreset(preset)}
-                >
-                  {preset.label}
-                </button>
-              ))}
-            </div>
-
-            {/* Interactive Simulator Card */}
-            <div className="simulator-grid-card">
-              {/* Left Column: Simulated Video Player & Audio Wave */}
-              <div className="sim-player-col">
-                <div className="sim-player-window">
-                  <div className="sim-player-header">
-                    <span className="player-brand-tag">{selectedPreset.label}</span>
-                    <span className="player-res-tag">1080p 60fps</span>
-                  </div>
-
-                  {/* Player Preview Canvas */}
-                  <div className="sim-video-canvas">
-                    <div className="sim-center-play">
-                      <Play size={36} fill="#ffffff" />
-                    </div>
-                    <div className="sim-citnow-watermark">
-                      <img src="/citnow-logo.png" alt="CitNow" />
-                    </div>
-                    {/* Simulated Waveform Bar */}
-                    <div className="audio-wave-anim">
-                      <span className="wave-bar bar-1"></span>
-                      <span className="wave-bar bar-2"></span>
-                      <span className="wave-bar bar-3"></span>
-                      <span className="wave-bar bar-4"></span>
-                      <span className="wave-bar bar-5"></span>
-                      <span className="wave-bar bar-6"></span>
-                      <span className="wave-bar bar-7"></span>
-                    </div>
-                  </div>
-
-                  {/* Player Meta Info */}
-                  <div className="sim-player-meta">
-                    <div className="meta-item">
-                      <Clock size={14} />
-                      <span>Duration: {selectedPreset.duration}</span>
-                    </div>
-                    <div className="meta-item">
-                      <Languages size={14} />
-                      <span>Detected: {selectedPreset.lang}</span>
-                    </div>
-                  </div>
-
-                  {/* Run Analysis Trigger Button */}
-                  <button
-                    className="btn-run-sim"
-                    onClick={handleRunAnalysis}
-                    disabled={isAnalyzing}
-                  >
-                    {isAnalyzing ? (
-                      <>
-                        <RefreshCw size={16} className="animate-spin" /> Processing AI Video &amp; Audio ({simProgress}%)...
-                      </>
-                    ) : (
-                      <>
-                        <Zap size={16} /> Re-Analyze This Walkaround
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-
-              {/* Right Column: AI Live Results & Translation */}
-              <div className="sim-results-col">
-                {/* Top Scores Strip */}
-                <div className="sim-scores-strip">
-                  <div className="sim-score-card">
-                    <span className="sim-score-title">Overall QA Score</span>
-                    <span className="sim-score-val emerald">{simResults.overallScore}</span>
-                    <span className="sim-score-status">PASS (Target: 8.5)</span>
-                  </div>
-                  <div className="sim-score-card">
-                    <span className="sim-score-title">Visual Evidence</span>
-                    <span className="sim-score-val cyan">{simResults.videoScore}</span>
-                    <span className="sim-score-status">High Clarity</span>
-                  </div>
-                  <div className="sim-score-card">
-                    <span className="sim-score-title">Acoustic Clarity</span>
-                    <span className="sim-score-val blue">{simResults.audioScore}</span>
-                    <span className="sim-score-status">Clean Voice</span>
-                  </div>
-                </div>
-
-                {/* Translation & Transcript Box */}
-                <div className="sim-translation-box">
-                  <div className="box-tab-header">
-                    <span className="box-title">
-                      <Languages size={14} /> Zero-Shot Vernacular Speech Translation
-                    </span>
-                    <span className="lang-tag">{simResults.lang}</span>
-                  </div>
-
-                  <div className="transcription-pane">
-                    <div className="transcript-label">Technician Spoken Audio:</div>
-                    <div className="transcript-content">"{simResults.transcript}"</div>
-                  </div>
-
-                  <div className="translation-pane">
-                    <div className="transcript-label">Instant English Translation:</div>
-                    <div className="translation-content">"{simResults.translation}"</div>
-                  </div>
-                </div>
-
-                {/* Protocol Checklist */}
-                <div className="sim-protocol-box">
-                  <div className="protocol-title">
-                    <FileCheck size={14} /> 5-Point Manufacturer Protocol Compliance
-                  </div>
-                  <div className="protocol-checklist-grid">
-                    {simResults.qaProtocol.map((item, index) => (
-                      <div key={index} className="protocol-item-row">
-                        <CheckCircle2 size={15} className="text-emerald" />
-                        <span>{item.name}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Bottom Next Trigger */}
-            <div className="slide-next-prompt" onClick={goToNext}>
-              <span>Next: Enterprise AI Core Architecture</span>
-              <ChevronDown size={16} className="bounce-arrow" />
-            </div>
-          </div>
-        </section>
-
-        {/* ============================================================== */}
-        {/* SLIDE 5: ENTERPRISE AI CORE ARCHITECTURE */}
-        {/* ============================================================== */}
-        <section id="ai" className="keynote-slide slide-ai">
-          <div className="slide-bg-glow glow-cyan" />
-          <div className="slide-content">
-            <div className="slide-header-box">
-              <div className="slide-pill">
-                <Cpu size={14} />
-                <span>DEEP LEARNING PIPELINE</span>
-              </div>
-              <h2 className="slide-heading">Enterprise AI Core Architecture</h2>
-              <p className="slide-subheading">
-                Scalable, multi-tenant computer vision and acoustic speech processing pipeline engineered for high-throughput automotive dealership networks.
-              </p>
-            </div>
-
-            {/* 5-Step Connected Flowchart */}
-            <div className="pipeline-flow-wrapper">
-              <div className="pipeline-steps-grid">
-                {/* Step 1 */}
-                <div className="pipeline-step-card">
-                  <div className="step-number-badge">01</div>
-                  <div className="step-icon-box">
-                    <Video size={22} />
-                  </div>
-                  <h4 className="step-title">CitNow Webhook Ingestion</h4>
-                  <p className="step-desc">
-                    Auto-receives technician walkaround video URLs via secure webhooks without modifying technician habits.
-                  </p>
-                </div>
-
-                {/* Step 2 */}
-                <div className="pipeline-step-card">
-                  <div className="step-number-badge">02</div>
-                  <div className="step-icon-box">
-                    <Languages size={22} />
-                  </div>
-                  <h4 className="step-title">Whisper Speech AI</h4>
-                  <p className="step-desc">
-                    Deep acoustic filtering strips workshop bay clatter and translates vernacular Hindi, Tamil, and Gujarati into English.
-                  </p>
-                </div>
-
-                {/* Step 3 */}
-                <div className="pipeline-step-card">
-                  <div className="step-number-badge">03</div>
-                  <div className="step-icon-box">
-                    <Camera size={22} />
-                  </div>
-                  <h4 className="step-title">Computer Vision QA</h4>
-                  <p className="step-desc">
-                    Analyzes frame clarity, optical flow motion blur, brake caliper exposure, and dark underbody illumination.
-                  </p>
-                </div>
-
-                {/* Step 4 */}
-                <div className="pipeline-step-card">
-                  <div className="step-number-badge">04</div>
-                  <div className="step-icon-box">
-                    <Shield size={22} />
-                  </div>
-                  <h4 className="step-title">Protocol Engine</h4>
-                  <p className="step-desc">
-                    Checks advisor greeting, VIN match, Red/Amber/Green tyre wear callouts, and safety component verification.
-                  </p>
-                </div>
-
-                {/* Step 5 */}
-                <div className="pipeline-step-card">
-                  <div className="step-number-badge">05</div>
-                  <div className="step-icon-box">
-                    <BarChart3 size={22} />
-                  </div>
-                  <h4 className="step-title">Executive Delivery</h4>
-                  <p className="step-desc">
-                    Real-time scorecards, WhatsApp customer summaries, and dealership group executive analytics dashboards.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Architecture Highlights Strip */}
-            <div className="architecture-specs-strip">
-              <div className="spec-card">
-                <span className="spec-val">&lt; 60s</span>
-                <span className="spec-label">P99 Video Analysis Latency</span>
-              </div>
-              <div className="spec-card">
-                <span className="spec-val">100%</span>
-                <span className="spec-label">Automated Video QA Coverage</span>
-              </div>
-              <div className="spec-card">
-                <span className="spec-val">Zero-Shot</span>
-                <span className="spec-label">Regional Dialect Translation</span>
-              </div>
-              <div className="spec-card">
-                <span className="spec-val">99.9%</span>
-                <span className="spec-label">Enterprise Cloud Availability</span>
-              </div>
-            </div>
-
-            {/* Bottom Next Trigger */}
-            <div className="slide-next-prompt" onClick={goToNext}>
-              <span>Next: Dealership ROI &amp; Financial Impact Model</span>
-              <ChevronDown size={16} className="bounce-arrow" />
-            </div>
-          </div>
-        </section>
-
-        {/* ============================================================== */}
-        {/* SLIDE 6: DEALERSHIP ROI & FINANCIAL MODEL */}
-        {/* ============================================================== */}
-        <section id="roi" className="keynote-slide slide-roi">
-          <div className="slide-bg-glow glow-emerald" />
-          <div className="slide-content">
-            <div className="slide-header-box">
-              <div className="slide-pill">
-                <TrendingUp size={14} />
-                <span>BUSINESS IMPACT</span>
-              </div>
-              <h2 className="slide-heading">Dealership ROI &amp; Revenue Recovered</h2>
-              <p className="slide-subheading">
-                Calculate the measurable financial return of 100% video inspection coverage and vernacular speech translation for your dealership.
-              </p>
-            </div>
-
-            {/* Interactive Calculator Panel */}
-            <div className="roi-calculator-grid">
-              {/* Left Column: Sliders */}
-              <div className="roi-inputs-col">
-                <h3 className="inputs-heading">Interactive Dealership Inputs</h3>
-
-                {/* Slider 1: Monthly Walkaround Videos */}
-                <div className="slider-group">
-                  <div className="slider-label-row">
-                    <span className="slider-label">Monthly Walkaround Videos:</span>
-                    <span className="slider-val-badge">{videoVolume.toLocaleString()} Videos</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="100"
-                    max="5000"
-                    step="50"
-                    value={videoVolume}
-                    onChange={(e) => setVideoVolume(Number(e.target.value))}
-                    className="range-slider"
-                  />
-                  <div className="slider-ticks">
-                    <span>100</span>
-                    <span>1,500</span>
-                    <span>3,000</span>
-                    <span>5,000</span>
-                  </div>
-                </div>
-
-                {/* Slider 2: Average RO Value */}
-                <div className="slider-group">
-                  <div className="slider-label-row">
-                    <span className="slider-label">Average Repair Order (RO) Value:</span>
-                    <span className="slider-val-badge">£{avgRoValue} / RO</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="150"
-                    max="1500"
-                    step="25"
-                    value={avgRoValue}
-                    onChange={(e) => setAvgRoValue(Number(e.target.value))}
-                    className="range-slider"
-                  />
-                  <div className="slider-ticks">
-                    <span>£150</span>
-                    <span>£500</span>
-                    <span>£1,000</span>
-                    <span>£1,500</span>
-                  </div>
-                </div>
-
-                {/* Re-calculate Button with Confetti */}
-                <button
-                  className="btn-roi-confetti"
-                  onClick={() => confetti({ particleCount: 70, spread: 80, origin: { y: 0.7 } })}
-                >
-                  <Sparkles size={16} /> Recalculate Dealership ROI 🎉
-                </button>
-              </div>
-
-              {/* Right Column: Output KPI Cards */}
-              <div className="roi-outputs-col">
-                <div className="roi-result-card featured">
-                  <span className="result-card-subtitle">Estimated Annual Revenue Recovered</span>
-                  <div className="result-card-bigval">£{roiStats.annualRevenue.toLocaleString()}</div>
-                  <span className="result-card-note">
-                    From +18.4% higher customer video approval rates on recommended brake &amp; tyre work.
-                  </span>
-                </div>
-
-                <div className="roi-sub-results-row">
-                  <div className="roi-sub-card">
-                    <span className="sub-card-label">Extra Repair Approvals</span>
-                    <span className="sub-card-val">+{roiStats.additionalApprovals} / mo</span>
-                    <span className="sub-card-sub">Verified customer conversions</span>
-                  </div>
-                  <div className="roi-sub-card">
-                    <span className="sub-card-label">Workshop Hours Saved</span>
-                    <span className="sub-card-val">{roiStats.hoursSaved} hrs / mo</span>
-                    <span className="sub-card-sub">Zero manual spot-checks</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Bottom Next Trigger */}
-            <div className="slide-next-prompt" onClick={goToNext}>
-              <span>Next: Enterprise FAQ &amp; Launch Console</span>
-              <ChevronDown size={16} className="bounce-arrow" />
-            </div>
-          </div>
-        </section>
-
-        {/* ============================================================== */}
-        {/* SLIDE 7: ENTERPRISE FAQ & LAUNCH CONSOLE */}
-        {/* ============================================================== */}
-        <section id="faq" className="keynote-slide slide-faq">
-          <div className="slide-bg-glow glow-blue" />
-          <div className="slide-content">
-            <div className="slide-header-box">
-              <div className="slide-pill">
-                <HelpCircle size={14} />
-                <span>ENTERPRISE ONBOARDING</span>
-              </div>
-              <h2 className="slide-heading">Frequently Asked Questions &amp; Launch</h2>
-              <p className="slide-subheading">
-                Everything you need to know about deploying QualityLens across your dealership bays today.
-              </p>
-            </div>
-
-            {/* 2-Column FAQ & Launch Card */}
-            <div className="faq-launch-grid">
-              {/* Left Column: Interactive Accordion FAQs */}
-              <div className="faq-accordion-col">
-                {faqs.map((faq, i) => (
-                  <div
-                    key={i}
-                    className={`faq-item-card ${openFaq === i ? 'open' : ''}`}
-                    onClick={() => setOpenFaq(openFaq === i ? -1 : i)}
-                  >
-                    <div className="faq-question-row">
-                      <span className="faq-question-text">{faq.q}</span>
-                      <div className="faq-chevron">
-                        {openFaq === i ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                      </div>
-                    </div>
-                    {openFaq === i && (
-                      <div className="faq-answer-row">
-                        <p>{faq.a}</p>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-
-              {/* Right Column: Launch QualityLens Card */}
-              <div className="launch-action-col">
-                <div className="launch-card-glass">
-                  <div className="launch-logo-wrap">
-                    <img src="/qualitylens-logo.png" alt="QualityLens" className="launch-logo" />
-                  </div>
-
-                  <h3 className="launch-title">Ready to Elevate Workshop Video Quality?</h3>
-                  <p className="launch-desc">
-                    Schedule a personalized 15-minute walkthrough of the QualityLens Dealership Inspector Console or access your existing portal.
-                  </p>
-
-                  <div className="launch-btn-group">
-                    <button className="btn-launch-demo" onClick={() => setDemoModalOpen(true)}>
-                      <Sparkles size={16} /> Book Live Dealership Demo
-                    </button>
-                    <button className="btn-launch-portal" onClick={() => navigate('/login')}>
-                      <Lock size={15} /> Launch QualityLens Portal
-                    </button>
-                  </div>
-
-                  {/* Direct Contact Links */}
-                  <div className="launch-contact-strip">
-                    <a href="tel:+919840012345" className="contact-link">
-                      <Phone size={14} /> +91 98400 12345
-                    </a>
-                    <span className="contact-sep">•</span>
-                    <a href="mailto:support@qualitylens.ai" className="contact-link">
-                      <Mail size={14} /> support@qualitylens.ai
-                    </a>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Back to Top */}
             <div className="slide-back-prompt" onClick={() => goToSlide(0)}>
               <ChevronUp size={16} className="bounce-arrow-up" />
-              <span>Back to First Slide (Overview)</span>
+              <span>Back to Slide 1 (Objectives &amp; Problem Solved)</span>
             </div>
           </div>
         </section>
       </main>
 
-      {/* 4. FLOATING GRAPHIC PRESENTATION CONTROLLER (BOTTOM DOCK) */}
+      {/* 4. FLOATING PRESENTATION CONTROLLER DOCK (BOTTOM DOCK) */}
       <div className="presentation-dock">
         <button
           className="dock-nav-btn prev"
@@ -1312,7 +1550,6 @@ export default function Presentation() {
           <ChevronLeft size={18} /> Prev
         </button>
 
-        {/* Slide Indicator Pills */}
         <div className="dock-pills-list">
           {slides.map((s, idx) => (
             <button
@@ -1352,7 +1589,7 @@ export default function Presentation() {
             </div>
             <div className="modal-body">
               <p className="modal-intro">
-                Schedule a 15-minute live screen walkthrough with an automotive AI specialist. We will benchmark 10 of your actual CitNow videos.
+                Schedule a 15-minute live screen walkthrough with an automotive AI specialist. We will benchmark 10 of your actual CitNOW videos against OEM standards.
               </p>
               <div className="modal-form">
                 <label className="form-label">Full Name</label>
