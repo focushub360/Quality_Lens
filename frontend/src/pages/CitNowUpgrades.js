@@ -1257,26 +1257,39 @@ export default function CitNowUpgrades() {
                       <Chip label="Baseline Tier" size="small" sx={{ bgcolor: '#E2E8F0', fontWeight: 800, fontSize: '0.7rem' }} />
                     </Box>
 
-                    <Grid container spacing={2}>
+                    <Box sx={{
+                      display: 'grid',
+                      gridTemplateColumns: {
+                        xs: '1fr',
+                        sm: 'repeat(2, 1fr)',
+                        md: 'repeat(4, 1fr)'
+                      },
+                      gap: 2
+                    }}>
                       {[
-                        { res: '4K UHD', dim: '3840×2160', score: '9.0 – 10.0', badge: 'Ultra Pristine', color: '#059669', bg: '#ECFDF5', border: '#A7F3D0' },
-                        { res: '1440p QHD', dim: '2560×1440', score: '8.5 – 9.5', badge: 'Superior', color: '#0284C7', bg: '#F0F9FF', border: '#BAE6FD' },
-                        { res: '1080p FHD', dim: '1920×1080', score: '7.5 – 9.2', badge: 'Standard High', color: '#0D9488', bg: '#F0FDFA', border: '#99F6E4' },
-                        { res: '720p HD', dim: '1280×720', score: '6.0 – 8.0', badge: 'Acceptable', color: '#D97706', bg: '#FFFBEB', border: '#FDE68A' },
-                        { res: '480p SD', dim: '854×480', score: '4.0 – 6.0', badge: 'Suboptimal', color: '#E11D48', bg: '#FFF1F2', border: '#FECDD3' },
-                        { res: '360p LD', dim: '640×360', score: '2.0 – 4.0', badge: 'Unusable', color: '#991B1B', bg: '#FEF2F2', border: '#FECACA' }
+                        { res: '1080p FHD', dim: '1920×1080', score: '9.0 – 10.0', badge: 'Standard Work', color: '#059669', bg: '#ECFDF5', border: '#A7F3D0' },
+                        { res: '720p HD', dim: '1280×720', score: '7.0 – 8.5', badge: 'Acceptable High', color: '#0284C7', bg: '#F0F9FF', border: '#BAE6FD' },
+                        { res: '480p SD', dim: '854×480', score: '4.0 – 6.5', badge: 'Suboptimal', color: '#D97706', bg: '#FFFBEB', border: '#FDE68A' },
+                        { res: '360p LD', dim: '640×360', score: '2.0 – 4.0', badge: 'Unusable', color: '#DC2626', bg: '#FEF2F2', border: '#FECACA' }
                       ].map((r, i) => (
-                        <Grid item xs={12} sm={6} md={4} key={i}>
-                          <Box sx={{ p: 2, borderRadius: 2.5, bgcolor: r.bg, border: `1.5px solid ${r.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Box>
-                              <Typography variant="subtitle2" sx={{ fontWeight: 800, color: r.color, fontSize: '0.92rem' }}>{r.res}</Typography>
-                              <Typography variant="caption" sx={{ color: '#64748B', fontWeight: 600 }}>{r.dim} • {r.badge}</Typography>
-                            </Box>
-                            <Chip label={r.score} sx={{ height: 26, fontSize: '0.78rem', fontWeight: 800, bgcolor: r.color, color: '#FFFFFF', boxShadow: `0 2px 8px ${r.color}35` }} />
+                        <Box key={i} sx={{
+                          p: 2,
+                          borderRadius: 2.5,
+                          bgcolor: r.bg,
+                          border: `1.5px solid ${r.border}`,
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          gap: 1
+                        }}>
+                          <Box sx={{ minWidth: 0 }}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 800, color: r.color, fontSize: '0.92rem', whiteSpace: 'nowrap' }}>{r.res}</Typography>
+                            <Typography variant="caption" sx={{ color: '#64748B', fontWeight: 600, whiteSpace: 'nowrap', display: 'block', textOverflow: 'ellipsis', overflow: 'hidden' }}>{r.dim} • {r.badge}</Typography>
                           </Box>
-                        </Grid>
+                          <Chip label={r.score} sx={{ height: 26, fontSize: '0.78rem', fontWeight: 800, bgcolor: r.color, color: '#FFFFFF', boxShadow: `0 2px 8px ${r.color}35`, flexShrink: 0 }} />
+                        </Box>
                       ))}
-                    </Grid>
+                    </Box>
                   </Box>
 
                   {/* 8 Visual Factors - Colorful Category Cards */}
@@ -1489,7 +1502,7 @@ export default function CitNowUpgrades() {
                           </Box>
                           
                           <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.9)', fontSize: '0.84rem', lineHeight: 1.6 }}>
-                            Equal 50/50 split ensures a video cannot pass with crystal-clear 4K visual if the service advisor's audio is inaudible, noisy, or muffled.
+                            Equal 50/50 split ensures a video cannot pass with crystal-clear 1080p visual if the service advisor's audio is inaudible, noisy, or muffled.
                           </Typography>
                         </Box>
 

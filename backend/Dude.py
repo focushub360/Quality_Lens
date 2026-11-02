@@ -50,11 +50,9 @@ sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
 
 class UnifiedMediaAnalyzer:
     RESOLUTION_MAP = [
-        (3840, 2160, "4K UHD", 9.0, 10.0),
-        (2560, 1440, "1440p (QHD)", 8.5, 9.5),
-        (1920, 1080, "1080p (FHD)", 7.5, 9.2), # Increased from 7.0 max
-        (1280, 720, "720p (HD)", 6.0, 8.0),   # Increased from 5.5 max
-        (854, 480, "480p (SD)", 4.0, 6.0),
+        (1920, 1080, "1080p (FHD)", 9.0, 10.0), # Standard Work benchmark tier
+        (1280, 720, "720p (HD)", 7.0, 8.5),
+        (854, 480, "480p (SD)", 4.0, 6.5),
         (640, 360, "360p (LD)", 2.0, 4.0),
         (0, 0, "Unknown/Very Low Res", 0, 2.0),
     ]
@@ -1251,7 +1249,7 @@ class UnifiedMediaAnalyzer:
                 final_score = max(3.5, final_score - 1.0)
 
             # Bonus for high-res clear videos
-            if res_label in ["4K UHD", "1440p (QHD)", "1080p (FHD)"] and visual_score_o10 > 8.5:
+            if res_label in ["1080p (FHD)"] and visual_score_o10 > 8.5:
                 final_score = min(10.0, final_score + 0.5)
             
             # Enhanced shake level classification (internal scores still 0-100)
