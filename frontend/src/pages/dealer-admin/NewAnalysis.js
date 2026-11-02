@@ -800,17 +800,46 @@ export default function NewAnalysis() {
                     <Box sx={{
                       display: 'flex',
                       alignItems: 'center',
-                      gap: 1,
+                      justifyContent: 'space-between',
+                      flexWrap: 'wrap',
+                      gap: 1.5,
                       p: 2,
                       mt: 2,
                       borderRadius: 2,
                       backgroundColor: THEME.successLight,
                       border: `1px solid ${THEME.success}20`
                     }}>
-                      <Check sx={{ color: THEME.success }} />
-                      <Typography variant="body2" fontWeight="600" sx={{ color: THEME.success }}>
-                        Analysis completed successfully!
-                      </Typography>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Check sx={{ color: THEME.success }} />
+                        <Typography variant="body2" fontWeight="600" sx={{ color: THEME.success }}>
+                          Analysis completed successfully!
+                        </Typography>
+                      </Box>
+                      <Button
+                        variant="contained"
+                        size="small"
+                        onClick={() => {
+                          const elem = document.getElementById('inline-analysis-result');
+                          if (elem) {
+                            elem.scrollIntoView({ behavior: 'smooth' });
+                          } else {
+                            window.location.href = `/dealer/results?id=${currentTask.result_id}`;
+                          }
+                        }}
+                        sx={{
+                          bgcolor: THEME.success,
+                          color: '#fff',
+                          fontWeight: 700,
+                          textTransform: 'none',
+                          borderRadius: 2,
+                          px: 2.5,
+                          py: 0.8,
+                          boxShadow: `0 2px 8px ${THEME.success}40`,
+                          '&:hover': { bgcolor: '#047857' }
+                        }}
+                      >
+                        View Analysis Results ↓
+                      </Button>
                     </Box>
                   )}
 
@@ -862,7 +891,7 @@ export default function NewAnalysis() {
                   : formatDurationDisplay(rawDuration);
 
                 return (
-                  <Box sx={{ mt: 3, pt: 3, borderTop: `1.5px dashed ${THEME.border}` }}>
+                  <Box id="inline-analysis-result" sx={{ mt: 3, pt: 3, borderTop: `1.5px dashed ${THEME.border}` }}>
                     {/* Result Header with Badges */}
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap', mb: 2.5 }}>
                       <Typography variant="h6" fontWeight="800" sx={{
