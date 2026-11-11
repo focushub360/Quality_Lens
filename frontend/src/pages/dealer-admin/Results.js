@@ -1725,28 +1725,19 @@ export default function Results() {
                   );
                 })()}
 
-                {/* Video Timeline & Template Structure Breakdown */}
+                {/* Video Timeline & Template Structure Breakdown (Only if real segmentation exists with templates) */}
                 {(() => {
                   const m = selectedResult.citnow_metadata || {};
-                  const inspSeg = m.inspection_segment || selectedResult.inspection_segment || {};
-                  const totalDur = Number(inspSeg.total_video_duration || selectedResult.video_duration || parseFloat(selectedResult.video_analysis?.detailed_analysis?.duration) || 0);
-                  if (!totalDur || totalDur <= 0) return null;
+                  const inspSeg = m.inspection_segment || selectedResult.inspection_segment;
+                  const totalDur = Number(inspSeg?.total_video_duration || selectedResult.video_duration || parseFloat(selectedResult.video_analysis?.detailed_analysis?.duration) || 0);
+                  if (!inspSeg || !totalDur || totalDur <= 0) return null;
 
-                  let introDur = inspSeg.intro_ad_seconds !== undefined && inspSeg.intro_ad_seconds !== null ? Number(inspSeg.intro_ad_seconds) : null;
-                  let outroDur = inspSeg.outro_ad_seconds !== undefined && inspSeg.outro_ad_seconds !== null ? Number(inspSeg.outro_ad_seconds) : null;
-                  let coreDur = inspSeg.core_inspection_seconds !== undefined && inspSeg.core_inspection_seconds !== null ? Number(inspSeg.core_inspection_seconds) : null;
+                  const introDur = Number(inspSeg.intro_ad_seconds || 0);
+                  const outroDur = Number(inspSeg.outro_ad_seconds || 0);
+                  const coreDur = Number(inspSeg.core_inspection_seconds || Math.max(0, totalDur - introDur - outroDur));
 
-                  if (introDur === null || outroDur === null || coreDur === null) {
-                    if (totalDur > 12) {
-                      introDur = 5.0;
-                      outroDur = 5.0;
-                      coreDur = Math.max(0, totalDur - introDur - outroDur);
-                    } else {
-                      introDur = 0;
-                      outroDur = 0;
-                      coreDur = totalDur;
-                    }
-                  }
+                  // Do not render if no real intro or outro template was detected
+                  if (introDur === 0 && outroDur === 0) return null;
 
                   const introPct = (introDur / totalDur) * 100;
                   const corePct = (coreDur / totalDur) * 100;
@@ -1787,31 +1778,33 @@ export default function Results() {
                       </Box>
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: THEME.textSecondary, mb: 2.5, px: 0.5 }}>
                         <span>0:00 (Start)</span>
-                        <span>Pre-Template: {introDur.toFixed(1)}s</span>
+                        {introDur > 0 && <span>Pre-Template: {introDur.toFixed(1)}s</span>}
                         <span style={{ fontWeight: 700, color: THEME.primary }}>Technician Recording: {coreDur.toFixed(1)}s</span>
-                        <span>Outro: {outroDur.toFixed(1)}s</span>
+                        {outroDur > 0 && <span>Outro: {outroDur.toFixed(1)}s</span>}
                       </Box>
 
                       {/* Duration Breakdown Cards */}
                       <Grid container spacing={2}>
-                        <Grid item xs={12} sm={4}>
-                          <Box sx={{ p: 2, bgcolor: THEME.surface, borderRadius: 2, border: `1px solid ${THEME.borderLight}`, height: '100%' }}>
-                            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
-                              <Typography variant="caption" sx={{ fontWeight: 700, color: '#64748B', textTransform: 'uppercase', fontSize: '0.72rem' }}>
-                                🏷️ Pre-Template / Logo
+                        {introDur > 0 && (
+                          <Grid item xs={12} sm={outroDur > 0 ? 4 : 6}>
+                            <Box sx={{ p: 2, bgcolor: THEME.surface, borderRadius: 2, border: `1px solid ${THEME.borderLight}`, height: '100%' }}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
+                                <Typography variant="caption" sx={{ fontWeight: 700, color: '#64748B', textTransform: 'uppercase', fontSize: '0.72rem' }}>
+                                  🏷️ Pre-Template / Logo
+                                </Typography>
+                                <Chip label={`${introPct.toFixed(0)}%`} size="small" sx={{ height: 18, fontSize: '0.68rem', fontWeight: 700, bgcolor: '#E2E8F0', color: '#475569' }} />
+                              </Box>
+                              <Typography variant="h6" fontWeight="800" sx={{ color: '#334155', fontSize: '1.2rem' }}>
+                                {introDur.toFixed(1)}s
                               </Typography>
-                              <Chip label={`${introPct.toFixed(0)}%`} size="small" sx={{ height: 18, fontSize: '0.68rem', fontWeight: 700, bgcolor: '#E2E8F0', color: '#475569' }} />
+                              <Typography variant="caption" sx={{ color: THEME.textTertiary, display: 'block', mt: 0.25 }}>
+                                Timeline: 0.0s – {introDur.toFixed(1)}s (Logo splash)
+                              </Typography>
                             </Box>
-                            <Typography variant="h6" fontWeight="800" sx={{ color: '#334155', fontSize: '1.2rem' }}>
-                              {introDur.toFixed(1)}s
-                            </Typography>
-                            <Typography variant="caption" sx={{ color: THEME.textTertiary, display: 'block', mt: 0.25 }}>
-                              Timeline: 0.0s – {introDur.toFixed(1)}s (Logo splash)
-                            </Typography>
-                          </Box>
-                        </Grid>
+                          </Grid>
+                        )}
 
-                        <Grid item xs={12} sm={4}>
+                        <Grid item xs={12} sm={introDur > 0 && outroDur > 0 ? 4 : (introDur > 0 || outroDur > 0 ? 6 : 12)}>
                           <Box sx={{ p: 2, bgcolor: `${THEME.primary}08`, borderRadius: 2, border: `1.5px solid ${THEME.primary}40`, height: '100%' }}>
                             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
                               <Typography variant="caption" sx={{ fontWeight: 800, color: THEME.primaryDark, textTransform: 'uppercase', fontSize: '0.72rem' }}>
@@ -1828,54 +1821,38 @@ export default function Results() {
                           </Box>
                         </Grid>
 
-                        <Grid item xs={12} sm={4}>
-                          <Box sx={{ p: 2, bgcolor: THEME.surface, borderRadius: 2, border: `1px solid ${THEME.borderLight}`, height: '100%' }}>
-                            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
-                              <Typography variant="caption" sx={{ fontWeight: 700, color: '#64748B', textTransform: 'uppercase', fontSize: '0.72rem' }}>
-                                🏁 Outro / Template
+                        {outroDur > 0 && (
+                          <Grid item xs={12} sm={introDur > 0 ? 4 : 6}>
+                            <Box sx={{ p: 2, bgcolor: THEME.surface, borderRadius: 2, border: `1px solid ${THEME.borderLight}`, height: '100%' }}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
+                                <Typography variant="caption" sx={{ fontWeight: 700, color: '#64748B', textTransform: 'uppercase', fontSize: '0.72rem' }}>
+                                  🏁 Outro / Template
+                                </Typography>
+                                <Chip label={`${outroPct.toFixed(0)}%`} size="small" sx={{ height: 18, fontSize: '0.68rem', fontWeight: 700, bgcolor: '#E2E8F0', color: '#475569' }} />
+                              </Box>
+                              <Typography variant="h6" fontWeight="800" sx={{ color: '#334155', fontSize: '1.2rem' }}>
+                                {outroDur.toFixed(1)}s
                               </Typography>
-                              <Chip label={`${outroPct.toFixed(0)}%`} size="small" sx={{ height: 18, fontSize: '0.68rem', fontWeight: 700, bgcolor: '#E2E8F0', color: '#475569' }} />
+                              <Typography variant="caption" sx={{ color: THEME.textTertiary, display: 'block', mt: 0.25 }}>
+                                Timeline: {(introDur + coreDur).toFixed(1)}s – {totalDur.toFixed(1)}s (End card)
+                              </Typography>
                             </Box>
-                            <Typography variant="h6" fontWeight="800" sx={{ color: '#334155', fontSize: '1.2rem' }}>
-                              {outroDur.toFixed(1)}s
-                            </Typography>
-                            <Typography variant="caption" sx={{ color: THEME.textTertiary, display: 'block', mt: 0.25 }}>
-                              Timeline: {(introDur + coreDur).toFixed(1)}s – {totalDur.toFixed(1)}s (End card)
-                            </Typography>
-                          </Box>
-                        </Grid>
+                          </Grid>
+                        )}
                       </Grid>
                     </Card>
                   );
                 })()}
 
-                {/* Vehicle Walkaround Inspection Angles */}
+                {/* Vehicle Walkaround Inspection Angles (ONLY REAL DETECTED ANGLES - NEVER FAKE) */}
                 {(() => {
                   const m = selectedResult.citnow_metadata || {};
-                  const inspSeg = m.inspection_segment || selectedResult.inspection_segment || {};
-                  const totalDur = Number(inspSeg.total_video_duration || selectedResult.video_duration || parseFloat(selectedResult.video_analysis?.detailed_analysis?.duration) || 0);
-                  let introDur = inspSeg.intro_ad_seconds !== undefined && inspSeg.intro_ad_seconds !== null ? Number(inspSeg.intro_ad_seconds) : 5.0;
-                  let coreDur = inspSeg.core_inspection_seconds !== undefined && inspSeg.core_inspection_seconds !== null ? Number(inspSeg.core_inspection_seconds) : Math.max(0, totalDur - 10.0);
+                  const sequence = m.walkaround_sequence || selectedResult.walkaround_sequence || selectedResult.video_analysis?.walkaround_sequence || selectedResult.video_analysis?.detailed_analysis?.walkaround_sequence;
 
-                  let sequence = m.walkaround_sequence || selectedResult.walkaround_sequence || selectedResult.video_analysis?.walkaround_sequence || selectedResult.video_analysis?.detailed_analysis?.walkaround_sequence;
-
+                  // STRICT: If no real sequence from video analysis, do NOT fabricate fake mock data!
                   if (!sequence || !Array.isArray(sequence) || sequence.length === 0) {
-                    if (totalDur >= 20) {
-                      const t1 = Math.round(introDur);
-                      const t2 = Math.round(introDur + coreDur * 0.25);
-                      const t3 = Math.round(introDur + coreDur * 0.55);
-                      const t4 = Math.round(introDur + coreDur * 0.82);
-                      const tEnd = Math.round(introDur + coreDur);
-                      sequence = [
-                        { stage: "Front Fascia & Grille", description: "Front bumper, registration plate, headlights & radiator grille", timestamp: `${t1}s – ${t2}s` },
-                        { stage: "Front Wheel & Brakes", description: "Front right tyre tread depth, alloy wheel rim & brake disc inspection", timestamp: `${t2}s – ${t3}s` },
-                        { stage: "Undercarriage & Hoist", description: "Underbody inspection on ramp, suspension arms, oil sump & exhaust system", timestamp: `${t3}s – ${t4}s` },
-                        { stage: "Rear Bumper & Tailgate", description: "Rear quarter, taillight units, tailgate fitment & rear tyres", timestamp: `${t4}s – ${tEnd}s` },
-                      ];
-                    }
+                    return null;
                   }
-
-                  if (!sequence || sequence.length === 0) return null;
 
                   return (
                     <Card sx={{
@@ -1891,7 +1868,7 @@ export default function Results() {
                           🎥 Vehicle Inspection Walkaround Angles
                         </Typography>
                         <Chip
-                          label={`${sequence.length} Sequential Inspection Angles`}
+                          label={`${sequence.length} Detected Inspection Angles`}
                           size="small"
                           sx={{ fontWeight: 700, bgcolor: 'rgba(16, 185, 129, 0.1)', color: THEME.success, border: '1px solid rgba(16, 185, 129, 0.25)' }}
                         />
@@ -1901,45 +1878,55 @@ export default function Results() {
                       </Typography>
 
                       <Grid container spacing={2}>
-                        {sequence.map((step, idx) => (
-                          <Grid item xs={12} sm={6} md={3} key={idx}>
-                            <Box sx={{
-                              p: 2,
-                              borderRadius: 2,
-                              border: `1px solid ${THEME.borderLight}`,
-                              bgcolor: THEME.surface,
-                              height: '100%',
-                              display: 'flex',
-                              flexDirection: 'column',
-                              justifyContent: 'space-between',
-                              transition: 'all 0.2s ease-in-out',
-                              '&:hover': {
-                                boxShadow: THEME.shadowMd,
-                                borderColor: THEME.primaryLight,
-                                bgcolor: '#FFFFFF'
-                              }
-                            }}>
-                              <Box>
-                                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-                                  <Chip 
-                                    label={`Angle #${idx + 1}`} 
-                                    size="small" 
-                                    sx={{ bgcolor: THEME.primaryUltraLight, color: THEME.primaryDark, fontWeight: 800, fontSize: '0.68rem', height: 20 }} 
-                                  />
-                                  <Typography variant="caption" sx={{ color: THEME.textSecondary, fontWeight: 700, fontSize: '0.72rem' }}>
-                                    ⏱️ {step.timestamp}
+                        {sequence.map((step, idx) => {
+                          const stageName = typeof step === 'string' ? step : (step.stage || `Angle #${idx + 1}`);
+                          const desc = typeof step === 'object' ? step.description : '';
+                          const ts = typeof step === 'object' ? step.timestamp : '';
+
+                          return (
+                            <Grid item xs={12} sm={6} md={3} key={idx}>
+                              <Box sx={{
+                                p: 2,
+                                borderRadius: 2,
+                                border: `1px solid ${THEME.borderLight}`,
+                                bgcolor: THEME.surface,
+                                height: '100%',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                justifyContent: 'space-between',
+                                transition: 'all 0.2s ease-in-out',
+                                '&:hover': {
+                                  boxShadow: THEME.shadowMd,
+                                  borderColor: THEME.primaryLight,
+                                  bgcolor: '#FFFFFF'
+                                }
+                              }}>
+                                <Box>
+                                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                                    <Chip 
+                                      label={`Angle #${idx + 1}`} 
+                                      size="small" 
+                                      sx={{ bgcolor: THEME.primaryUltraLight, color: THEME.primaryDark, fontWeight: 800, fontSize: '0.68rem', height: 20 }} 
+                                    />
+                                    {ts && (
+                                      <Typography variant="caption" sx={{ color: THEME.textSecondary, fontWeight: 700, fontSize: '0.72rem' }}>
+                                        ⏱️ {ts}
+                                      </Typography>
+                                    )}
+                                  </Box>
+                                  <Typography variant="subtitle2" sx={{ fontWeight: 800, color: THEME.textPrimary, mb: 0.5, fontSize: '0.9rem' }}>
+                                    {stageName}
                                   </Typography>
+                                  {desc && (
+                                    <Typography variant="caption" sx={{ color: THEME.textSecondary, lineHeight: 1.5, display: 'block', fontSize: '0.78rem' }}>
+                                      {desc}
+                                    </Typography>
+                                  )}
                                 </Box>
-                                <Typography variant="subtitle2" sx={{ fontWeight: 800, color: THEME.textPrimary, mb: 0.5, fontSize: '0.9rem' }}>
-                                  {step.stage}
-                                </Typography>
-                                <Typography variant="caption" sx={{ color: THEME.textSecondary, lineHeight: 1.5, display: 'block', fontSize: '0.78rem' }}>
-                                  {step.description}
-                                </Typography>
                               </Box>
-                            </Box>
-                          </Grid>
-                        ))}
+                            </Grid>
+                          );
+                        })}
                       </Grid>
                     </Card>
                   );

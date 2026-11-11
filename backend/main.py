@@ -2600,6 +2600,7 @@ async def _run_analysis_pipeline(
         "video_duration": results.get("video_duration") or results.get("inspection_segment", {}).get("total_video_duration"),
         "video_duration_formatted": results.get("video_duration_formatted") or results.get("inspection_segment", {}).get("total_video_duration_formatted"),
         "inspection_segment": results.get("inspection_segment"),
+        "walkaround_sequence": results.get("walkaround_sequence") or (results.get("video_analysis", {}).get("walkaround_sequence") if isinstance(results.get("video_analysis"), dict) else []) or [],
         "video_analysis": results.get("video_analysis"),
         "audio_analysis": results.get("audio_analysis"),
         "overall_quality": results.get("overall_quality"),

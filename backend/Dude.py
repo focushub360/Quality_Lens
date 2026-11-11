@@ -608,33 +608,137 @@ class UnifiedMediaAnalyzer:
                 os.unlink(output_audio_path)
             raise Exception(error_msg)
         
-    def get_inspection_segment(self, total_duration):
+    def detect_real_template_segment(self, video_path, total_duration):
+        """
+        REAL Computer Vision Detection of CitNOW pre-template logo and outro title cards.
+        Analyzes actual video frames to detect where branding graphic slides start and end.
+        No hardcoding, no fake numbers.
+        """
+        if not video_path or not os.path.exists(video_path) or total_duration <= 0:
+            return 0.0, total_duration, total_duration, "normal"
+            
+        try:
+            import cv2
+            import numpy as np
+            
+            cap = cv2.VideoCapture(video_path)
+            if not cap.isOpened():
+                return 0.0, total_duration, total_duration, "normal"
+                
+            fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
+            
+            # --- 1. Detect Real Intro Logo / Pre-template ---
+            # CitNOW intro slides are static logos / graphic animations during the first 0-10 seconds.
+            # Characteristics:
+            # - Very low frame-to-frame difference (near 0 motion).
+            # - Uniform background (high percentage of near-white or near-black pixels, low std dev).
+            # - Hard scene transition when technician's camera turns on (large pixel delta > 25.0).
+            
+            max_intro_search_sec = min(12.0, total_duration * 0.35)
+            intro_step_sec = 0.2
+            
+            prev_gray = None
+            detected_intro_end = 0.0
+            is_in_intro_template = False
+            
+            # Check frame at t=0.2s to determine if video starts with a graphic/logo slide
+            cap.set(cv2.CAP_PROP_POS_MSEC, 200)
+            ret, first_frame = cap.read()
+            if ret and first_frame is not None:
+                first_gray = cv2.cvtColor(first_frame, cv2.COLOR_BGR2GRAY)
+                mean_val = np.mean(first_gray)
+                std_val = np.std(first_gray)
+                if std_val < 38 or mean_val > 225 or mean_val < 30:
+                    is_in_intro_template = True
+                    prev_gray = first_gray
+            
+            if is_in_intro_template:
+                current_t = 0.4
+                while current_t <= max_intro_search_sec:
+                    cap.set(cv2.CAP_PROP_POS_MSEC, int(current_t * 1000))
+                    ret, frame = cap.read()
+                    if not ret or frame is None:
+                        break
+                    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                    if prev_gray is not None:
+                        diff = cv2.absdiff(gray, prev_gray)
+                        mean_diff = np.mean(diff)
+                        std_cur = np.std(gray)
+                        mean_cur = np.mean(gray)
+                        
+                        # Scene change detection: significant jump indicates cut to real workshop camera
+                        if mean_diff > 25.0 or (std_cur > 45 and 40 < mean_cur < 210 and mean_diff > 12.0):
+                            detected_intro_end = round(current_t, 1)
+                            break
+                    prev_gray = gray
+                    current_t += intro_step_sec
+            
+            # --- 2. Detect Real Outro / End Template ---
+            # Search last 12 seconds of video backwards
+            detected_outro_start = total_duration
+            if total_duration > 15.0:
+                search_start_t = max(total_duration - 12.0, total_duration * 0.75)
+                # Check last frame
+                cap.set(cv2.CAP_PROP_POS_MSEC, int((total_duration - 0.3) * 1000))
+                ret, last_frame = cap.read()
+                is_in_outro_template = False
+                if ret and last_frame is not None:
+                    last_gray = cv2.cvtColor(last_frame, cv2.COLOR_BGR2GRAY)
+                    std_last = np.std(last_gray)
+                    mean_last = np.mean(last_gray)
+                    if std_last < 38 or mean_last > 225 or mean_last < 30:
+                        is_in_outro_template = True
+                
+                if is_in_outro_template:
+                    rev_t = total_duration - 0.8
+                    prev_f_gray = last_gray
+                    while rev_t >= search_start_t:
+                        cap.set(cv2.CAP_PROP_POS_MSEC, int(rev_t * 1000))
+                        ret, f = cap.read()
+                        if not ret or f is None:
+                            break
+                        f_gray = cv2.cvtColor(f, cv2.COLOR_BGR2GRAY)
+                        diff = cv2.absdiff(f_gray, prev_f_gray)
+                        if np.mean(diff) > 25.0:
+                            detected_outro_start = round(rev_t + 0.4, 1)
+                            break
+                        prev_f_gray = f_gray
+                        rev_t -= intro_step_sec
+            
+            cap.release()
+            
+            insp_start = detected_intro_end
+            insp_end = min(total_duration, detected_outro_start)
+            insp_dur = max(0.0, insp_end - insp_start)
+            status = "normal" if insp_dur >= 20.0 else "brief_inspection"
+            print(f"🎬 Real OpenCV Template Detection: Intro={insp_start}s | Core={insp_dur}s | Outro={(total_duration - insp_end):.1f}s")
+            return insp_start, insp_end, insp_dur, status
+            
+        except Exception as e:
+            print(f"⚠️ Error during OpenCV template detection: {e}")
+            return 0.0, total_duration, total_duration, "normal"
+
+    def get_inspection_segment(self, total_duration, video_path=None):
         """
         GOLDEN RULE: Automotive CitNow walkaround videos contain:
-        - START: Dealership branding / company ad / animated logo / music bumper (~3-7s)
-        - END: Dealership outro / marketing promo card (~4-8s)
+        - START: Dealership branding / company ad / animated logo / music bumper
+        - END: Dealership outro / marketing promo card
         - CENTER: The actual physical vehicle inspection (checking car body, tyres, brakes, underbody, with technician commentary).
         
-        This method computes the precise center inspection window so that video and audio
-        quality analysis evaluates the genuine car inspection, completely filtering out ads.
+        This method computes the precise center inspection window using real OpenCV detection.
+        No hardcoding, no fake numbers.
         """
         if total_duration <= 0:
             return 0.0, 0.0, 0.0, "unknown"
             
         if total_duration < 10.0:
-            # Video is too short — consists almost entirely of intro/outro with minimal car inspection
             return 0.0, total_duration, total_duration, "too_brief"
             
-        # Dynamically scale intro/outro ad offsets based on total duration
-        intro_offset = min(6.0, max(2.5, total_duration * 0.08))
-        outro_offset = min(6.0, max(2.5, total_duration * 0.08))
-        
-        inspection_start = intro_offset
-        inspection_end = max(inspection_start + 3.0, total_duration - outro_offset)
-        inspection_duration = max(0.0, inspection_end - inspection_start)
-        
-        status = "normal" if inspection_duration >= 20.0 else "brief_inspection"
-        return inspection_start, inspection_end, inspection_duration, status
+        if video_path and os.path.exists(video_path):
+            return self.detect_real_template_segment(video_path, total_duration)
+            
+        # If video_path is not provided directly, return 0.0 offset (never invent fake numbers)
+        return 0.0, total_duration, total_duration, "normal"
         
     def analyze_audio_quality(self, audio_path, offset=0.0, duration=None):
         """Comprehensive audio quality analysis focused on the center inspection segment - SCORES OUT OF 10"""
@@ -910,7 +1014,7 @@ class UnifiedMediaAnalyzer:
             
             # GOLDEN RULE: CitNow videos have dealership branding/ads at START & END.
             # The core inspection of the car is strictly in the CENTER!
-            insp_start, insp_end, insp_dur, insp_status = self.get_inspection_segment(duration)
+            insp_start, insp_end, insp_dur, insp_status = self.get_inspection_segment(duration, video_path=video_path)
             if inspection_start is not None and inspection_end is not None:
                 insp_start, insp_end = inspection_start, inspection_end
                 insp_dur = max(0.0, insp_end - insp_start)
@@ -964,7 +1068,13 @@ class UnifiedMediaAnalyzer:
               "issues": [<list of specific visual problems found, e.g. "incomplete walkaround", "only front portion shown", "blurry", "too dark", "shaky">],
               "shake_level": <"None", "Minimal", "Noticeable", or "Severe">,
               "resolution_quality": <"High Definition", "Standard Definition", or "Low Quality">,
-              "walkaround_sequence": [<list of vehicle camera angles/components shown in chronological order, e.g. "Front portion / grille & bumper", "Driver-side front tyre & brake disc", "Undercarriage & exhaust", "Rear bumper & tailgate", "Passenger-side profile">],
+              "walkaround_sequence": [
+                {{
+                  "stage": "<Specific vehicle area inspected in this camera angle, e.g. Front Grille & Bonnet, Right Profile & Wheel, Interior Cabin & Controls, Roof & Spoiler, Boot / Cargo Area, Driver Side Door>",
+                  "description": "<What vehicle condition, component, or damage is shown in this angle>",
+                  "timestamp": "<Approximate timestamp, e.g. 5s – 18s>"
+                }}
+              ],
               "detailed_analysis": {{
                 "lighting": "<one sentence about lighting quality>",
                 "focus": "<one sentence about sharpness and focus>",
@@ -986,6 +1096,25 @@ class UnifiedMediaAnalyzer:
             )
             
             result = json.loads(response.text)
+            
+            # Normalize walkaround_sequence (REAL data only)
+            raw_seq = result.get("walkaround_sequence", [])
+            normalized_seq = []
+            if isinstance(raw_seq, list):
+                for idx, item in enumerate(raw_seq):
+                    if isinstance(item, dict) and item.get("stage"):
+                        normalized_seq.append({
+                            "stage": str(item.get("stage", f"Angle #{idx+1}")),
+                            "description": str(item.get("description", "")),
+                            "timestamp": str(item.get("timestamp", ""))
+                        })
+                    elif isinstance(item, str) and len(item.strip()) > 3:
+                        normalized_seq.append({
+                            "stage": item.strip(),
+                            "description": "Technician camera inspection view",
+                            "timestamp": ""
+                        })
+            result["walkaround_sequence"] = normalized_seq
             
             # Post-processing: Enforce duration realism
             if insp_dur < 10.0 or duration < 12.0:
@@ -1048,7 +1177,7 @@ class UnifiedMediaAnalyzer:
             print(f"📊 Video Info: {width}x{height}, {fps:.1f} fps, {frame_count} frames, {duration:.1f}s")
             
             # GOLDEN RULE: Sample frames strictly from the center inspection window!
-            insp_start, insp_end, insp_dur, insp_status = self.get_inspection_segment(duration)
+            insp_start, insp_end, insp_dur, insp_status = self.get_inspection_segment(duration, video_path=video_path)
             if inspection_start is not None and inspection_end is not None:
                 insp_start, insp_end = inspection_start, inspection_end
                 insp_dur = max(0.0, insp_end - insp_start)
@@ -2120,7 +2249,7 @@ class UnifiedMediaAnalyzer:
                 except Exception:
                     video_duration = 0
 
-            insp_start, insp_end, insp_dur, insp_status = self.get_inspection_segment(video_duration)
+            insp_start, insp_end, insp_dur, insp_status = self.get_inspection_segment(video_duration, video_path=video_path)
             print(f"🎯 GOLDEN RULE: Total: {video_duration:.1f}s | Intro Ad: 0.0-{insp_start:.1f}s | Center Car Inspection: {insp_start:.1f}-{insp_end:.1f}s ({insp_dur:.1f}s) | Outro Ad: {insp_end:.1f}-{video_duration:.1f}s")
             
             _mins = int(video_duration // 60)
@@ -2203,6 +2332,7 @@ class UnifiedMediaAnalyzer:
                 print(f"⚖️ Adjusted Video Quality with Star Rating ({star_rating}★)")
 
             results["video_analysis"] = video_analysis
+            results["walkaround_sequence"] = video_analysis.get("walkaround_sequence", []) if isinstance(video_analysis, dict) else []
             results["processing_steps"].append("video_quality_analysis")
             print(f"Video Quality: {results['video_analysis']['quality_label']} ({results['video_analysis']['quality_score']:.1f}/10)")
 
