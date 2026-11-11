@@ -4127,6 +4127,8 @@ export default function SuperAdminDashboard() {
   };
   const [invalidAlerts, setInvalidAlerts] = useState([]);
   const [alertsLoading, setAlertsLoading] = useState(false);
+  const [dealerOverviewSort, setDealerOverviewSort] = useState('volume'); // 'volume' (default) | 'score'
+  const [filterSingleVolume, setFilterSingleVolume] = useState(true); // exclude single-volume uploads (videos <= 1)
 
   const fetchAlerts = async () => {
     try {
@@ -5540,14 +5542,67 @@ export default function SuperAdminDashboard() {
             boxShadow: THEME.shadowSm
           }}>
             <CardContent sx={{ p: 3 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-                <Analytics sx={{ color: THEME.primary, mr: 2, fontSize: 24 }} />
-                <Typography variant="h6" sx={{
-                  color: THEME.textPrimary,
-                  fontWeight: 600
-                }}>
-                  Dealer Performance Overview
-                </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2, mb: 3 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  <Analytics sx={{ color: THEME.primary, mr: 2, fontSize: 24 }} />
+                  <Box>
+                    <Typography variant="h6" sx={{
+                      color: THEME.textPrimary,
+                      fontWeight: 600
+                    }}>
+                      Dealer Performance Overview
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: THEME.textSecondary }}>
+                      Ranked by {dealerOverviewSort === 'volume' ? 'Total Video Volume' : 'Quality Score'} • {filterSingleVolume ? 'Single-video uploads excluded' : 'All uploads included'}
+                    </Typography>
+                  </Box>
+                </Box>
+
+                {/* Sort & Filter Controls */}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                  <Chip
+                    label="📊 Sort: Highest Volume"
+                    size="small"
+                    onClick={() => setDealerOverviewSort('volume')}
+                    sx={{
+                      cursor: 'pointer',
+                      fontWeight: 600,
+                      fontSize: '0.78rem',
+                      bgcolor: dealerOverviewSort === 'volume' ? THEME.primary : THEME.surface,
+                      color: dealerOverviewSort === 'volume' ? '#fff' : THEME.textSecondary,
+                      border: `1px solid ${dealerOverviewSort === 'volume' ? THEME.primary : THEME.border}`,
+                      '&:hover': { bgcolor: dealerOverviewSort === 'volume' ? THEME.primaryDark : THEME.borderLight }
+                    }}
+                  />
+                  <Chip
+                    label="⭐ Sort: Quality Score"
+                    size="small"
+                    onClick={() => setDealerOverviewSort('score')}
+                    sx={{
+                      cursor: 'pointer',
+                      fontWeight: 600,
+                      fontSize: '0.78rem',
+                      bgcolor: dealerOverviewSort === 'score' ? THEME.primary : THEME.surface,
+                      color: dealerOverviewSort === 'score' ? '#fff' : THEME.textSecondary,
+                      border: `1px solid ${dealerOverviewSort === 'score' ? THEME.primary : THEME.border}`,
+                      '&:hover': { bgcolor: dealerOverviewSort === 'score' ? THEME.primaryDark : THEME.borderLight }
+                    }}
+                  />
+                  <Chip
+                    label={filterSingleVolume ? "Hide Single Volume (1 Video)" : "Show All (Inc. 1 Video)"}
+                    size="small"
+                    onClick={() => setFilterSingleVolume(prev => !prev)}
+                    sx={{
+                      cursor: 'pointer',
+                      fontWeight: 600,
+                      fontSize: '0.78rem',
+                      bgcolor: filterSingleVolume ? `${THEME.primary}12` : THEME.surface,
+                      color: filterSingleVolume ? THEME.primary : THEME.textSecondary,
+                      border: `1px solid ${filterSingleVolume ? THEME.primary : THEME.border}`,
+                      '&:hover': { bgcolor: `${THEME.primary}20` }
+                    }}
+                  />
+                </Box>
               </Box>
 
               <TableContainer>
@@ -5564,15 +5619,61 @@ export default function SuperAdminDashboard() {
                       }
                     }}>
                       <TableCell>Dealer</TableCell>
-                      <TableCell align="center">Overall Score</TableCell>
+                      <TableCell 
+                        align="center" 
+                        onClick={() => setDealerOverviewSort('score')}
+                        sx={{ 
+                          cursor: 'pointer', 
+                          userSelect: 'none', 
+                          color: dealerOverviewSort === 'score' ? `${THEME.primary} !important` : 'inherit',
+                          '&:hover': { color: `${THEME.primary} !important` }
+                        }}
+                      >
+                        Overall Score {dealerOverviewSort === 'score' ? '↓' : ''}
+                      </TableCell>
                       <TableCell align="center">Video Quality</TableCell>
                       <TableCell align="center">Audio Quality</TableCell>
-                      <TableCell align="center">Total Videos</TableCell>
+                      <TableCell 
+                        align="center" 
+                        onClick={() => setDealerOverviewSort('volume')}
+                        sx={{ 
+                          cursor: 'pointer', 
+                          userSelect: 'none', 
+                          color: dealerOverviewSort === 'volume' ? `${THEME.primary} !important` : 'inherit',
+                          '&:hover': { color: `${THEME.primary} !important` }
+                        }}
+                      >
+                        Total Videos {dealerOverviewSort === 'volume' ? '↓' : ''}
+                      </TableCell>
                       <TableCell align="center">Actions</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {dashboardData.dealerRankings.slice(0, 5).map((dealer, index) => (
+                    {(() => {
+                      const validDealers = dashboardData.dealerRankings.filter(d => 
+                        filterSingleVolume ? d.videos > 1 : d.videos > 0
+                      );
+                      const displayList = validDealers.length > 0 ? validDealers : dashboardData.dealerRankings;
+                      const sortedDealers = [...displayList].sort((a, b) => {
+                        if (dealerOverviewSort === 'volume') {
+                          return b.videos - a.videos || b.overall - a.overall;
+                        }
+                        return b.overall - a.overall || b.videos - a.videos;
+                      });
+
+                      if (sortedDealers.length === 0) {
+                        return (
+                          <TableRow>
+                            <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
+                              <Typography variant="body2" sx={{ color: THEME.textTertiary }}>
+                                No dealer data available
+                              </Typography>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      }
+
+                      return sortedDealers.slice(0, 5).map((dealer, index) => (
                       <TableRow
                         key={dealer.id}
                         sx={{
@@ -5668,16 +5769,8 @@ export default function SuperAdminDashboard() {
                           </Tooltip>
                         </TableCell>
                       </TableRow>
-                    ))}
-                    {dashboardData.dealerRankings.length === 0 && (
-                      <TableRow>
-                        <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
-                          <Typography variant="body2" sx={{ color: THEME.textTertiary }}>
-                            No dealer data available
-                          </Typography>
-                        </TableCell>
-                      </TableRow>
-                    )}
+                    ));
+                    })()}
                   </TableBody>
                 </Table>
               </TableContainer>
