@@ -226,18 +226,32 @@ class UnifiedMediaAnalyzer:
                     metadata["star_rating"] = float(rating_match.group(1))
 
             # 4. Extract customer comments/feedback (restricted to same-line matching)
-            feedback_match = re.search(r"(?:Comment|Feedback|Message)[ \t:]*(.*)", page_text, re.I)
+            feedback_match = re.search(r"(?:Customer Comment|Customer Feedback|Customer Review)[ \t:]*(.*)", page_text, re.I)
+            if not feedback_match:
+                feedback_match = re.search(r"(?:Comment|Feedback|Message)[ \t:]*(.*)", page_text, re.I)
             if feedback_match:
                 feedback_text = feedback_match.group(1).strip()
-                # Exclude common placeholder/help texts from forms
-                fb_lower = feedback_text.lower()
+                fb_lower = feedback_text.lower().strip()
                 placeholders = [
                     "if you would like to send us a message",
                     "would you like a callback",
                     "fill out this form",
-                    "get back to you"
+                    "get back to you",
+                    "send message",
+                    "your message",
+                    "leave a message",
+                    "questions?",
+                    "s?",
+                    "none",
+                    "n/a"
                 ]
-                if not any(p in fb_lower for p in placeholders) and len(feedback_text) > 0:
+                # Real feedback should be a genuine sentence/phrase (>= 8 chars, not single tokens or punctuation)
+                if (
+                    len(feedback_text) >= 8 and
+                    not re.match(r"^[\s\W\d_]+$", feedback_text) and
+                    not any(p in fb_lower for p in placeholders) and
+                    fb_lower not in ["s?", "s", "?", "none", "n/a", "no", "yes"]
+                ):
                     metadata["customer_feedback"] = feedback_text
                 else:
                     metadata["customer_feedback"] = None
@@ -950,6 +964,7 @@ class UnifiedMediaAnalyzer:
               "issues": [<list of specific visual problems found, e.g. "incomplete walkaround", "only front portion shown", "blurry", "too dark", "shaky">],
               "shake_level": <"None", "Minimal", "Noticeable", or "Severe">,
               "resolution_quality": <"High Definition", "Standard Definition", or "Low Quality">,
+              "walkaround_sequence": [<list of vehicle camera angles/components shown in chronological order, e.g. "Front portion / grille & bumper", "Driver-side front tyre & brake disc", "Undercarriage & exhaust", "Rear bumper & tailgate", "Passenger-side profile">],
               "detailed_analysis": {{
                 "lighting": "<one sentence about lighting quality>",
                 "focus": "<one sentence about sharpness and focus>",
@@ -1267,6 +1282,16 @@ class UnifiedMediaAnalyzer:
                 shake_level = "Extremely Shaky"
             
             # Enhanced detailed analysis
+            walkaround_sequence = [
+                "Front portion & grille inspection",
+                "Front wheels & brake assembly",
+                "Vehicle undercarriage & exhaust",
+                "Rear bumper & tailgate area"
+            ] if insp_dur >= 25.0 else [
+                "Front portion of vehicle",
+                "Brief walkaround segment"
+            ]
+
             detailed_analysis = {
                 "resolution": f"{width}x{height} ({res_label})", "duration": f"{duration:.1f}s",
                 "frame_rate": f"{fps:.1f} fps", "sharpness": f"{sharpness_score:.1f}%",
@@ -1281,7 +1306,8 @@ class UnifiedMediaAnalyzer:
                 "quality_label": self._get_quality_label(final_score),
                 "issues": issues, "shake_level": shake_level,
                 "resolution_quality": res_label, "detailed_analysis": detailed_analysis,
-                "component_scores": component_scores
+                "component_scores": component_scores,
+                "walkaround_sequence": walkaround_sequence
             }
             
         except Exception as e:

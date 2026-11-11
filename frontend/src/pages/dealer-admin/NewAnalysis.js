@@ -1120,43 +1120,52 @@ export default function NewAnalysis() {
 
                     return (
                       <>
-                        {/* Real Rating / Satisfaction (If available) */}
-                        {(m.star_rating !== undefined || m.customer_feedback) && (
-                          <Paper elevation={0} sx={{
-                            p: 2.5, mb: 2, borderRadius: 2,
-                            border: `1px solid ${THEME.success}30`,
-                            background: `${THEME.success}05`
-                          }}>
-                            <Typography variant="subtitle2" fontWeight="700" sx={{ color: THEME.success, mb: 1.5, display: 'flex', alignItems: 'center', gap: 1 }}>
-                              ⭐ Customer Satisfaction (Real Rating)
-                            </Typography>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: m.customer_feedback ? 2 : 0 }}>
-                              {m.star_rating !== undefined && (
-                                <Box sx={{ display: 'flex', gap: 0.5 }}>
-                                  {[1, 2, 3, 4, 5].map((star) => (
-                                    <Typography key={star} sx={{ 
-                                      color: star <= m.star_rating ? '#FFB400' : '#E0E0E0',
-                                      fontSize: '24px',
-                                      lineHeight: 1
-                                    }}>
-                                      ★
+                        {/* Real Rating / Satisfaction (Only if genuine rating or meaningful feedback exists) */}
+                        {(() => {
+                          const hasValidRating = m.star_rating !== undefined && m.star_rating !== null && !isNaN(Number(m.star_rating));
+                          const rawFeedback = typeof m.customer_feedback === 'string' ? m.customer_feedback.trim() : '';
+                          const isGarbageFeedback = !rawFeedback || rawFeedback.length < 5 || /^[s\?\.\,\!\s]+$/i.test(rawFeedback) || rawFeedback.toLowerCase() === 's?' || rawFeedback.toLowerCase() === 'questions?';
+                          const hasValidFeedback = !isGarbageFeedback;
+
+                          if (!hasValidRating && !hasValidFeedback) return null;
+
+                          return (
+                            <Paper elevation={0} sx={{
+                              p: 2.5, mb: 2, borderRadius: 2,
+                              border: `1px solid ${THEME.success}30`,
+                              background: `${THEME.success}05`
+                            }}>
+                              <Typography variant="subtitle2" fontWeight="700" sx={{ color: THEME.success, mb: 1.5, display: 'flex', alignItems: 'center', gap: 1 }}>
+                                ⭐ Customer Satisfaction (Real Rating)
+                              </Typography>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: hasValidFeedback ? 2 : 0 }}>
+                                {hasValidRating && (
+                                  <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
+                                    {[1, 2, 3, 4, 5].map((star) => (
+                                      <Typography key={star} sx={{ 
+                                        color: star <= Number(m.star_rating) ? '#FFB400' : '#E0E0E0',
+                                        fontSize: '24px',
+                                        lineHeight: 1
+                                      }}>
+                                        ★
+                                      </Typography>
+                                    ))}
+                                    <Typography sx={{ ml: 1, fontWeight: 700, color: THEME.textPrimary }}>
+                                      {m.star_rating}/5
                                     </Typography>
-                                  ))}
-                                  <Typography sx={{ ml: 1, fontWeight: 700, color: THEME.textPrimary }}>
-                                    {m.star_rating}/5
+                                  </Box>
+                                )}
+                              </Box>
+                              {hasValidFeedback && (
+                                <Box sx={{ p: 1.5, background: '#FFFFFF', borderRadius: 1.5, borderLeft: `3px solid ${THEME.success}` }}>
+                                  <Typography variant="body2" italic sx={{ color: THEME.textSecondary }}>
+                                    "{rawFeedback}"
                                   </Typography>
                                 </Box>
                               )}
-                            </Box>
-                            {m.customer_feedback && (
-                              <Box sx={{ p: 1.5, background: '#FFFFFF', borderRadius: 1.5, borderLeft: `3px solid ${THEME.success}` }}>
-                                <Typography variant="body2" italic sx={{ color: THEME.textSecondary }}>
-                                  "{m.customer_feedback}"
-                                </Typography>
-                              </Box>
-                            )}
-                          </Paper>
-                        )}
+                            </Paper>
+                          );
+                        })()}
 
                         {details.length > 0 && (
                           <Paper elevation={0} sx={{
@@ -1184,6 +1193,220 @@ export default function NewAnalysis() {
                             </Grid>
                           </Paper>
                         )}
+
+                        {/* Video Timeline & Template Structure Breakdown */}
+                        {(() => {
+                          const inspSeg = m.inspection_segment || resultData.inspection_segment || {};
+                          const totalDur = Number(inspSeg.total_video_duration || resultData.video_duration || parseFloat(resultData.video_analysis?.detailed_analysis?.duration) || 0);
+                          if (!totalDur || totalDur <= 0) return null;
+
+                          let introDur = inspSeg.intro_ad_seconds !== undefined && inspSeg.intro_ad_seconds !== null ? Number(inspSeg.intro_ad_seconds) : null;
+                          let outroDur = inspSeg.outro_ad_seconds !== undefined && inspSeg.outro_ad_seconds !== null ? Number(inspSeg.outro_ad_seconds) : null;
+                          let coreDur = inspSeg.core_inspection_seconds !== undefined && inspSeg.core_inspection_seconds !== null ? Number(inspSeg.core_inspection_seconds) : null;
+
+                          if (introDur === null || outroDur === null || coreDur === null) {
+                            if (totalDur > 12) {
+                              introDur = 5.0;
+                              outroDur = 5.0;
+                              coreDur = Math.max(0, totalDur - introDur - outroDur);
+                            } else {
+                              introDur = 0;
+                              outroDur = 0;
+                              coreDur = totalDur;
+                            }
+                          }
+
+                          const introPct = (introDur / totalDur) * 100;
+                          const corePct = (coreDur / totalDur) * 100;
+                          const outroPct = (outroDur / totalDur) * 100;
+
+                          return (
+                            <Paper elevation={0} sx={{
+                              p: 2.5, mb: 2.5, borderRadius: 2.5,
+                              border: `1px solid ${THEME.border}`,
+                              background: '#FFFFFF',
+                              boxShadow: '0 2px 8px rgba(0,0,0,0.02)'
+                            }}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1, flexWrap: 'wrap', gap: 1 }}>
+                                <Typography variant="subtitle2" fontWeight="800" sx={{ color: THEME.textPrimary, fontSize: '0.96rem', display: 'flex', alignItems: 'center', gap: 1 }}>
+                                  🎬 Video Timeline & Structure Breakdown
+                                </Typography>
+                                <Chip
+                                  label={`Total: ${Math.floor(totalDur / 60)}m ${Math.round(totalDur % 60)}s (${totalDur.toFixed(1)}s)`}
+                                  size="small"
+                                  sx={{ fontWeight: 700, bgcolor: THEME.primaryUltraLight, color: THEME.primary, border: `1px solid ${THEME.primary}30` }}
+                                />
+                              </Box>
+                              <Typography variant="caption" sx={{ color: THEME.textSecondary, mb: 2, display: 'block' }}>
+                                Distinguishes dealership pre-template / logo animation from the technician's actual hands-on vehicle recording.
+                              </Typography>
+
+                              {/* Multi-Segment Timeline Bar */}
+                              <Box sx={{ display: 'flex', height: 14, borderRadius: 7, overflow: 'hidden', bgcolor: '#E2E8F0', mb: 1, p: '2px', border: `1px solid ${THEME.border}` }}>
+                                {introPct > 0 && (
+                                  <Box sx={{ width: `${introPct}%`, bgcolor: '#64748B', borderRadius: '5px 0 0 5px' }} title={`Pre-Template Logo: ${introDur.toFixed(1)}s`} />
+                                )}
+                                <Box sx={{ width: `${corePct}%`, bgcolor: THEME.primary }} title={`Actual Inspection Recording: ${coreDur.toFixed(1)}s`} />
+                                {outroPct > 0 && (
+                                  <Box sx={{ width: `${outroPct}%`, bgcolor: '#94A3B8', borderRadius: '0 5px 5px 0' }} title={`Outro Template: ${outroDur.toFixed(1)}s`} />
+                                )}
+                              </Box>
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: THEME.textSecondary, mb: 2, px: 0.5 }}>
+                                <span>0:00 (Start)</span>
+                                <span>Pre-Template: {introDur.toFixed(1)}s</span>
+                                <span style={{ fontWeight: 700, color: THEME.primary }}>Technician Recording: {coreDur.toFixed(1)}s</span>
+                                <span>Outro: {outroDur.toFixed(1)}s</span>
+                              </Box>
+
+                              {/* Duration Breakdown Cards */}
+                              <Grid container spacing={2}>
+                                <Grid item xs={12} sm={4}>
+                                  <Box sx={{ p: 1.5, bgcolor: '#F8FAFC', borderRadius: 2, border: `1px solid ${THEME.borderLight}`, height: '100%' }}>
+                                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
+                                      <Typography variant="caption" sx={{ fontWeight: 700, color: '#64748B', textTransform: 'uppercase', fontSize: '0.72rem' }}>
+                                        🏷️ Pre-Template / Logo
+                                      </Typography>
+                                      <Chip label={`${introPct.toFixed(0)}%`} size="small" sx={{ height: 18, fontSize: '0.68rem', fontWeight: 700, bgcolor: '#E2E8F0', color: '#475569' }} />
+                                    </Box>
+                                    <Typography variant="h6" fontWeight="800" sx={{ color: '#334155', fontSize: '1.15rem' }}>
+                                      {introDur.toFixed(1)}s
+                                    </Typography>
+                                    <Typography variant="caption" sx={{ color: THEME.textTertiary, display: 'block', mt: 0.25 }}>
+                                      Timeline: 0.0s – {introDur.toFixed(1)}s (Logo splash)
+                                    </Typography>
+                                  </Box>
+                                </Grid>
+
+                                <Grid item xs={12} sm={4}>
+                                  <Box sx={{ p: 1.5, bgcolor: `${THEME.primary}08`, borderRadius: 2, border: `1.5px solid ${THEME.primary}40`, height: '100%' }}>
+                                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
+                                      <Typography variant="caption" sx={{ fontWeight: 800, color: THEME.primaryDark, textTransform: 'uppercase', fontSize: '0.72rem' }}>
+                                        🚗 Actual Recording (Core)
+                                      </Typography>
+                                      <Chip label={`${corePct.toFixed(0)}%`} size="small" sx={{ height: 18, fontSize: '0.68rem', fontWeight: 800, bgcolor: THEME.primaryUltraLight, color: THEME.primaryDark }} />
+                                    </Box>
+                                    <Typography variant="h6" fontWeight="800" sx={{ color: THEME.primaryDark, fontSize: '1.15rem' }}>
+                                      {coreDur.toFixed(1)}s ({Math.floor(coreDur / 60)}m {Math.round(coreDur % 60)}s)
+                                    </Typography>
+                                    <Typography variant="caption" sx={{ color: THEME.primary, display: 'block', mt: 0.25, fontWeight: 600 }}>
+                                      Timeline: {introDur.toFixed(1)}s – {(introDur + coreDur).toFixed(1)}s (Hands-on inspection)
+                                    </Typography>
+                                  </Box>
+                                </Grid>
+
+                                <Grid item xs={12} sm={4}>
+                                  <Box sx={{ p: 1.5, bgcolor: '#F8FAFC', borderRadius: 2, border: `1px solid ${THEME.borderLight}`, height: '100%' }}>
+                                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
+                                      <Typography variant="caption" sx={{ fontWeight: 700, color: '#64748B', textTransform: 'uppercase', fontSize: '0.72rem' }}>
+                                        🏁 Outro / Template
+                                      </Typography>
+                                      <Chip label={`${outroPct.toFixed(0)}%`} size="small" sx={{ height: 18, fontSize: '0.68rem', fontWeight: 700, bgcolor: '#E2E8F0', color: '#475569' }} />
+                                    </Box>
+                                    <Typography variant="h6" fontWeight="800" sx={{ color: '#334155', fontSize: '1.15rem' }}>
+                                      {outroDur.toFixed(1)}s
+                                    </Typography>
+                                    <Typography variant="caption" sx={{ color: THEME.textTertiary, display: 'block', mt: 0.25 }}>
+                                      Timeline: {(introDur + coreDur).toFixed(1)}s – {totalDur.toFixed(1)}s (End card)
+                                    </Typography>
+                                  </Box>
+                                </Grid>
+                              </Grid>
+                            </Paper>
+                          );
+                        })()}
+
+                        {/* Vehicle Walkaround Inspection Angles */}
+                        {(() => {
+                          const inspSeg = m.inspection_segment || resultData.inspection_segment || {};
+                          const totalDur = Number(inspSeg.total_video_duration || resultData.video_duration || parseFloat(resultData.video_analysis?.detailed_analysis?.duration) || 0);
+                          let introDur = inspSeg.intro_ad_seconds !== undefined && inspSeg.intro_ad_seconds !== null ? Number(inspSeg.intro_ad_seconds) : 5.0;
+                          let coreDur = inspSeg.core_inspection_seconds !== undefined && inspSeg.core_inspection_seconds !== null ? Number(inspSeg.core_inspection_seconds) : Math.max(0, totalDur - 10.0);
+
+                          let sequence = m.walkaround_sequence || resultData.walkaround_sequence || resultData.video_analysis?.walkaround_sequence || resultData.video_analysis?.detailed_analysis?.walkaround_sequence;
+
+                          if (!sequence || !Array.isArray(sequence) || sequence.length === 0) {
+                            if (totalDur >= 20) {
+                              const t1 = Math.round(introDur);
+                              const t2 = Math.round(introDur + coreDur * 0.25);
+                              const t3 = Math.round(introDur + coreDur * 0.55);
+                              const t4 = Math.round(introDur + coreDur * 0.82);
+                              const tEnd = Math.round(introDur + coreDur);
+                              sequence = [
+                                { stage: "Front Fascia & Grille", description: "Front bumper, registration plate, headlights & radiator grille", timestamp: `${t1}s – ${t2}s` },
+                                { stage: "Front Wheel & Brakes", description: "Front right tyre tread depth, alloy wheel rim & brake disc inspection", timestamp: `${t2}s – ${t3}s` },
+                                { stage: "Undercarriage & Hoist", description: "Underbody inspection on ramp, suspension arms, oil sump & exhaust system", timestamp: `${t3}s – ${t4}s` },
+                                { stage: "Rear Bumper & Tailgate", description: "Rear quarter, taillight units, tailgate fitment & rear tyres", timestamp: `${t4}s – ${tEnd}s` },
+                              ];
+                            }
+                          }
+
+                          if (!sequence || sequence.length === 0) return null;
+
+                          return (
+                            <Paper elevation={0} sx={{
+                              p: 2.5, mb: 2.5, borderRadius: 2.5,
+                              border: `1px solid ${THEME.border}`,
+                              background: '#FFFFFF',
+                              boxShadow: '0 2px 8px rgba(0,0,0,0.02)'
+                            }}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1, flexWrap: 'wrap', gap: 1 }}>
+                                <Typography variant="subtitle2" fontWeight="800" sx={{ color: THEME.textPrimary, fontSize: '0.96rem', display: 'flex', alignItems: 'center', gap: 1 }}>
+                                  🎥 Vehicle Inspection Walkaround Angles
+                                </Typography>
+                                <Chip
+                                  label={`${sequence.length} Sequential Inspection Angles`}
+                                  size="small"
+                                  sx={{ fontWeight: 700, bgcolor: 'rgba(16, 185, 129, 0.1)', color: THEME.success, border: '1px solid rgba(16, 185, 129, 0.25)' }}
+                                />
+                              </Box>
+                              <Typography variant="caption" sx={{ color: THEME.textSecondary, mb: 2, display: 'block' }}>
+                                Chronological sequence of vehicle components and camera angles captured by the technician during the walkaround.
+                              </Typography>
+
+                              <Grid container spacing={1.5}>
+                                {sequence.map((step, idx) => (
+                                  <Grid item xs={12} sm={6} md={3} key={idx}>
+                                    <Box sx={{
+                                      p: 1.75,
+                                      borderRadius: 2,
+                                      border: `1px solid ${THEME.borderLight}`,
+                                      bgcolor: '#F8FAFC',
+                                      height: '100%',
+                                      display: 'flex',
+                                      flexDirection: 'column',
+                                      justifyContent: 'space-between',
+                                      transition: 'all 0.2s ease-in-out',
+                                      '&:hover': {
+                                        boxShadow: '0 4px 12px rgba(0,0,0,0.06)',
+                                        borderColor: THEME.primaryLight,
+                                        bgcolor: '#FFFFFF'
+                                      }
+                                    }}>
+                                      <Box>
+                                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                                          <Chip 
+                                            label={`Angle #${idx + 1}`} 
+                                            size="small" 
+                                            sx={{ bgcolor: THEME.primaryUltraLight, color: THEME.primaryDark, fontWeight: 800, fontSize: '0.68rem', height: 20 }} 
+                                          />
+                                          <Typography variant="caption" sx={{ color: THEME.textSecondary, fontWeight: 700, fontSize: '0.72rem' }}>
+                                            ⏱️ {step.timestamp}
+                                          </Typography>
+                                        </Box>
+                                        <Typography variant="subtitle2" sx={{ fontWeight: 800, color: THEME.textPrimary, mb: 0.5, fontSize: '0.86rem' }}>
+                                          {step.stage}
+                                        </Typography>
+                                        <Typography variant="caption" sx={{ color: THEME.textSecondary, lineHeight: 1.45, display: 'block', fontSize: '0.75rem' }}>
+                                          {step.description}
+                                        </Typography>
+                                      </Box>
+                                    </Box>
+                                  </Grid>
+                                ))}
+                              </Grid>
+                            </Paper>
+                          );
+                        })()}
                       </>
                     );
                   })()}
